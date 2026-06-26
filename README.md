@@ -57,6 +57,16 @@ order is given in `_CoqProject`.
 | `algoExp1.v`   | Double-word exponential `exp1` with rigorous error bounds. |
 | `algoPhase1.v` | Phase 1 of the `x^y` algorithm; proves the result equals the correctly-rounded power when the phase succeeds (Theorem 1). |
 
+### Triple-word arithmetic (in progress)
+
+Start of a formalisation of the triple-word algorithms of `doc/paper3.pdf`
+(Fabiano, Muller, Picot, *Algorithms for triple-word arithmetic*, IEEE TC 2019).
+
+| File | Contents |
+|------|----------|
+| `addition.v`  | Triple-word addition `TWSum` (Algorithm 8): the `Merge`/`VecSum`/`VSEB` building blocks, the algorithm, and the statements of its correctness (Theorem 6) and relative-error bound `2u³ + 4.2u⁴`. The proofs are currently sketched with `have` steps and `admit`s. |
+| `addition.ml` | Reference OCaml (binary64) implementation of the same algorithm, with a randomised test that checks the error bound using exact floating-point expansions. Run with `ocaml addition.ml`. |
+
 ### Precomputed tables
 
 | File | Contents |

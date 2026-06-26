@@ -276,7 +276,8 @@ have He_sum : sumR e = sumR z by admit.
 (* VSEB(3) of VecSum is P-nonoverlapping (Theorems 1, 2 and 6).               *)
 have Hr_nonover : Pnonoverlap (vsebK 3 e) by admit.
 (* and its terms are floating-point numbers.                                  *)
-have Hr_format : {in vsebK 3 e, forall t, format t} by admit.
+have Hr_format : {in vsebK 3 e, forall t, format t}.
+  by apply/format_vsebK/format_vecSum.
 (* Reading the first three terms off the P-nonoverlapping sequence            *)
 (* yields a triple-word number.                                               *)
 admit.

@@ -75,7 +75,7 @@ Local Notation fastTwoSum := (fastTwoSum beta emin p rnd).
 (* Round-to-nearest half-ulp error bound with this section's format and tie- *)
 (* breaking pre-applied: [error_le_half_ulp_RN x : Prec_gt_0 p -> ...].      *)
 Local Notation error_le_half_ulp_RN :=
-  (@error_le_half_ulp_round radix2 (FLT_exp emin p)
+  (@error_le_half_ulp_round beta (FLT_exp emin p)
      (FLT_exp_valid emin p) (FLT_exp_monotone emin p) choice).
 (* Flocq's [TwoSum_correct] with this section's parameters and hypotheses    *)
 (* pre-applied: [TwoSum_correct_RN x y : format x -> format y -> ...].        *)
@@ -114,12 +114,10 @@ Lemma TwoSum_correct_loc a b : format a -> format b ->
   let: DWR s e := TwoSum a b in s + e = a + b.
 Proof.
 move=> Fa Fb.
-have Hco := TwoSum_correct_RN b a Fb Fa.
-rewrite (Rplus_comm b a) in Hco.
-rewrite /TwoSum /= /beta /rnd.
-set DA := (round radix2 (FLT_exp emin p) (Znearest choice) (a - _)).
-set DB := (round radix2 (FLT_exp emin p) (Znearest choice) (b - _)).
-rewrite (Rplus_comm DA DB); exact: Hco.
+have := TwoSum_correct_RN b a Fb Fa.
+rewrite -[radix2]/beta -[Znearest _]/rnd (Rplus_comm b a) /=.
+set DA := RND (a - _); set DB := RND (b - _).
+by rewrite (Rplus_comm DA DB).
 Qed.
 
 (* Magnitude analogue of [format_TwoSum] (Algorithm 2): the low word of a  *)
@@ -136,16 +134,9 @@ set e := RND (RND (a - _) + RND (b - _)).
 move=> Hc.
 have He : e = a + b - s by lra.
 rewrite He Rabs_minus_sym.
-(* The round-to-nearest error bound: |RN(x) - x| <= ulp(RN x)/2, with     *)
-(* x = a + b and RN(a + b) = s.  Discharged with Flocq's                   *)
-(* [error_le_half_ulp_round]; the [beta] / [rnd] section lets are unfolded *)
-(* to [radix2] / [Znearest choice] so the [ulp] / [round] atoms line up.   *)
-have Hh := error_le_half_ulp_RN (a + b).
-have Es : round radix2 (FLT_exp emin p) (Znearest choice) (a + b) = s
-  by rewrite /s /beta /rnd.
-rewrite Es in Hh.
-have Eu : Ulp.ulp radix2 (FLT_exp emin p) s = ulp s by rewrite /beta.
-rewrite Eu in Hh; specialize (Hh p_gt_0); lra.
+have /(_ p_gt_0) Hh := error_le_half_ulp_RN (a + b).
+rewrite -[Znearest _]/rnd -/s in Hh.
+lra.
 Qed.
 
 (* ===========================================================================*)

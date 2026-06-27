@@ -16,6 +16,7 @@ From Stdlib Require Import ZArith Reals Psatz.
 From mathcomp Require Import all_ssreflect all_algebra.
 From Flocq Require Import Core Relative Sterbenz Operations Mult_error.
 Require Import Nmore Rmore Fmore Rstruct MULTmore prelim.
+From Flocq Require Import Pff.Pff2Flocq.
 
 Delimit Scope R_scope with R.
 Delimit Scope Z_scope with Z.
@@ -53,6 +54,9 @@ Proof. by rewrite /u /= /Z.pow_pos /=; lra. Qed.
 (* is needed for the error-free transforms (e.g. 2Sum is exact and its low  *)
 (* word is bounded by half an ulp) -- a generic [Valid_rnd] is too weak.    *)
 Variable choice : Z -> bool.
+(* Ties broken to even (the symmetry [RN(-t) = -RN(t)]); required by         *)
+(* Flocq's [TwoSum_correct].                                                 *)
+Hypothesis choice_sym : forall x, choice x = ~~ choice (- (x + 1))%Z.
 Let rnd : R -> Z := Znearest choice.
 Local Instance valid_rnd : Valid_rnd rnd := valid_rnd_N choice.
 
@@ -89,13 +93,53 @@ Proof. by move=> Fa Fb; split; try apply: generic_format_round. Qed.
 (* the error word [e] is at most half an ulp of the high word [s].        *)
 Definition magnitudeDWR (a : dwR) := let: DWR s e := a in Rabs e <= ulp s / 2.
 
-(* Magnitude analogue of [format_TwoSum] (Algorithm 2).  This is the base *)
-(* case to be propagated up through vecSum / vseb, exactly as the format   *)
-(* property was: 2Sum is error-free (s + e = a + b) and, under            *)
-(* round-to-nearest, its low word satisfies |e| <= ulp(s)/2.              *)
+(* 2Sum is error-free: s + e = a + b.  We reuse Flocq's [TwoSum_correct]  *)
+(* (the Pff bridge), instantiated with the operands SWAPPED: paper3's      *)
+(* Algorithm 2 subtracts [b] first, whereas Flocq's variant subtracts its  *)
+(* first argument first, so [TwoSum_correct b a] has exactly our           *)
+(* intermediate values (up to commutativity of [+]).                       *)
+Lemma TwoSum_correct_loc a b : format a -> format b ->
+  let: DWR s e := TwoSum a b in s + e = a + b.
+Proof.
+move=> Fa Fb.
+have Hemin : (emin <= 0)%Z by rewrite /emin /emax /p; lia.
+have Hco := @TwoSum_correct emin p choice Hp2 Hemin choice_sym b a Fb Fa.
+rewrite (Rplus_comm b a) in Hco.
+rewrite /TwoSum /= /beta /rnd.
+set DA := (round radix2 (FLT_exp emin p) (Znearest choice) (a - _)).
+set DB := (round radix2 (FLT_exp emin p) (Znearest choice) (b - _)).
+rewrite (Rplus_comm DA DB); exact: Hco.
+Qed.
+
+(* Magnitude analogue of [format_TwoSum] (Algorithm 2): the low word of a  *)
+(* 2Sum is bounded by half an ulp of its high word.  Combine exactness     *)
+(* [e = (a+b) - s] with the round-to-nearest bound |RN(x)-x| <= ulp(RN x)/2.*)
 Lemma magnitude_TwoSum a b :
   format a -> format b -> magnitudeDWR (TwoSum a b).
-Proof. Admitted.
+Proof.
+move=> Fa Fb.
+have Hc := TwoSum_correct_loc Fa Fb.
+move: Hc; rewrite /magnitudeDWR /TwoSum /=.
+set s := RND (a + b).
+set e := RND (RND (a - _) + RND (b - _)).
+move=> Hc.
+have He : e = a + b - s by lra.
+rewrite He Rabs_minus_sym.
+(* Remaining step: the round-to-nearest error bound, |RN(x) - x| <= ulp(RN x)/2,
+   with x = a + b and RN(a + b) = s.  Discharge with Flocq's
+   [error_le_half_ulp_round].  It needs [Valid_exp] / [FLT_exp_monotone] and a
+   little unfolding of the [beta] / [rnd] section lets to [radix2] /
+   [Znearest choice] so the [ulp] / [round] atoms line up, e.g.:
+     have Hh := @error_le_half_ulp_round radix2 (FLT_exp emin p) _
+                  (FLT_exp_monotone emin p) choice (a + b).
+     have Es : round radix2 (FLT_exp emin p) (Znearest choice) (a + b) = s
+       by rewrite /s /beta /rnd.
+     rewrite Es in Hh.
+     have Eu : Ulp.ulp radix2 (FLT_exp emin p) s = ulp s by rewrite /beta.
+     rewrite Eu in Hh; lra.                                                  *)
+have Hh : Rabs (s - (a + b)) <= ulp s / 2 by admit.
+exact: Hh.
+Admitted.
 
 (* ===========================================================================*)
 (*  Algorithm 4: VecSum                                                       *)

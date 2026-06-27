@@ -47,8 +47,14 @@ Local Notation u_gt_0 := (u_gt_0 p beta).
 Lemma uE : u = pow (- p).
 Proof. by rewrite /u /= /Z.pow_pos /=; lra. Qed.
 
-Variable rnd : R -> Z.
-Context ( valid_rnd : Valid_rnd rnd ).
+(* Following paper3, the whole development is under round-to-nearest        *)
+(* (ties broken by [choice]): the paper sets RN(.) as its standing rounding *)
+(* mode in the preliminaries and writes every operation as RN(...).  This   *)
+(* is needed for the error-free transforms (e.g. 2Sum is exact and its low  *)
+(* word is bounded by half an ulp) -- a generic [Valid_rnd] is too weak.    *)
+Variable choice : Z -> bool.
+Let rnd : R -> Z := Znearest choice.
+Local Instance valid_rnd : Valid_rnd rnd := valid_rnd_N choice.
 
 Local Notation float := (float
  radix2).
@@ -78,6 +84,18 @@ Definition formatDWR (a : dwR) := let: DWR b c := a in format b /\ format c.
 
 Lemma format_TwoSum a b : format a -> format b -> formatDWR (TwoSum a b).
 Proof. by move=> Fa Fb; split; try apply: generic_format_round. Qed.
+
+(* The magnitude counterpart of [formatDWR]: in a 2Sum result [DWR s e]   *)
+(* the error word [e] is at most half an ulp of the high word [s].        *)
+Definition magnitudeDWR (a : dwR) := let: DWR s e := a in Rabs e <= ulp s / 2.
+
+(* Magnitude analogue of [format_TwoSum] (Algorithm 2).  This is the base *)
+(* case to be propagated up through vecSum / vseb, exactly as the format   *)
+(* property was: 2Sum is error-free (s + e = a + b) and, under            *)
+(* round-to-nearest, its low word satisfies |e| <= ulp(s)/2.              *)
+Lemma magnitude_TwoSum a b :
+  format a -> format b -> magnitudeDWR (TwoSum a b).
+Proof. Admitted.
 
 (* ===========================================================================*)
 (*  Algorithm 4: VecSum                                                       *)

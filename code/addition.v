@@ -60,6 +60,9 @@ Hypothesis choice_sym : forall x, choice x = ~~ choice (- (x + 1))%Z.
 Let rnd : R -> Z := Znearest choice.
 Local Instance valid_rnd : Valid_rnd rnd := valid_rnd_N choice.
 
+Lemma emin_le_0 : (emin <= 0)%Z.
+Proof. by rewrite /emin /emax /p; lia. Qed.
+
 Local Notation float := (float
  radix2).
 Local Notation fexp := (FLT_exp emin p).
@@ -69,6 +72,15 @@ Local Notation mant := (scaled_mantissa beta fexp).
 Local Notation RND := (round beta fexp rnd).
 Local Notation ulp := (ulp beta fexp).
 Local Notation fastTwoSum := (fastTwoSum beta emin p rnd).
+(* Round-to-nearest half-ulp error bound with this section's format and tie- *)
+(* breaking pre-applied: [error_le_half_ulp_RN x : Prec_gt_0 p -> ...].      *)
+Local Notation error_le_half_ulp_RN :=
+  (@error_le_half_ulp_round radix2 (FLT_exp emin p)
+     (FLT_exp_valid emin p) (FLT_exp_monotone emin p) choice).
+(* Flocq's [TwoSum_correct] with this section's parameters and hypotheses    *)
+(* pre-applied: [TwoSum_correct_RN x y : format x -> format y -> ...].        *)
+Local Notation TwoSum_correct_RN :=
+  (@TwoSum_correct emin p choice Hp2 emin_le_0 choice_sym).
 
 (* ===========================================================================*)
 (*  Basic error-free transforms                                               *)
@@ -102,8 +114,7 @@ Lemma TwoSum_correct_loc a b : format a -> format b ->
   let: DWR s e := TwoSum a b in s + e = a + b.
 Proof.
 move=> Fa Fb.
-have Hemin : (emin <= 0)%Z by rewrite /emin /emax /p; lia.
-have Hco := @TwoSum_correct emin p choice Hp2 Hemin choice_sym b a Fb Fa.
+have Hco := TwoSum_correct_RN b a Fb Fa.
 rewrite (Rplus_comm b a) in Hco.
 rewrite /TwoSum /= /beta /rnd.
 set DA := (round radix2 (FLT_exp emin p) (Znearest choice) (a - _)).
@@ -125,21 +136,17 @@ set e := RND (RND (a - _) + RND (b - _)).
 move=> Hc.
 have He : e = a + b - s by lra.
 rewrite He Rabs_minus_sym.
-(* Remaining step: the round-to-nearest error bound, |RN(x) - x| <= ulp(RN x)/2,
-   with x = a + b and RN(a + b) = s.  Discharge with Flocq's
-   [error_le_half_ulp_round].  It needs [Valid_exp] / [FLT_exp_monotone] and a
-   little unfolding of the [beta] / [rnd] section lets to [radix2] /
-   [Znearest choice] so the [ulp] / [round] atoms line up, e.g.:
-     have Hh := @error_le_half_ulp_round radix2 (FLT_exp emin p) _
-                  (FLT_exp_monotone emin p) choice (a + b).
-     have Es : round radix2 (FLT_exp emin p) (Znearest choice) (a + b) = s
-       by rewrite /s /beta /rnd.
-     rewrite Es in Hh.
-     have Eu : Ulp.ulp radix2 (FLT_exp emin p) s = ulp s by rewrite /beta.
-     rewrite Eu in Hh; lra.                                                  *)
-have Hh : Rabs (s - (a + b)) <= ulp s / 2 by admit.
-exact: Hh.
-Admitted.
+(* The round-to-nearest error bound: |RN(x) - x| <= ulp(RN x)/2, with     *)
+(* x = a + b and RN(a + b) = s.  Discharged with Flocq's                   *)
+(* [error_le_half_ulp_round]; the [beta] / [rnd] section lets are unfolded *)
+(* to [radix2] / [Znearest choice] so the [ulp] / [round] atoms line up.   *)
+have Hh := error_le_half_ulp_RN (a + b).
+have Es : round radix2 (FLT_exp emin p) (Znearest choice) (a + b) = s
+  by rewrite /s /beta /rnd.
+rewrite Es in Hh.
+have Eu : Ulp.ulp radix2 (FLT_exp emin p) s = ulp s by rewrite /beta.
+rewrite Eu in Hh; specialize (Hh p_gt_0); lra.
+Qed.
 
 (* ===========================================================================*)
 (*  Algorithm 4: VecSum                                                       *)

@@ -309,7 +309,13 @@ Definition isTW (x : twR) : Prop :=
 (*   [FLT_exp_monotone] + [monotone_exp_not_FTZ].                              *)
 Lemma format_lt_ulp_0 y : format y -> Rabs y < ulp 0 -> y = 0.
 Proof.
-Admitted.
+move=> yF yLu.
+suff : ~ (0 < Rabs y) by split_Rabs; lra.
+move=> ay_gt0.
+have ayF : format (Rabs y) by apply: generic_format_abs.
+have pLw : pow emin <= Rabs y by apply: alpha_LB ayF _.
+rewrite ulp_FLT_0 in yLu; lra.
+Qed.
 
 (* P-nonoverlap separation implies magnitude order, zeros included.            *)
 (* Depends on:                                                                 *)
@@ -319,14 +325,22 @@ Admitted.
 Lemma format_lt_ulp_le x y :
   format x -> format y -> Rabs y < ulp x -> Rabs y <= Rabs x.
 Proof.
-Admitted.
+move=> xF yF yLux.
+have [x_eq0|x_neq0 ]:= Req_dec x 0; last first.
+  apply: Rle_trans (Rlt_le _ _ yLux) _.
+  by apply: ulp_le_abs.
+have -> : y = 0 by apply: format_lt_ulp_0 => //; rewrite -x_eq0.
+split_Rabs; lra.
+Qed.
 
 (* The merge precondition for a single TW: its three limbs are magnitude-      *)
 (* sorted.  Two applications of [format_lt_ulp_le] to the [isTW] conjuncts.    *)
 Lemma isTW_sorted_mag x : isTW x ->
   let: TWR x0 x1 x2 := x in Rabs x1 <= Rabs x0 /\ Rabs x2 <= Rabs x1.
 Proof.
-Admitted.
+by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1]; 
+   split; apply: format_lt_ulp_le.
+Qed.
 
 (* ===========================================================================*)
 (*  Algorithm 8: TWSum -- the sum of two triple-word numbers.                 *)

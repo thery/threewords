@@ -1,0 +1,15 @@
+# Rocq/Coq build artifacts
+*.vo
+*.vok
+*.vos
+*.glob
+.*.aux
+.*.cache
+.coq-native/
+.Makefile.coq.d
+rocq_mcp_cache*.v
+.tmp*.aux
+
+# C build artifacts
+code/TWFalcon/test_zeros
+*.o

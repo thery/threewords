@@ -13,8 +13,12 @@ Authors: Laurent Théry, Laurence Rideau — MIT License.
 
 ```
 doc/      research papers describing the algorithms and their proofs
-example/  the Rocq/Coq development (algorithms, tables and supporting lemmas)
+example/  the elementary-function development
+          coq/       the Rocq/Coq sources (algorithms, tables, supporting lemmas)
+          TWFalcon/  upstream C reference implementation of the arithmetic
 code/     triple-word arithmetic, with a self-contained build (in progress)
+          coq/       addition.v and the supporting files it needs
+          TWFalcon/  C extraction of the addition + a "TW contains zeros" test
 ```
 
 ## `doc/`
@@ -26,8 +30,10 @@ code/     triple-word arithmetic, with a self-contained build (in progress)
 
 ## `example/`
 
-The Rocq/Coq sources. Build with `make` (see the dependencies below). The build
-order is given in `_CoqProject`.
+The Rocq/Coq sources live in `example/coq/`. Build with `cd example/coq && make`
+(see the dependencies below); the build order is given in `_CoqProject`. The
+upstream C reference implementation of the arithmetic is kept alongside in
+`example/TWFalcon/` (see its `README.md`).
 
 ### Supporting libraries
 
@@ -76,15 +82,26 @@ drive the Rocq/Coq build. `pow.pdf` is a generated document for the development.
 
 Start of a formalisation of the triple-word algorithms of `doc/paper3.pdf`
 (Fabiano, Muller, Picot, *Algorithms for triple-word arithmetic*, IEEE TC 2019).
-This directory is self-contained: it bundles `addition.v` together with the
-supporting files it needs from `example/` (`Nmore.v`, `Rmore.v`, `Fmore.v`,
+
+### `code/coq/`
+
+Self-contained Rocq/Coq build: it bundles `addition.v` together with the
+supporting files it needs from `example/coq/` (`Nmore.v`, `Rmore.v`, `Fmore.v`,
 `Rstruct.v`, `MULTmore.v`, `Fast2Sum_robust_flt.v`, `prelim.v`) plus its own
-`Makefile` and `_CoqProject`, so it builds on its own with `cd code && make`.
+`Makefile` and `_CoqProject`, so it builds on its own with `cd code/coq && make`.
 
 | File | Contents |
 |------|----------|
 | `addition.v`  | Triple-word addition `TWSum` (Algorithm 8): the `Merge`/`VecSum`/`VSEB` building blocks, the algorithm, and the statements of its correctness (Theorem 6) and relative-error bound `2u³ + 4.2u⁴`. The proofs are currently sketched with `have` steps and `admit`s. |
 | `addition.ml` | Reference OCaml (binary64) implementation of the same algorithm, with a randomised test that checks the error bound using exact floating-point expansions. Run with `ocaml addition.ml`. |
+
+### `code/TWFalcon/`
+
+C extraction of just the addition (`tw_sum` = `merge_noloop` → `vec_sum6` →
+`vseb_sum`) from the upstream `triple_float.c`, plus `test_zeros.c`, a test of
+what happens when a triple-word contains zero limbs (the merge/VSEB corner that
+motivated this directory). Build and run with `cd code/TWFalcon && make test`.
+See its `README.md`.
 
 ## Requirements
 
@@ -98,6 +115,6 @@ supporting files it needs from `example/` (`Nmore.v`, `Rmore.v`, `Fmore.v`,
 
 ```shell
 git clone https://github.com/thery/threewords.git
-cd threewords/example
+cd threewords/example/coq
 make
 ```

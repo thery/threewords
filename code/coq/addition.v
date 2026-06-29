@@ -289,6 +289,46 @@ Definition isTW (x : twR) : Prop :=
   [/\ format x0, format x1, format x2, Rabs x1 < ulp x0 & Rabs x2 < ulp x1].
 
 (* ===========================================================================*)
+(*  From P-nonoverlap to magnitude order, with the zero case.                 *)
+(*                                                                            *)
+(*  [isTW] is P-nonoverlapping (Def. 1/5): the separation is the *strict*     *)
+(*  [Rabs x_{i+1} < ulp x_i].  To feed [Merge] (which orders by [Rabs]) we    *)
+(*  need the magnitude order [Rabs x_{i+1} <= Rabs x_i].  The usual argument  *)
+(*  [ulp x_i <= Rabs x_i] breaks at x_i = 0, since in FLT                     *)
+(*    ulp 0 = bpow emin > 0 = Rabs 0      (Flocq: [ulp_FLT_0]).               *)
+(*  But that very value is what forces a zero limb to be *trailing*: a        *)
+(*  nonzero float has [bpow emin <= Rabs y], so [Rabs y < ulp 0] gives y = 0. *)
+(* ===========================================================================*)
+
+(* A format number strictly below the smallest positive float is 0.           *)
+(* Depends on (all from Flocq.Core, already imported via [Core]):              *)
+(*   - [ulp_FLT_0]    : ulp 0 = bpow emin   (Flocq.Core.FLT)                   *)
+(*   - [ulp_ge_ulp_0] : Exp_not_FTZ fexp -> ulp 0 <= ulp y   (Flocq.Core.Ulp) *)
+(*   - [ulp_le_abs]   : y <> 0 -> format y -> ulp y <= Rabs y (Flocq.Core.Ulp)*)
+(*   the [Exp_not_FTZ (FLT_exp emin p)] instance comes from                    *)
+(*   [FLT_exp_monotone] + [monotone_exp_not_FTZ].                              *)
+Lemma format_lt_ulp_0 y : format y -> Rabs y < ulp 0 -> y = 0.
+Proof.
+Admitted.
+
+(* P-nonoverlap separation implies magnitude order, zeros included.            *)
+(* Depends on:                                                                 *)
+(*   - [ulp_le_abs] : x <> 0 -> format x -> ulp x <= Rabs x  (Flocq.Core.Ulp)  *)
+(*     for the x <> 0 case (then Rabs y < ulp x <= Rabs x);                    *)
+(*   - [ulp_FLT_0] + [format_lt_ulp_0] above for the x = 0 case (then y = 0).  *)
+Lemma format_lt_ulp_le x y :
+  format x -> format y -> Rabs y < ulp x -> Rabs y <= Rabs x.
+Proof.
+Admitted.
+
+(* The merge precondition for a single TW: its three limbs are magnitude-      *)
+(* sorted.  Two applications of [format_lt_ulp_le] to the [isTW] conjuncts.    *)
+Lemma isTW_sorted_mag x : isTW x ->
+  let: TWR x0 x1 x2 := x in Rabs x1 <= Rabs x0 /\ Rabs x2 <= Rabs x1.
+Proof.
+Admitted.
+
+(* ===========================================================================*)
 (*  Algorithm 8: TWSum -- the sum of two triple-word numbers.                 *)
 (* ===========================================================================*)
 Definition TWSum (x y : twR) : twR :=

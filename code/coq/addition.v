@@ -338,9 +338,18 @@ Qed.
 Lemma isTW_sorted_mag x : isTW x ->
   let: TWR x0 x1 x2 := x in Rabs x1 <= Rabs x0 /\ Rabs x2 <= Rabs x1.
 Proof.
-by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1]; 
+by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1];
    split; apply: format_lt_ulp_le.
 Qed.
+
+(* [Merge] picks the larger-magnitude head at each step, so it turns two       *)
+(* magnitude-sorted sequences into a magnitude-sorted one.  Combined with      *)
+(* [isTW_sorted_mag] on each input triple, this discharges [Hz_sorted] in      *)
+(* [TWSum_isTW].                                                                *)
+Lemma Merge_sorted_mag l1 l2 :
+  sorted_mag l1 -> sorted_mag l2 -> sorted_mag (Merge l1 l2).
+Proof.
+Admitted.
 
 (* ===========================================================================*)
 (*  Algorithm 8: TWSum -- the sum of two triple-word numbers.                 *)

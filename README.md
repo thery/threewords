@@ -18,6 +18,7 @@ example/  the elementary-function development
           TWFalcon/  upstream C reference implementation of the arithmetic
 code/     triple-word arithmetic, with a self-contained build (in progress)
           coq/       addition.v and the supporting files it needs
+          ocaml/     reference OCaml implementation of the addition
           TWFalcon/  C extraction of the addition + a "TW contains zeros" test
 ```
 
@@ -93,7 +94,12 @@ supporting files it needs from `example/coq/` (`Nmore.v`, `Rmore.v`, `Fmore.v`,
 | File | Contents |
 |------|----------|
 | `addition.v`  | Triple-word addition `TWSum` (Algorithm 8): the `Merge`/`VecSum`/`VSEB` building blocks, the algorithm, and the statements of its correctness (Theorem 6) and relative-error bound `2u³ + 4.2u⁴`. The proofs are currently sketched with `have` steps and `admit`s. |
-| `addition.ml` | Reference OCaml (binary64) implementation of the same algorithm, with a randomised test that checks the error bound using exact floating-point expansions. Run with `ocaml addition.ml`. |
+
+### `code/ocaml/`
+
+| File | Contents |
+|------|----------|
+| `addition.ml` | Reference OCaml (binary64) implementation of the same algorithm, with a randomised test that checks the error bound using exact floating-point expansions. Run with `cd code/ocaml && ocaml addition.ml`. |
 
 ### `code/TWFalcon/`
 

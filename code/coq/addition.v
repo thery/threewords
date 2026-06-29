@@ -233,6 +233,7 @@ Qed.
 (* ===========================================================================*)
 (*  Merge two magnitude-sorted sequences into a magnitude-sorted one.         *)
 (* ===========================================================================*)
+
 Fixpoint Merge (l1 : seq R) : seq R -> seq R :=
   fix Merge_aux (l2 : seq R) : seq R :=
     match l1, l2 with
@@ -342,6 +343,43 @@ by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1];
    split; apply: format_lt_ulp_le.
 Qed.
 
+Lemma sorted_mag_cons a1 a2 l :
+  sorted_mag [:: a1,  a2 & l] -> Rabs a2 <= Rabs a1 /\ sorted_mag (a2 :: l).
+Proof.
+move=> a1a2lM; split; first by apply: (a1a2lM 0%N).
+by move=> n Hn; apply: (a1a2lM n.+1).
+Qed. 
+
+Lemma sorted_mag_cons_inv a1 a2 l :
+  Rabs a2 <= Rabs a1 -> sorted_mag (a2 :: l) -> sorted_mag [:: a1,  a2 & l].
+Proof. by move=> a2La1 a2lN [//|i Hi]; apply: (a2lN i). Qed.
+
+Lemma sorted_mag_le a1 a2 l :
+  sorted_mag (a1 :: l) -> Rabs a1 <= Rabs a2 -> sorted_mag (a2 :: l).
+Proof.
+case: l => // a3 l /sorted_mag_cons[a1La3 a3lS] a1La2.
+by apply: sorted_mag_cons_inv => //; lra.
+Qed. 
+
+Lemma Merge_asorted_mag a l1 l2 :
+  sorted_mag (a :: l1) -> sorted_mag (a :: l2) -> sorted_mag (a :: Merge l1 l2).
+Proof.
+elim: l1 l2 a => /= [|a1 l1 IH1]; first by elim.
+elim => // a2 l2 IH2 a a1l1S a2l2S.
+case: Rle_bool_spec => [a2La1|a1La2].
+  apply: sorted_mag_cons_inv.
+    by case: (sorted_mag_cons a1l1S).
+  apply: IH1; first by case: (sorted_mag_cons a1l1S).
+  apply: sorted_mag_cons_inv => //.
+  by case: (sorted_mag_cons a2l2S).
+apply: sorted_mag_cons_inv => //.
+  by case: (sorted_mag_cons a2l2S).
+apply: IH2.
+  apply: sorted_mag_cons_inv; first by apply: Rlt_le.
+  by case: (sorted_mag_cons a1l1S).
+by case: (sorted_mag_cons a2l2S).
+Qed.
+
 (* [Merge] picks the larger-magnitude head at each step, so it turns two       *)
 (* magnitude-sorted sequences into a magnitude-sorted one.  Combined with      *)
 (* [isTW_sorted_mag] on each input triple, this discharges [Hz_sorted] in      *)
@@ -349,7 +387,27 @@ Qed.
 Lemma Merge_sorted_mag l1 l2 :
   sorted_mag l1 -> sorted_mag l2 -> sorted_mag (Merge l1 l2).
 Proof.
-Admitted.
+elim: l1 l2 => /= [|a l1 IH1]; first by elim.
+elim => // b l2 IH2 al1S bl2S.
+case: Rle_bool_spec => [bLa|aLb].
+  apply: Merge_asorted_mag => //.
+  by apply: sorted_mag_cons_inv.
+move : bl2S.
+have: sorted_mag (b :: l1).
+  case: (l1) al1S => // a3 l3 H.
+  case: (sorted_mag_cons H) => H1 H2.
+  by apply: sorted_mag_cons_inv => //; lra.
+elim: (l2) (b) aLb => 
+    /= [b1 aLb1 b1l1S _|b3 l3 IH3 b4 aLb4 b4l1S /sorted_mag_cons[b4Lb3 b3l3S]].
+  by apply: sorted_mag_cons_inv => //; lra.
+case: Rle_bool_spec => [b3La|aLb3].
+  apply: sorted_mag_cons_inv; first by lra.
+  apply: Merge_asorted_mag => //.
+  by apply: sorted_mag_cons_inv.
+apply: sorted_mag_cons_inv => //.
+apply: IH3 => //.
+by apply: sorted_mag_le al1S _; lra.
+Qed.
 
 (* ===========================================================================*)
 (*  Algorithm 8: TWSum -- the sum of two triple-word numbers.                 *)
@@ -391,7 +449,10 @@ have Hz_format : {in z, forall t, format t}.
     by case: Hx => x0F x1F x2F _ _ z1; rewrite !inE => /or3P[] /eqP->.
   by case: Hy => y0F y1F y2F _ _ z1; rewrite !inE => /or3P[] /eqP->.
 (* ... magnitude-sorted ...                                                   *)
-have Hz_sorted : sorted_mag z by admit.
+have Hz_sorted : sorted_mag z.
+  apply: Merge_sorted_mag.
+    by have [? ?] := isTW_sorted_mag Hx; case => //=; case.
+  by have [? ?] := isTW_sorted_mag Hy; case => //=; case.      
 (* ... and pairwise ulp-separated: the hypotheses of Theorem 6.               *)
 have Hz_ulp : pairwise_ulp z by admit.
 (* VecSum preserves the exact sum (Algorithm 4 is error-free).                *)

@@ -277,6 +277,9 @@ Fixpoint sumR (l : seq R) : R := if l is a :: l' then a + sumR l' else 0.
 Definition Pnonoverlap (l : seq R) : Prop :=
   forall i, (i.+1 < size l)%N -> Rabs (nth 0 l i.+1) < ulp (nth 0 l i).
 
+Lemma Pnonoverlap_cons a l : Pnonoverlap (a :: l) -> Pnonoverlap l.
+Proof. by move=> alP i iLs; apply: (alP i.+1). Qed.
+
 (* The two preconditions of Theorem 6 on the merged sequence.                 *)
 Definition sorted_mag (l : seq R) : Prop :=
   forall i, (i.+1 < size l)%N -> Rabs (nth 0 l i.+1) <= Rabs (nth 0 l i).
@@ -302,12 +305,12 @@ Definition isTW (x : twR) : Prop :=
 (* ===========================================================================*)
 
 (* A format number strictly below the smallest positive float is 0.           *)
-(* Depends on (all from Flocq.Core, already imported via [Core]):              *)
-(*   - [ulp_FLT_0]    : ulp 0 = bpow emin   (Flocq.Core.FLT)                   *)
+(* Depends on (all from Flocq.Core, already imported via [Core]):             *)
+(*   - [ulp_FLT_0]    : ulp 0 = bpow emin   (Flocq.Core.FLT)                  *)
 (*   - [ulp_ge_ulp_0] : Exp_not_FTZ fexp -> ulp 0 <= ulp y   (Flocq.Core.Ulp) *)
 (*   - [ulp_le_abs]   : y <> 0 -> format y -> ulp y <= Rabs y (Flocq.Core.Ulp)*)
-(*   the [Exp_not_FTZ (FLT_exp emin p)] instance comes from                    *)
-(*   [FLT_exp_monotone] + [monotone_exp_not_FTZ].                              *)
+(*   the [Exp_not_FTZ (FLT_exp emin p)] instance comes from                   *)
+(*   [FLT_exp_monotone] + [monotone_exp_not_FTZ].                             *)
 Lemma format_lt_ulp_0 y : format y -> Rabs y < ulp 0 -> y = 0.
 Proof.
 move=> yF yLu.
@@ -318,11 +321,11 @@ have pLw : pow emin <= Rabs y by apply: alpha_LB ayF _.
 rewrite ulp_FLT_0 in yLu; lra.
 Qed.
 
-(* P-nonoverlap separation implies magnitude order, zeros included.            *)
-(* Depends on:                                                                 *)
-(*   - [ulp_le_abs] : x <> 0 -> format x -> ulp x <= Rabs x  (Flocq.Core.Ulp)  *)
-(*     for the x <> 0 case (then Rabs y < ulp x <= Rabs x);                    *)
-(*   - [ulp_FLT_0] + [format_lt_ulp_0] above for the x = 0 case (then y = 0).  *)
+(* P-nonoverlap separation implies magnitude order, zeros included.           *)
+(* Depends on:                                                                *)
+(*   - [ulp_le_abs] : x <> 0 -> format x -> ulp x <= Rabs x  (Flocq.Core.Ulp) *)
+(*     for the x <> 0 case (then Rabs y < ulp x <= Rabs x);                   *)
+(*   - [ulp_FLT_0] + [format_lt_ulp_0] above for the x = 0 case (then y = 0). *)
 Lemma format_lt_ulp_le x y :
   format x -> format y -> Rabs y < ulp x -> Rabs y <= Rabs x.
 Proof.
@@ -334,13 +337,19 @@ have -> : y = 0 by apply: format_lt_ulp_0 => //; rewrite -x_eq0.
 split_Rabs; lra.
 Qed.
 
-(* The merge precondition for a single TW: its three limbs are magnitude-      *)
-(* sorted.  Two applications of [format_lt_ulp_le] to the [isTW] conjuncts.    *)
-Lemma isTW_sorted_mag x : isTW x ->
-  let: TWR x0 x1 x2 := x in Rabs x1 <= Rabs x0 /\ Rabs x2 <= Rabs x1.
+Definition TW2l x := let: TWR x0 x1 x2 := x in [:: x0; x1; x2].
+
+(* The merge precondition for a single TW: its three limbs are magnitude-     *)
+(* sorted.  Two applications of [format_lt_ulp_le] to the [isTW] conjuncts.   *)
+Lemma isTW_sorted_mag x : isTW x -> sorted_mag (TW2l x).
 Proof.
-by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1];
-   split; apply: format_lt_ulp_le.
+by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|//]] _; 
+   apply: format_lt_ulp_le.
+Qed.
+
+Lemma isTW_Pnonoverlap x : isTW x -> Pnonoverlap (TW2l x).
+Proof.
+by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|[]]].
 Qed.
 
 Lemma sorted_mag_cons a1 a2 l :
@@ -361,6 +370,40 @@ case: l => // a3 l /sorted_mag_cons[a1La3 a3lS] a1La2.
 by apply: sorted_mag_cons_inv => //; lra.
 Qed. 
 
+Lemma pairwise_ulp_cons a1 a2 a3 l :
+  pairwise_ulp [:: a1, a2, a3 & l] ->
+  Rabs a3 < ulp a1 /\ pairwise_ulp [::a2, a3 & l].
+Proof.
+move=> a1a2a3lU; split; last by move=> n Hn; apply: (a1a2a3lU n.+1).
+by apply: (a1a2a3lU 0%N).
+Qed. 
+
+Lemma pairwise_ulp_cons_inv a1 a2 a3 l :
+  Rabs a3 < ulp a1 -> 
+  pairwise_ulp (a2 :: a3 :: l) -> pairwise_ulp [:: a1, a2, a3 & l].
+Proof. by move=> a2La1 a2lN [//|i Hi]; apply: (a2lN i). Qed.
+
+Lemma pairwise_ulp_cons1_inv a l :
+  pairwise_ulp l  -> ((1 < size l)%N -> Rabs(nth 0 l 1) < ulp a) -> pairwise_ulp (a :: l).
+Proof.
+case: l => // b [|c l] //= bclP /(_ isT) cLua.
+by apply: pairwise_ulp_cons_inv.
+Qed.
+
+Lemma Merge_head_lt l1 l2 a :
+  {in l1, forall z, Rabs z < a} -> {in l2, forall z, Rabs z < a} ->
+  {in Merge l1 l2, forall z, Rabs z < a}.
+Proof.
+elim: l1 l2 a => /= [|a1 l1 IH1]; first by elim.
+elim => // a2 l2 IH2 a a1l1S a2l2S.
+case: Rle_bool_spec => [a2La1|a1La2] x.
+  rewrite inE => /orP[/eqP->|]; first by apply: a1l1S; rewrite !inE eqxx.
+  by apply: IH1 => [z zIl1|//]; apply: a1l1S; rewrite !inE zIl1 orbT.
+rewrite inE => /orP[/eqP->|]; first by apply: a2l2S; rewrite !inE eqxx.
+apply: IH2 => // z zIl2.
+by apply: a2l2S; rewrite !inE zIl2 orbT.
+Qed.
+
 Lemma Merge_asorted_mag a l1 l2 :
   sorted_mag (a :: l1) -> sorted_mag (a :: l2) -> sorted_mag (a :: Merge l1 l2).
 Proof.
@@ -380,10 +423,10 @@ apply: IH2.
 by case: (sorted_mag_cons a2l2S).
 Qed.
 
-(* [Merge] picks the larger-magnitude head at each step, so it turns two       *)
-(* magnitude-sorted sequences into a magnitude-sorted one.  Combined with      *)
-(* [isTW_sorted_mag] on each input triple, this discharges [Hz_sorted] in      *)
-(* [TWSum_isTW].                                                                *)
+(* [Merge] picks the larger-magnitude head at each step, so it turns two      *)
+(* magnitude-sorted sequences into a magnitude-sorted one.  Combined with     *)
+(* [isTW_sorted_mag] on each input triple, this discharges [Hz_sorted] in     *)
+(* [TWSum_isTW].                                                              *)
 Lemma Merge_sorted_mag l1 l2 :
   sorted_mag l1 -> sorted_mag l2 -> sorted_mag (Merge l1 l2).
 Proof.
@@ -407,6 +450,117 @@ case: Rle_bool_spec => [b3La|aLb3].
 apply: sorted_mag_cons_inv => //.
 apply: IH3 => //.
 by apply: sorted_mag_le al1S _; lra.
+Qed.
+
+Lemma Pnonoverlap_imp_pairwise_ul l :  
+  {in l,  forall z : R, format z} -> Pnonoverlap l -> pairwise_ulp l.
+Proof.
+elim: l => //= a [|b [|c l]] // IH abclF abclP.
+apply: pairwise_ulp_cons_inv.
+  have /= bLua := abclP 0%N isT.
+  apply: Rle_lt_trans bLua.
+  have /= := abclP 1%N isT.
+  have [->/format_lt_ulp_0->//|y_neq0 cLub] := Req_dec b 0; try lra.
+    by apply: abclF; rewrite !inE eqxx !orbT.
+  apply: Rle_trans (Rlt_le _ _ cLub) _.
+  apply: ulp_le_abs => //.
+  by apply: abclF; rewrite !inE eqxx !orbT.
+apply: IH.
+  by move=> z zIl; apply: abclF; rewrite inE zIl orbT.
+by move=> i iLs; apply: (abclP i.+1).
+Qed.
+
+Lemma Merge_pairwise_ulp (l1 l2 : seq R) :
+  {in l1, forall z, format z} ->   {in l2, forall z, format z} ->
+  Pnonoverlap l1 -> Pnonoverlap l2 -> pairwise_ulp (Merge l1 l2).
+Proof.
+elim: l1 l2 => /= [|a l1 IH1].
+  elim => // b [|c [|d l2]] IH _ bl2F _ bl2P //.
+  apply: pairwise_ulp_cons_inv.
+    have /= cLub := bl2P 0%N isT.
+    apply: Rle_lt_trans cLub.
+    have /= := bl2P 1%N isT.
+    have [->/format_lt_ulp_0->//|y_neq0 dLuc] := Req_dec c 0; try lra.
+      by apply: bl2F; rewrite !inE eqxx !orbT.
+    apply: Rle_trans (Rlt_le _ _ dLuc) _.
+    apply: ulp_le_abs => //.
+    by apply: bl2F; rewrite !inE eqxx !orbT.
+  apply: IH => //.
+    by move=> z zIl; apply: bl2F; rewrite inE zIl orbT.
+  by apply: Pnonoverlap_cons bl2P.
+elim => [al1F _ al1P _|b l2 IH2 al1F bl2F al1P bl2P].
+  by apply: Pnonoverlap_imp_pairwise_ul.
+case: Rle_bool_spec => [bLa|aLb].
+  apply: pairwise_ulp_cons1_inv.
+    apply: IH1 => //.
+      by move=> z zIl; apply: al1F; rewrite inE zIl orbT.
+    by apply: Pnonoverlap_cons al1P.
+  case: (l1) al1P al1F => //.
+    case: (l2) bl2P bl2F => //= c l3 /(_ 0%N isT) /= cLub _ _ _ _.
+    apply: Rlt_le_trans cLub _.
+    by apply: (ulp_le beta fexp _ _ bLa).
+  move=> a1 l3.
+  rewrite /=; case: Rle_bool_spec => /=.
+    case: l3 => //=.
+      move=> bLa1 /(_ 0%N isT) /= a1Lua _ _.
+      by apply: Rle_lt_trans bLa1 a1Lua.
+    move=> a2 l3 bLa1 aa1a2l3P aa1a2l3F _.
+    case: Rle_bool_spec => [bLa2|a2Lb] /=.
+      have /(_ 0%N isT)/= a1Lua :=  aa1a2l3P.
+      apply: Rle_lt_trans (a1Lua).
+      have /(_ 1%N isT)/= a2Lua1 :=  aa1a2l3P.
+      move: a2Lua1.
+      have [->/format_lt_ulp_0->|a1_neq0 a2Lua1] := Req_dec a1 0; try lra.
+        by apply: aa1a2l3F; rewrite !inE eqxx !orbT.
+      apply: Rle_trans (Rlt_le _ _ a2Lua1) _.
+      apply: ulp_le_abs => //.
+      by apply: aa1a2l3F; rewrite !inE eqxx !orbT.
+    have /(_ 0%N isT)/= a1Lua :=  aa1a2l3P.
+    by apply: Rle_lt_trans (a1Lua).
+  move=> a1Lb aa1l3P aa1l3F.
+  case: (l2) bl2F bl2P => /= [_ _ _|b1 l4 bb1F bb1P _] /=.
+    by apply: (aa1l3P 0%N).
+  case: Rle_bool_spec => [b1La1|a1Lb1] /=.
+    by apply: (aa1l3P 0%N).
+  have /(_ 0%N isT)/= b1Lub :=  bb1P.
+  apply: Rlt_le_trans b1Lub _.
+  by apply: (ulp_le beta fexp _ _ bLa).
+apply: pairwise_ulp_cons1_inv.
+  apply: IH2 => //.
+    by move=> z zIl; apply: bl2F; rewrite inE zIl orbT.
+  by apply: Pnonoverlap_cons bl2P.
+case: (l2) bl2F bl2P al1F al1P => /=.
+  case: (l1) => // a1 l3 bF bP aa1l3F aa1l3P /= _.
+  have /(_ 0%N isT)/= a1Lua :=  aa1l3P.
+  apply: Rlt_le_trans a1Lua _.
+  by apply: (ulp_le beta fexp _ _ (Rlt_le _ _ aLb)).
+move=> b1 l3.
+case: Rle_bool_spec => [b1La|aLb1] /=.
+  case: (l1) => //= [_ /(_ 0%N isT) //|a1 l4].
+  case: Rle_bool_spec => [b1La1|a1Lb1]//=.  
+    move=> bb1l3F bb1l3P aa1l4F aa1l4P _.
+    have /(_ 0%N isT)/= a1Lua :=  aa1l4P.
+    apply: Rlt_le_trans a1Lua _.
+    by apply: (ulp_le beta fexp _ _ (Rlt_le _ _ aLb)).
+  case: l3 => /= [bb1F bb1P aa1l4F aa1l4P _|
+                  b2 l3 bb1b2l3F bb1b2l3P aa1l4F aa1l4P _].
+    by apply: (bb1P 0%N).
+  by apply: (bb1b2l3P 0%N).
+case: l3 => /= [bb1F bb1P al1F al1P _|b2 l3 bb1b2l3F bb1b2l3P al1F al1P _].
+  apply: Rlt_trans aLb1 _.
+  by apply: (bb1P 0%N).
+case: Rle_bool_spec => [b2La|aLb2]//=.
+  apply: Rlt_trans aLb1 _.
+  by apply: (bb1b2l3P 0%N).
+have /(_ 1%N isT)/= b2Lub1 := bb1b2l3P.
+  apply: Rlt_le_trans b2Lub1 _.
+apply: (ulp_le beta fexp).
+apply: Rlt_le.
+have /(_ 0%N isT)/= b1Lub := bb1b2l3P.
+apply: Rlt_le_trans b1Lub _.
+apply: ulp_le_abs.
+  move=> b_eq0; move: aLb; rewrite b_eq0; split_Rabs; lra.
+by apply: bb1b2l3F; rewrite !inE eqxx.
 Qed.
 
 (* ===========================================================================*)
@@ -450,11 +604,15 @@ have Hz_format : {in z, forall t, format t}.
   by case: Hy => y0F y1F y2F _ _ z1; rewrite !inE => /or3P[] /eqP->.
 (* ... magnitude-sorted ...                                                   *)
 have Hz_sorted : sorted_mag z.
-  apply: Merge_sorted_mag.
-    by have [? ?] := isTW_sorted_mag Hx; case => //=; case.
-  by have [? ?] := isTW_sorted_mag Hy; case => //=; case.      
+  apply: Merge_sorted_mag; first by apply: isTW_sorted_mag Hx.
+  by apply: isTW_sorted_mag Hy.
 (* ... and pairwise ulp-separated: the hypotheses of Theorem 6.               *)
-have Hz_ulp : pairwise_ulp z by admit.
+have Hz_ulp : pairwise_ulp z.
+  apply: Merge_pairwise_ulp=> [u|u||].
+  - by rewrite !inE => /or3P[] /eqP->; case: Hx.
+  - by rewrite !inE => /or3P[] /eqP->; case: Hy.
+  - by apply: isTW_Pnonoverlap Hx.
+  by apply: isTW_Pnonoverlap Hy.
 (* VecSum preserves the exact sum (Algorithm 4 is error-free).                *)
 have He_sum : sumR e = sumR z by admit.
 (* VSEB(3) of VecSum is P-nonoverlapping (Theorems 1, 2 and 6).               *)

@@ -390,8 +390,8 @@ split_Rabs; lra.
 Qed.
 
 (* P-nonoverlap implies pairwise-ulp separation on a single (format) list,    *)
-(* zeros included: |x_{i+2}| < ulp x_{i+1} <= ulp x_i, the last step via       *)
-(* [ulp_le_abs] (and [format_lt_ulp_0] when x_{i+1} = 0).                      *)
+(* zeros included: |x_{i+2}| < ulp x_{i+1} <= ulp x_i, the last step via      *)
+(* [ulp_le_abs] (and [format_lt_ulp_0] when x_{i+1} = 0).                     *)
 Lemma Pnonoverlap_imp_pairwise_ul l :
   {in l,  forall z : R, format z} -> Pnonoverlap l -> pairwise_ulp l.
 Proof.
@@ -603,6 +603,57 @@ apply: ulp_le_abs.
 by apply: bb1b2l3F; rewrite !inE eqxx.
 Qed.
 
+Lemma vecSumAux_cons a b l :
+  vecSumAux [::a, b & l] =
+  let '(es, s) := vecSumAux (b :: l) in 
+  let 'DWR si ei1 := TwoSum a s in (ei1 :: es, si).
+Proof. by []. Qed.
+
+Lemma format_vecSumAux l : 
+  {in l, forall z, format z} ->
+  format (vecSumAux l).2 /\ {in (vecSumAux l).1, forall z, format z}.
+Proof.
+elim: l => [_|a [|b l] // IH ablF]; split => //.
+- by apply: generic_format_0.
+- by apply: ablF; rewrite inE eqxx.
+- rewrite vecSumAux_cons.
+  have /IH[] :  {in b :: l,  forall z : R, format z}.
+    by move=> z zIl; apply: ablF; rewrite inE zIl orbT.
+  case E : vecSumAux => [es s].
+  case E1 : TwoSum => [si ei1] => sF esF.
+  have := @format_TwoSum a s => //.
+  rewrite E1; case => //.
+  by apply: ablF; rewrite inE eqxx.
+have /IH[] :  {in b :: l,  forall z : R, format z}.
+  by move=> z zIl; apply: ablF; rewrite inE zIl orbT.
+  rewrite vecSumAux_cons.
+case E : vecSumAux => [es s].
+case E1 : TwoSum => [si ei1] => sF esF.
+move=> z; rewrite inE => /orP[/eqP->|zIes].
+  have := @format_TwoSum a s => //.
+  rewrite E1; case => //.
+  by apply: ablF; rewrite inE eqxx.
+by apply: esF.
+Qed.
+
+Lemma vecSum_sum l : 
+  {in l, forall z, format z} -> sumR (vecSum l) = sumR l.
+Proof.
+rewrite /vecSum; elim: l => [|a [|b l] // IH ablF]; first by rewrite /=; lra.
+rewrite vecSumAux_cons.
+have : sumR (let '(es, s0) := vecSumAux (b :: l) in s0 :: es) = sumR (b :: l).
+  by apply: IH => z zIl; apply: ablF; rewrite inE zIl orbT.
+case E : vecSumAux => [es s] ssE; rewrite /= in ssE.
+case E1 : TwoSum => [si ei1] /=.
+have := @TwoSum_correct_loc a s.
+rewrite E1 -Rplus_assoc => -> //.
+- by rewrite Rplus_assoc ssE.
+- by apply: ablF; rewrite inE eqxx.
+case: (@format_vecSumAux (b :: l)) => [z zIl|].
+  by apply: ablF; rewrite inE zIl !orbT.
+by rewrite E.
+Qed.
+
 (* ===========================================================================*)
 (*  Algorithm 8: TWSum -- the sum of two triple-word numbers.                 *)
 (* ===========================================================================*)
@@ -654,7 +705,7 @@ have Hz_ulp : pairwise_ulp z.
   - by apply: isTW_Pnonoverlap Hx.
   by apply: isTW_Pnonoverlap Hy.
 (* VecSum preserves the exact sum (Algorithm 4 is error-free).                *)
-have He_sum : sumR e = sumR z by admit.
+have He_sum : sumR e = sumR z by apply: vecSum_sum.
 (* VSEB(3) of VecSum is P-nonoverlapping (Theorems 1, 2 and 6).               *)
 have Hr_nonover : Pnonoverlap (vsebK 3 e) by admit.
 (* and its terms are floating-point numbers.                                  *)

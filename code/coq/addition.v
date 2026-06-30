@@ -277,14 +277,66 @@ Fixpoint sumR (l : seq R) : R := if l is a :: l' then a + sumR l' else 0.
 Definition Pnonoverlap (l : seq R) : Prop :=
   forall i, (i.+1 < size l)%N -> Rabs (nth 0 l i.+1) < ulp (nth 0 l i).
 
+(* Dropping the head of a P-nonoverlapping sequence keeps it P-nonoverlapping. *)
 Lemma Pnonoverlap_cons a l : Pnonoverlap (a :: l) -> Pnonoverlap l.
 Proof. by move=> alP i iLs; apply: (alP i.+1). Qed.
 
 (* The two preconditions of Theorem 6 on the merged sequence.                 *)
+
+(* --- magnitude order ----------------------------------------------------- *)
+(* [sorted_mag l]: the sequence is non-increasing in magnitude.               *)
 Definition sorted_mag (l : seq R) : Prop :=
   forall i, (i.+1 < size l)%N -> Rabs (nth 0 l i.+1) <= Rabs (nth 0 l i).
+
+(* Peel the head of a [sorted_mag] sequence: the first step plus the tail.     *)
+Lemma sorted_mag_cons a1 a2 l :
+  sorted_mag [:: a1,  a2 & l] -> Rabs a2 <= Rabs a1 /\ sorted_mag (a2 :: l).
+Proof.
+move=> a1a2lM; split; first by apply: (a1a2lM 0%N).
+by move=> n Hn; apply: (a1a2lM n.+1).
+Qed.
+
+(* Cons a larger-magnitude head onto a [sorted_mag] sequence.                  *)
+Lemma sorted_mag_cons_inv a1 a2 l :
+  Rabs a2 <= Rabs a1 -> sorted_mag (a2 :: l) -> sorted_mag [:: a1,  a2 & l].
+Proof. by move=> a2La1 a2lN [//|i Hi]; apply: (a2lN i). Qed.
+
+(* Replace the head by an even larger one (still [sorted_mag]).                *)
+Lemma sorted_mag_le a1 a2 l :
+  sorted_mag (a1 :: l) -> Rabs a1 <= Rabs a2 -> sorted_mag (a2 :: l).
+Proof.
+case: l => // a3 l /sorted_mag_cons[a1La3 a3lS] a1La2.
+by apply: sorted_mag_cons_inv => //; lra.
+Qed.
+
+(* --- pairwise ulp separation --------------------------------------------- *)
+(* [pairwise_ulp l]: each term is below ulp of the term two positions before; *)
+(* this tolerates a single overlap but never two in a row.                    *)
 Definition pairwise_ulp (l : seq R) : Prop :=
   forall i, (i.+2 < size l)%N -> Rabs (nth 0 l i.+2) < ulp (nth 0 l i).
+
+(* Peel the head: the third-term bound [Rabs a3 < ulp a1] plus the tail.       *)
+Lemma pairwise_ulp_cons a1 a2 a3 l :
+  pairwise_ulp [:: a1, a2, a3 & l] ->
+  Rabs a3 < ulp a1 /\ pairwise_ulp [::a2, a3 & l].
+Proof.
+move=> a1a2a3lU; split; last by move=> n Hn; apply: (a1a2a3lU n.+1).
+by apply: (a1a2a3lU 0%N).
+Qed.
+
+(* Cons a head given its bound against the third term.                         *)
+Lemma pairwise_ulp_cons_inv a1 a2 a3 l :
+  Rabs a3 < ulp a1 ->
+  pairwise_ulp (a2 :: a3 :: l) -> pairwise_ulp [:: a1, a2, a3 & l].
+Proof. by move=> a2La1 a2lN [//|i Hi]; apply: (a2lN i). Qed.
+
+(* Cons a head onto any tail: the only new obligation is the third-term bound. *)
+Lemma pairwise_ulp_cons1_inv a l :
+  pairwise_ulp l  -> ((1 < size l)%N -> Rabs(nth 0 l 1) < ulp a) -> pairwise_ulp (a :: l).
+Proof.
+case: l => // b [|c l] //= bclP /(_ isT) cLua.
+by apply: pairwise_ulp_cons_inv.
+Qed.
 
 (* Definition 5: a triple-word number is a P-nonoverlapping triplet           *)
 (* of floating-point numbers.                                                 *)
@@ -337,6 +389,30 @@ have -> : y = 0 by apply: format_lt_ulp_0 => //; rewrite -x_eq0.
 split_Rabs; lra.
 Qed.
 
+(* P-nonoverlap implies pairwise-ulp separation on a single (format) list,    *)
+(* zeros included: |x_{i+2}| < ulp x_{i+1} <= ulp x_i, the last step via       *)
+(* [ulp_le_abs] (and [format_lt_ulp_0] when x_{i+1} = 0).                      *)
+Lemma Pnonoverlap_imp_pairwise_ul l :
+  {in l,  forall z : R, format z} -> Pnonoverlap l -> pairwise_ulp l.
+Proof.
+elim: l => //= a [|b [|c l]] // IH abclF abclP.
+apply: pairwise_ulp_cons_inv.
+  have /= bLua := abclP 0%N isT.
+  apply: Rle_lt_trans bLua.
+  have /= := abclP 1%N isT.
+  have [->/format_lt_ulp_0->//|y_neq0 cLub] := Req_dec b 0; try lra.
+    by apply: abclF; rewrite !inE eqxx !orbT.
+  apply: Rle_trans (Rlt_le _ _ cLub) _.
+  apply: ulp_le_abs => //.
+  by apply: abclF; rewrite !inE eqxx !orbT.
+apply: IH.
+  by move=> z zIl; apply: abclF; rewrite inE zIl orbT.
+by move=> i iLs; apply: (abclP i.+1).
+Qed.
+
+(* ===========================================================================*)
+(*  Triple-word numbers as 3-element sequences                                *)
+(* ===========================================================================*)
 Definition TW2l x := let: TWR x0 x1 x2 := x in [:: x0; x1; x2].
 
 (* The merge precondition for a single TW: its three limbs are magnitude-     *)
@@ -347,49 +423,22 @@ by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|//]] _;
    apply: format_lt_ulp_le.
 Qed.
 
+(* A triple-word, viewed as a 3-element list, is P-nonoverlapping (Def. 5).   *)
 Lemma isTW_Pnonoverlap x : isTW x -> Pnonoverlap (TW2l x).
 Proof.
 by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|[]]].
 Qed.
 
-Lemma sorted_mag_cons a1 a2 l :
-  sorted_mag [:: a1,  a2 & l] -> Rabs a2 <= Rabs a1 /\ sorted_mag (a2 :: l).
-Proof.
-move=> a1a2lM; split; first by apply: (a1a2lM 0%N).
-by move=> n Hn; apply: (a1a2lM n.+1).
-Qed. 
+(* ===========================================================================*)
+(*  Merge lemmas (beyond [format_Merge] above): a common magnitude bound, and *)
+(*  the two preconditions of Theorem 6 -- magnitude order and pairwise ulp.   *)
+(* ===========================================================================*)
 
-Lemma sorted_mag_cons_inv a1 a2 l :
-  Rabs a2 <= Rabs a1 -> sorted_mag (a2 :: l) -> sorted_mag [:: a1,  a2 & l].
-Proof. by move=> a2La1 a2lN [//|i Hi]; apply: (a2lN i). Qed.
-
-Lemma sorted_mag_le a1 a2 l :
-  sorted_mag (a1 :: l) -> Rabs a1 <= Rabs a2 -> sorted_mag (a2 :: l).
-Proof.
-case: l => // a3 l /sorted_mag_cons[a1La3 a3lS] a1La2.
-by apply: sorted_mag_cons_inv => //; lra.
-Qed. 
-
-Lemma pairwise_ulp_cons a1 a2 a3 l :
-  pairwise_ulp [:: a1, a2, a3 & l] ->
-  Rabs a3 < ulp a1 /\ pairwise_ulp [::a2, a3 & l].
-Proof.
-move=> a1a2a3lU; split; last by move=> n Hn; apply: (a1a2a3lU n.+1).
-by apply: (a1a2a3lU 0%N).
-Qed. 
-
-Lemma pairwise_ulp_cons_inv a1 a2 a3 l :
-  Rabs a3 < ulp a1 -> 
-  pairwise_ulp (a2 :: a3 :: l) -> pairwise_ulp [:: a1, a2, a3 & l].
-Proof. by move=> a2La1 a2lN [//|i Hi]; apply: (a2lN i). Qed.
-
-Lemma pairwise_ulp_cons1_inv a l :
-  pairwise_ulp l  -> ((1 < size l)%N -> Rabs(nth 0 l 1) < ulp a) -> pairwise_ulp (a :: l).
-Proof.
-case: l => // b [|c l] //= bclP /(_ isT) cLua.
-by apply: pairwise_ulp_cons_inv.
-Qed.
-
+(* Merge propagates a common upper bound on the elements: if every element of *)
+(* [l1] and of [l2] is below [a], so is every element of the merge.  This is  *)
+(* the key tool for [pairwise_ulp] of the merge -- once the global maximum    *)
+(* (the larger head) is removed, all remaining elements are below ulp of the  *)
+(* head, hence so is the element two positions on.                            *)
 Lemma Merge_head_lt l1 l2 a :
   {in l1, forall z, Rabs z < a} -> {in l2, forall z, Rabs z < a} ->
   {in Merge l1 l2, forall z, Rabs z < a}.
@@ -404,6 +453,9 @@ apply: IH2 => // z zIl2.
 by apply: a2l2S; rewrite !inE zIl2 orbT.
 Qed.
 
+(* Merge under a common dominating head [a]: if [a] tops both lists, it still *)
+(* tops the merge, and the merge stays magnitude-sorted.  (Helper for         *)
+(* [Merge_sorted_mag].)                                                       *)
 Lemma Merge_asorted_mag a l1 l2 :
   sorted_mag (a :: l1) -> sorted_mag (a :: l2) -> sorted_mag (a :: Merge l1 l2).
 Proof.
@@ -452,24 +504,12 @@ apply: IH3 => //.
 by apply: sorted_mag_le al1S _; lra.
 Qed.
 
-Lemma Pnonoverlap_imp_pairwise_ul l :  
-  {in l,  forall z : R, format z} -> Pnonoverlap l -> pairwise_ulp l.
-Proof.
-elim: l => //= a [|b [|c l]] // IH abclF abclP.
-apply: pairwise_ulp_cons_inv.
-  have /= bLua := abclP 0%N isT.
-  apply: Rle_lt_trans bLua.
-  have /= := abclP 1%N isT.
-  have [->/format_lt_ulp_0->//|y_neq0 cLub] := Req_dec b 0; try lra.
-    by apply: abclF; rewrite !inE eqxx !orbT.
-  apply: Rle_trans (Rlt_le _ _ cLub) _.
-  apply: ulp_le_abs => //.
-  by apply: abclF; rewrite !inE eqxx !orbT.
-apply: IH.
-  by move=> z zIl; apply: abclF; rewrite inE zIl orbT.
-by move=> i iLs; apply: (abclP i.+1).
-Qed.
-
+(* The main Merge result for Theorem 6: merging two P-nonoverlapping (format) *)
+(* lists yields a [pairwise_ulp] sequence.  The merge's own magnitude tests   *)
+(* supply the ordering, so no [sorted_mag] hypothesis is needed -- among any  *)
+(* three consecutive outputs, two come from the same input list and are       *)
+(* consecutive there, giving the [Pnonoverlap] step; the mixed cases use the  *)
+(* merge's comparison plus ulp monotonicity ([ulp_le]).                       *)
 Lemma Merge_pairwise_ulp (l1 l2 : seq R) :
   {in l1, forall z, format z} ->   {in l2, forall z, format z} ->
   Pnonoverlap l1 -> Pnonoverlap l2 -> pairwise_ulp (Merge l1 l2).

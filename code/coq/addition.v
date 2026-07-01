@@ -693,35 +693,40 @@ Lemma Pnonoverlap_take k l : Pnonoverlap l -> Pnonoverlap (take k l).
 Proof.
 Admitted.
 
-(* Theorem 1 (VecSum).  If the input [l] is magnitude-sorted and pairwise-ulp  *)
-(* separated -- the two conditions [Merge] produces on the six merged terms -- *)
-(* then [vecSum l] is F-nonoverlapping (and preserves the sum, cf.             *)
-(* [vecSum_sum]).                                                             *)
-(* Informal proof (paper Thm 1 / Cor 1): write each term as [M_i * 2^(k_i)]    *)
-(* with [|M_i| < 2^p].  [sorted_mag] + [pairwise_ulp] give [k_{i-1} >= k_i+1]  *)
-(* for all i except at most one "overlap" index, plus [k_{n-2} >= k_{n-1}].    *)
-(* Running [2Sum] from the least-significant end (Algorithm 4) then makes each *)
-(* error term at most [1/2 uls] of the running high word -- i.e. the output    *)
-(* is F-nonoverlapping (with interleaving zeros).  The induction step is       *)
-(* [magnitude_TwoSum] (each 2Sum error is <= 1/2 ulp of its sum) sharpened to  *)
-(* the [uls] bound using the exponent separation above.                       *)
+(* Theorem 1 (VecSum), stated as in the paper: given the input separation,     *)
+(* [vecSum l] is F-nonoverlapping AND has the same exact sum.  The input        *)
+(* hypotheses [sorted_mag l] + [pairwise_ulp l] are the concrete form of the    *)
+(* paper's exponent conditions (writing [x_i = M_i * 2^(k_i)], [|M_i| < 2^p]:   *)
+(* [k_{i-1} >= k_i + 1] for all i except at most one "overlap" index, and       *)
+(* [k_{n-2} >= k_{n-1}]); they are exactly what [Merge] produces on the six      *)
+(* merged terms.                                                               *)
+(* Informal proof.  Sum: this conjunct is precisely [vecSum_sum].  Separation:  *)
+(* run [2Sum] from the least-significant end (Algorithm 4); by induction each   *)
+(* error term is at most [1/2 uls] of the running high word, so the output is   *)
+(* F-nonoverlapping (with interleaving zeros).  The induction step is           *)
+(* [magnitude_TwoSum] (each 2Sum error is <= 1/2 ulp of its sum) sharpened to   *)
+(* the [uls] bound using the exponent separation above.                        *)
 Lemma vecSum_Fnonoverlap l :
   {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
-  Fnonoverlap (vecSum l).
+  Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
 Proof.
 Admitted.
 
-(* Theorem 2 (VSEB).  If [e] is F-nonoverlapping (and its terms are floats),   *)
-(* then [vseb e] is P-nonoverlapping (Priest, Def. 1), provided [p >= n - 1]   *)
-(* with [n = size e].  Here [n = 6] and [p = 53], so the side condition holds. *)
-(* Informal proof (paper Thm 2): [vseb] walks the sequence with a running      *)
-(* remainder, emitting a term only when the [2Sum] error is nonzero (thereby   *)
-(* dropping interleaving zeros).  The F-nonoverlap bound                       *)
-(* [|e_{i+1}| <= 1/2 uls(e_i)] makes every step a Fast2Sum with no rounding,   *)
-(* so consecutive emitted terms satisfy the STRICT [|y_{i+1}| < ulp(y_i)];     *)
-(* the [p >= n-1] hypothesis rules out the carry that could turn [<] into [=]. *)
+(* Theorem 2 (VSEB), stated as in the paper: if [e] is F-nonoverlapping (with   *)
+(* float terms) and the precision is large enough, [size e <= p + 1] (i.e. the  *)
+(* paper's [p >= n - 1] with [n = size e]; here [n = 6], [p = 53]), then         *)
+(* [vseb e] is P-nonoverlapping (Priest, Def. 1) AND has the same exact sum.     *)
+(* Informal proof (paper Thm 2): [vseb] walks the sequence with a running        *)
+(* remainder, emitting a term only when the [2Sum] error is nonzero (thereby     *)
+(* dropping interleaving zeros); it is error-free, whence the sum is preserved.  *)
+(* The F-nonoverlap bound [|e_{i+1}| <= 1/2 uls(e_i)] makes every step a          *)
+(* Fast2Sum with no rounding, so consecutive emitted terms satisfy the STRICT    *)
+(* [|y_{i+1}| < ulp(y_i)]; the [size e <= p + 1] hypothesis rules out the carry  *)
+(* that could turn [<] into [=].                                                *)
 Lemma vseb_Pnonoverlap e :
-  {in e, forall z, format z} -> Fnonoverlap e -> Pnonoverlap (vseb e).
+  (Z.of_nat (size e) <= p + 1)%Z ->
+  {in e, forall z, format z} -> Fnonoverlap e ->
+  Pnonoverlap (vseb e) /\ sumR (vseb e) = sumR e.
 Proof.
 Admitted.
 
@@ -778,16 +783,19 @@ have Hz_ulp : pairwise_ulp z.
 (* VecSum preserves the exact sum (Algorithm 4 is error-free).                *)
 have He_sum : sumR e = sumR z by apply: vecSum_sum.
 (* VSEB(3) of VecSum is P-nonoverlapping.  The chain (see the lemmas above):  *)
-(*   - [vecSum_Fnonoverlap] (Thm 1): [e = vecSum z] is F-nonoverlapping, using *)
-(*     [Hz_format], [Hz_sorted] and [Hz_ulp];                                  *)
-(*   - [vseb_Pnonoverlap]  (Thm 2): hence [vseb e] is P-nonoverlapping         *)
-(*     ([format_vecSum Hz_format] supplies the formatness side condition);     *)
+(*   - [vecSum_Fnonoverlap] (Thm 1): [e = vecSum z] is F-nonoverlapping (its   *)
+(*     [.1]), using [Hz_format], [Hz_sorted] and [Hz_ulp];                     *)
+(*   - [vseb_Pnonoverlap]  (Thm 2): hence [vseb e] is P-nonoverlapping (its    *)
+(*     [.1]); its side conditions are [size e = 6 <= p + 1] and the formatness *)
+(*     [format_vecSum Hz_format];                                              *)
 (*   - [Pnonoverlap_take]         : [vsebK 3 e = take 3 (vseb e)] is a prefix, *)
 (*     so it is P-nonoverlapping too.                                          *)
-(* i.e. once the three lemmas are proved this closes with                      *)
-(*   [rewrite /vsebK; apply: Pnonoverlap_take; apply: vseb_Pnonoverlap;        *)
-(*      [exact: (format_vecSum Hz_format)                                      *)
-(*      |exact: (vecSum_Fnonoverlap Hz_format Hz_sorted Hz_ulp)]].             *)
+(* i.e. once the three lemmas are proved this closes with (writing [Hsz] for   *)
+(* [Z.of_nat (size e) <= p + 1] -- here [size e = 6] as VecSum and Merge       *)
+(* preserve length, and [p = 53])                                              *)
+(*   [rewrite /vsebK; apply: Pnonoverlap_take;                                 *)
+(*    apply: (vseb_Pnonoverlap Hsz (format_vecSum Hz_format)                    *)
+(*             (vecSum_Fnonoverlap Hz_format Hz_sorted Hz_ulp).1).1].          *)
 have Hr_nonover : Pnonoverlap (vsebK 3 e) by admit.
 (* and its terms are floating-point numbers.                                  *)
 have Hr_format : {in vsebK 3 e, forall t, format t}.

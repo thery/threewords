@@ -655,6 +655,82 @@ by rewrite E.
 Qed.
 
 (* ===========================================================================*)
+(*  Normalisation: VecSum then VSEB (paper Theorems 1 and 2)                  *)
+(*                                                                            *)
+(*  This is the machinery behind the [Hr_nonover] step of [TWSum_isTW]: it    *)
+(*  turns the merged six-term sequence into a P-nonoverlapping triple.  The   *)
+(*  chain is  VecSum (Thm 1) -> VSEB (Thm 2) -> take the first 3 terms.       *)
+(* ===========================================================================*)
+
+(* [uls x] -- "unit in the last significant place": the weight of the         *)
+(* RIGHTMOST nonzero bit of [x]  (whereas [ulp x] is the weight of the        *)
+(* leftmost / most-significant bit).  If [x = m * 2^(cexp x)] with [m] the    *)
+(* integer mantissa, then [uls x = 2^(cexp x + v2 m)], with [v2 m] the        *)
+(* 2-adic valuation of [m]: [Z.land m (- m)] isolates the lowest set bit of   *)
+(* [m] as a power of two, and [Z.log2] of it is exactly [v2 m].  Always       *)
+(* [uls x <= ulp x], with equality iff the mantissa is odd.  (The value at    *)
+(* [x = 0] is irrelevant -- it is never used below.)                          *)
+Definition uls (x : R) : R :=
+  let m := Ztrunc (mant x) in pow (cexp x + Z.log2 (Z.land m (- m)))%Z.
+
+(* Definition 2 (Fabiano): [l] is F-nonoverlapping when each term is at most   *)
+(* half the [uls] of its predecessor.  Since [uls <= ulp] this is STRICTLY     *)
+(* stronger than [pairwise_ulp] / [Pnonoverlap]; it is the invariant that      *)
+(* VecSum establishes (Thm 1) and that VSEB consumes (Thm 2).                  *)
+(* NB: the paper's Thms 1-2 state this "with interleaving zeros" (Def. 3):     *)
+(* interior zeros are simply skipped in the analysis, exactly the phenomenon   *)
+(* handled by [format_lt_ulp_0].  We keep the plain form here for the roadmap. *)
+Definition Fnonoverlap (l : seq R) : Prop :=
+  forall i, (i.+1 < size l)%N -> Rabs (nth 0 l i.+1) <= / 2 * uls (nth 0 l i).
+
+(* A prefix of a P-nonoverlapping sequence is P-nonoverlapping.  Since         *)
+(* [vsebK k = take k \o vseb], this is what turns "VSEB is P-nonoverlapping"   *)
+(* into "VSEB(k) is P-nonoverlapping".                                        *)
+(* Proof: [take k] leaves the [nth]s at indices < k unchanged and only        *)
+(* shortens the list, so every instance of the [Pnonoverlap] condition on     *)
+(* [take k l] is an instance already available on [l].                        *)
+Lemma Pnonoverlap_take k l : Pnonoverlap l -> Pnonoverlap (take k l).
+Proof.
+Admitted.
+
+(* Theorem 1 (VecSum), stated as in the paper: given the input separation,     *)
+(* [vecSum l] is F-nonoverlapping AND has the same exact sum.  The input        *)
+(* hypotheses [sorted_mag l] + [pairwise_ulp l] are the concrete form of the    *)
+(* paper's exponent conditions (writing [x_i = M_i * 2^(k_i)], [|M_i| < 2^p]:   *)
+(* [k_{i-1} >= k_i + 1] for all i except at most one "overlap" index, and       *)
+(* [k_{n-2} >= k_{n-1}]); they are exactly what [Merge] produces on the six      *)
+(* merged terms.                                                               *)
+(* Informal proof.  Sum: this conjunct is precisely [vecSum_sum].  Separation:  *)
+(* run [2Sum] from the least-significant end (Algorithm 4); by induction each   *)
+(* error term is at most [1/2 uls] of the running high word, so the output is   *)
+(* F-nonoverlapping (with interleaving zeros).  The induction step is           *)
+(* [magnitude_TwoSum] (each 2Sum error is <= 1/2 ulp of its sum) sharpened to   *)
+(* the [uls] bound using the exponent separation above.                        *)
+Lemma vecSum_Fnonoverlap l :
+  {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
+  Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
+Proof.
+Admitted.
+
+(* Theorem 2 (VSEB), stated as in the paper: if [e] is F-nonoverlapping (with   *)
+(* float terms) and the precision is large enough, [size e <= p + 1] (i.e. the  *)
+(* paper's [p >= n - 1] with [n = size e]; here [n = 6], [p = 53]), then         *)
+(* [vseb e] is P-nonoverlapping (Priest, Def. 1) AND has the same exact sum.     *)
+(* Informal proof (paper Thm 2): [vseb] walks the sequence with a running        *)
+(* remainder, emitting a term only when the [2Sum] error is nonzero (thereby     *)
+(* dropping interleaving zeros); it is error-free, whence the sum is preserved.  *)
+(* The F-nonoverlap bound [|e_{i+1}| <= 1/2 uls(e_i)] makes every step a          *)
+(* Fast2Sum with no rounding, so consecutive emitted terms satisfy the STRICT    *)
+(* [|y_{i+1}| < ulp(y_i)]; the [size e <= p + 1] hypothesis rules out the carry  *)
+(* that could turn [<] into [=].                                                *)
+Lemma vseb_Pnonoverlap e :
+  (Z.of_nat (size e) <= p + 1)%Z ->
+  {in e, forall z, format z} -> Fnonoverlap e ->
+  Pnonoverlap (vseb e) /\ sumR (vseb e) = sumR e.
+Proof.
+Admitted.
+
+(* ===========================================================================*)
 (*  Algorithm 8: TWSum -- the sum of two triple-word numbers.                 *)
 (* ===========================================================================*)
 Definition TWSum (x y : twR) : twR :=
@@ -706,7 +782,20 @@ have Hz_ulp : pairwise_ulp z.
   by apply: isTW_Pnonoverlap Hy.
 (* VecSum preserves the exact sum (Algorithm 4 is error-free).                *)
 have He_sum : sumR e = sumR z by apply: vecSum_sum.
-(* VSEB(3) of VecSum is P-nonoverlapping (Theorems 1, 2 and 6).               *)
+(* VSEB(3) of VecSum is P-nonoverlapping.  The chain (see the lemmas above):  *)
+(*   - [vecSum_Fnonoverlap] (Thm 1): [e = vecSum z] is F-nonoverlapping (its   *)
+(*     [.1]), using [Hz_format], [Hz_sorted] and [Hz_ulp];                     *)
+(*   - [vseb_Pnonoverlap]  (Thm 2): hence [vseb e] is P-nonoverlapping (its    *)
+(*     [.1]); its side conditions are [size e = 6 <= p + 1] and the formatness *)
+(*     [format_vecSum Hz_format];                                              *)
+(*   - [Pnonoverlap_take]         : [vsebK 3 e = take 3 (vseb e)] is a prefix, *)
+(*     so it is P-nonoverlapping too.                                          *)
+(* i.e. once the three lemmas are proved this closes with (writing [Hsz] for   *)
+(* [Z.of_nat (size e) <= p + 1] -- here [size e = 6] as VecSum and Merge       *)
+(* preserve length, and [p = 53])                                              *)
+(*   [rewrite /vsebK; apply: Pnonoverlap_take;                                 *)
+(*    apply: (vseb_Pnonoverlap Hsz (format_vecSum Hz_format)                    *)
+(*             (vecSum_Fnonoverlap Hz_format Hz_sorted Hz_ulp).1).1].          *)
 have Hr_nonover : Pnonoverlap (vsebK 3 e) by admit.
 (* and its terms are floating-point numbers.                                  *)
 have Hr_format : {in vsebK 3 e, forall t, format t}.

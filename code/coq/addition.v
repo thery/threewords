@@ -63,8 +63,7 @@ Local Instance valid_rnd : Valid_rnd rnd := valid_rnd_N choice.
 Lemma emin_le_0 : (emin <= 0)%Z.
 Proof. by rewrite /emin /emax /p; lia. Qed.
 
-Local Notation float := (float
- radix2).
+Local Notation float := (float radix2).
 Local Notation fexp := (FLT_exp emin p).
 Local Notation format := (generic_format beta fexp).
 Local Notation cexp := (cexp beta fexp).
@@ -324,15 +323,16 @@ move=> a1a2a3lU; split; last by move=> n Hn; apply: (a1a2a3lU n.+1).
 by apply: (a1a2a3lU 0%N).
 Qed.
 
-(* Cons a head given its bound against the third term.                         *)
+(* Cons a head given its bound against the third term.                        *)
 Lemma pairwise_ulp_cons_inv a1 a2 a3 l :
   Rabs a3 < ulp a1 ->
   pairwise_ulp (a2 :: a3 :: l) -> pairwise_ulp [:: a1, a2, a3 & l].
 Proof. by move=> a2La1 a2lN [//|i Hi]; apply: (a2lN i). Qed.
 
-(* Cons a head onto any tail: the only new obligation is the third-term bound. *)
+(* Cons a head onto any tail: the only new obligation is the third-term bound.*)
 Lemma pairwise_ulp_cons1_inv a l :
-  pairwise_ulp l  -> ((1 < size l)%N -> Rabs(nth 0 l 1) < ulp a) -> pairwise_ulp (a :: l).
+  pairwise_ulp l  -> ((1 < size l)%N -> Rabs(nth 0 l 1) < ulp a) ->
+  pairwise_ulp (a :: l).
 Proof.
 case: l => // b [|c l] //= bclP /(_ isT) cLua.
 by apply: pairwise_ulp_cons_inv.
@@ -429,6 +429,11 @@ Proof.
 by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|[]]].
 Qed.
 
+Lemma isTW_format x : isTW x -> {in (TW2l x), forall z, format z}.
+Proof.
+by case : x => x0 x1 x2 [x0F x1F x2F _ _] z; rewrite !inE => /or3P[] /eqP->.
+Qed.
+
 (* ===========================================================================*)
 (*  Merge lemmas (beyond [format_Merge] above): a common magnitude bound, and *)
 (*  the two preconditions of Theorem 6 -- magnitude order and pairwise ulp.   *)
@@ -453,6 +458,9 @@ apply: IH2 => // z zIl2.
 by apply: a2l2S; rewrite !inE zIl2 orbT.
 Qed.
 
+Search Z.land.
+
+Compute (Z.land 23 (- 23)).
 (* Merge under a common dominating head [a]: if [a] tops both lists, it still *)
 (* tops the merge, and the merge stays magnitude-sorted.  (Helper for         *)
 (* [Merge_sorted_mag].)                                                       *)
@@ -603,6 +611,15 @@ apply: ulp_le_abs.
 by apply: bb1b2l3F; rewrite !inE eqxx.
 Qed.
 
+Lemma Merge_sumR (l1 l2 : seq R) : sumR (Merge l1 l2) = sumR l1 + sumR l2.
+ Proof.
+elim: l1 l2 => /= [|a l1 IH1]; first by elim => [/=| b l2] //; lra.
+elim =>  [/=|b l2 IH2]; first by lra.
+case: Rle_bool_spec => [bLa|aLb].
+  by rewrite /= IH1 /=; lra.
+by rewrite /= IH2; lra.
+Qed.
+
 Lemma vecSumAux_cons a b l :
   vecSumAux [::a, b & l] =
   let '(es, s) := vecSumAux (b :: l) in 
@@ -663,69 +680,148 @@ Qed.
 (* ===========================================================================*)
 
 (* [uls x] -- "unit in the last significant place": the weight of the         *)
-(* RIGHTMOST NONZERO bit of [x].  ([ulp x = 2^(cexp x)] is the weight of the   *)
-(* last *representable* place -- the spacing of the grid; the weight of the    *)
-(* leftmost bit is [ufp x], the other extreme.)  If [x = m * 2^(cexp x)] with  *)
-(* [m] the integer mantissa, then [uls x = 2^(cexp x + v2 m)], where [v2 m] is *)
-(* the 2-adic valuation of [m]: [Z.land m (- m)] isolates the lowest set bit   *)
-(* of [m] as a power of two, and [Z.log2] of it is exactly [v2 m].  Hence      *)
-(* [uls x = ulp x * 2^(v2 m) >= ulp x], with equality iff the mantissa is odd  *)
-(* -- e.g. for [x = -1.01101_2 * 2^364] the paper has [ulp x = 2^312] but      *)
-(* [uls x = 2^359].  (The value at [x = 0] is irrelevant -- never used below.) *)
-Definition uls (x : R) : R :=
-  let m := Ztrunc (mant x) in pow (cexp x + Z.log2 (Z.land m (- m)))%Z.
+(* RIGHTMOST nonzero bit of [x]  (whereas [ulp x] is the weight of the        *)
+(* leftmost / most-significant bit).  If [x = m * 2^(cexp x)] with [m] the    *)
+(* integer mantissa, then [uls x = 2^(cexp x + v2 m)], with [v2 m] the        *)
+(* 2-adic valuation of [m]: [Z.land m (- m)] isolates the lowest set bit of   *)
+(* [m] as a power of two, and [Z.log2] of it is exactly [v2 m].  Always       *)
+(* [uls x <= ulp x], with equality iff the mantissa is odd.  (The value at    *)
+(* [x = 0] is irrelevant -- it is never used below.)                          *)
+Fixpoint trP (p : positive) := if p is xO p1 then (trP p1).+1 else 0%N.
 
-(* Definition 2 (Fabiano): [l] is F-nonoverlapping when each term is at most   *)
-(* half the [uls] of its predecessor.  This is Fabiano's separation (more      *)
-(* restrictive than Shewchuk's ulp-nonoverlapping); it is the invariant that   *)
-(* VecSum establishes (Thm 1) and that VSEB consumes (Thm 2) to yield a        *)
-(* P-nonoverlapping output.                                                    *)
-(* NB: the paper's Thms 1-2 state this "with interleaving zeros" (Def. 3):     *)
-(* interior zeros are simply skipped in the analysis, exactly the phenomenon   *)
-(* handled by [format_lt_ulp_0].  We keep the plain form here for the roadmap. *)
+Definition two_power_pos n := iter n xO 1%positive.
+
+Lemma trPE p1 : (two_power_pos (trP p1) | p1)%positive.
+Proof.
+have div1 q : (1 | q)%positive by exists q; rewrite Pos.mul_comm.
+elim: p1 => //= p1 [q {2}->] /=; exists q; lia.
+Qed.
+
+Definition trZ (z : Z) := if z is Zpos p1 then (trP p1) else
+                          if z is Zneg p1 then (trP p1) else 0%N.
+
+Lemma trZ0 : trZ 0 = 0%N.
+Proof. by []. Qed.
+
+Lemma two_power_nat_pos n : (Zpos (two_power_pos n) = two_power_nat n)%Z.
+Proof. by elim: n. Qed.
+
+Lemma trZE p1 : (2 ^ Z.of_nat (trZ p1) | p1)%Z.
+Proof.
+rewrite -two_power_nat_equiv.
+case: p1 => [|p1|p1]; first by apply: Z.divide_0_r.
+  by rewrite -two_power_nat_pos /=; apply/Z.divide_Zpos/trPE.
+rewrite -two_power_nat_pos /=.
+by apply/Z.divide_Zpos_Zneg_r/Z.divide_Zpos/trPE.
+Qed.
+
+Definition uls (x : R) : R :=
+  if Req_bool x 0 then ulp 0 else
+  let m := Ztrunc (mant x) in pow (cexp x + Z.of_nat (trZ m))%Z.
+
+Lemma uls0 : uls 0 = ulp 0.
+Proof. by rewrite /uls; case: Req_bool_spec. Qed.
+
+Lemma ulsE x : 
+ format x -> 
+ x = IZR (Ztrunc (mant x) / (2 ^ Z.of_nat (trZ (Ztrunc (mant x)))))%Z * uls x.
+Proof.
+move=> xF; rewrite /uls.
+case: (Req_bool_spec x 0) => [->|x_neq0].
+  by rewrite scaled_mantissa_0 Ztrunc_IZR Rmult_0_l.
+rewrite -[X in X = _](scaled_mantissa_mult_bpow beta fexp) bpow_plus.
+rewrite -[X in _ = _ * (_ * X)]IZR_Zpower; last by lia.
+rewrite [X in _ = _ * X]Rmult_comm -[RHS]Rmult_assoc -mult_IZR.
+rewrite Zmult_comm -Znumtheory.Zdivide_Zdiv_eq.
+- by rewrite -scaled_mantissa_generic //.
+- by apply: Zpower_gt_0; lia.
+by apply: trZE.
+Qed.
+
+Lemma ulp_le_ulps x : ulp x <= uls x.
+Proof.
+rewrite /uls.
+case: Req_bool_spec => [->//|x_neq0]; first by lra.
+rewrite ulp_neq_0 //;apply: bpow_le; lia.
+Qed.
+
+(* Definition 2 (Fabiano): [l] is F-nonoverlapping when each term is at most  *)
+(* half the [uls] of its predecessor.  Since [uls <= ulp] this is STRICTLY    *)
+(* stronger than [pairwise_ulp] / [Pnonoverlap]; it is the invariant that     *)
+(* VecSum establishes (Thm 1) and that VSEB consumes (Thm 2).                 *)
+(* NB: the paper's Thms 1-2 state this "with interleaving zeros" (Def. 3):    *)
+(* interior zeros are simply skipped in the analysis, exactly the phenomenon  *)
+(* handled by [format_lt_ulp_0].  We keep the plain form here for the roadmap.*)
 Definition Fnonoverlap (l : seq R) : Prop :=
   forall i, (i.+1 < size l)%N -> Rabs (nth 0 l i.+1) <= / 2 * uls (nth 0 l i).
 
-(* A prefix of a P-nonoverlapping sequence is P-nonoverlapping.  Since         *)
-(* [vsebK k = take k \o vseb], this is what turns "VSEB is P-nonoverlapping"   *)
+(* A prefix of a P-nonoverlapping sequence is P-nonoverlapping.  Since        *)
+(* [vsebK k = take k \o vseb], this is what turns "VSEB is P-nonoverlapping"  *)
 (* into "VSEB(k) is P-nonoverlapping".                                        *)
 (* Proof: [take k] leaves the [nth]s at indices < k unchanged and only        *)
 (* shortens the list, so every instance of the [Pnonoverlap] condition on     *)
 (* [take k l] is an instance already available on [l].                        *)
 Lemma Pnonoverlap_take k l : Pnonoverlap l -> Pnonoverlap (take k l).
 Proof.
-Admitted.
+elim: l k => //= a [| b l] IH [|[|k]] //=.
+move=> ablP [|i] /= iLs; first by apply: (ablP 0%N).
+apply: (IH k.+1 _ i) => // z zLs.
+by apply: (ablP z.+1).
+Qed.
 
-(* Theorem 1 (VecSum), stated as in the paper: given the input separation,     *)
-(* [vecSum l] is F-nonoverlapping AND has the same exact sum.  The input        *)
-(* hypotheses [sorted_mag l] + [pairwise_ulp l] are the concrete form of the    *)
-(* paper's exponent conditions (writing [x_i = M_i * 2^(k_i)], [|M_i| < 2^p]:   *)
-(* [k_{i-1} >= k_i + 1] for all i except at most one "overlap" index, and       *)
-(* [k_{n-2} >= k_{n-1}]); they are exactly what [Merge] produces on the six      *)
-(* merged terms.                                                               *)
-(* Informal proof.  Sum: this conjunct is precisely [vecSum_sum].  Separation:  *)
-(* run [2Sum] from the least-significant end (Algorithm 4); by induction each   *)
-(* error term is at most [1/2 uls] of the running high word, so the output is   *)
-(* F-nonoverlapping (with interleaving zeros).  The induction step is           *)
-(* [magnitude_TwoSum] (each 2Sum error is <= 1/2 ulp of its sum) sharpened to   *)
-(* the [uls] bound using the exponent separation above.                        *)
+(* Theorem 1 (VecSum), stated as in the paper: given the input separation,    *)
+(* [vecSum l] is F-nonoverlapping AND has the same exact sum.  The input      *)
+(* hypotheses [sorted_mag l] + [pairwise_ulp l] are the concrete form of the  *)
+(* paper's exponent conditions (writing [x_i = M_i * 2^(k_i)], [|M_i| < 2^p]: *)
+(* [k_{i-1} >= k_i + 1] for all i except at most one "overlap" index, and     *)
+(* [k_{n-2} >= k_{n-1}]); they are exactly what [Merge] produces on the six   *)
+(* merged terms.                                                              *)
+(* Informal proof.  Sum: this conjunct is precisely [vecSum_sum].  Separation:*)
+(* run [2Sum] from the least-significant end (Algorithm 4); by induction each *)
+(* error term is at most [1/2 uls] of the running high word, so the output is *)
+(* F-nonoverlapping (with interleaving zeros).  The induction step is         *)
+(* [magnitude_TwoSum] (each 2Sum error is <= 1/2 ulp of its sum) sharpened to *)
+(* the [uls] bound using the exponent separation above.                       *)
 Lemma vecSum_Fnonoverlap l :
   {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
   Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
 Proof.
+move=> lF lM lP; split; last by apply: vecSum_sum.
+rewrite /vecSum.
+elim: l lF lM lP => // a [|b l] // IH ablF ablM ablP.
+have -> : vecSumAux [:: a,  b  & l] =
+          let: (es, s) := vecSumAux (b :: l) in
+          let: DWR si ei1 := TwoSum a s in
+          (ei1 :: es, si) by [].
+case E : (vecSumAux (b :: l)) => [es s].
+case E1 : (TwoSum a s) => [si ei1].
+have sesF :  Fnonoverlap (s :: es).
+  have := IH; rewrite E; apply.
+  - by move=> z zIl; apply: ablF; rewrite inE zIl orbT.
+  - by case: (sorted_mag_cons ablM).
+  by case: (l) ablP => // c l1 /pairwise_ulp_cons[].
+have sF : format s.
+  have := @format_vecSumAux (b :: l).
+  by rewrite E; case => // z zIl; apply: ablF; rewrite inE zIl orbT.
+move=> [/=|i] _.
+  have :  magnitudeDWR (TwoSum a s).
+    apply: magnitude_TwoSum => //.
+    by apply: ablF => //; rewrite !inE eqxx.
+ rewrite E1 => /=; rewrite Rmult_comm /Rdiv //.
+  admit.
 Admitted.
 
-(* Theorem 2 (VSEB), stated as in the paper: if [e] is F-nonoverlapping (with   *)
-(* float terms) and the precision is large enough, [size e <= p + 1] (i.e. the  *)
-(* paper's [p >= n - 1] with [n = size e]; here [n = 6], [p = 53]), then         *)
-(* [vseb e] is P-nonoverlapping (Priest, Def. 1) AND has the same exact sum.     *)
-(* Informal proof (paper Thm 2): [vseb] walks the sequence with a running        *)
-(* remainder, emitting a term only when the [2Sum] error is nonzero (thereby     *)
-(* dropping interleaving zeros); it is error-free, whence the sum is preserved.  *)
-(* The F-nonoverlap bound [|e_{i+1}| <= 1/2 uls(e_i)] makes every step a          *)
-(* Fast2Sum with no rounding, so consecutive emitted terms satisfy the STRICT    *)
-(* [|y_{i+1}| < ulp(y_i)]; the [size e <= p + 1] hypothesis rules out the carry  *)
-(* that could turn [<] into [=].                                                *)
+(* Theorem 2 (VSEB), stated as in the paper: if [e] is F-nonoverlapping (with *)
+(* float terms) and the precision is large enough, [size e <= p + 1] (i.e. the*)
+(* paper's [p >= n - 1] with [n = size e]; here [n = 6], [p = 53]), then      *)
+(* [vseb e] is P-nonoverlapping (Priest, Def. 1) AND has the same exact sum.  *)
+(* Informal proof (paper Thm 2): [vseb] walks the sequence with a running     *)
+(* remainder, emitting a term only when the [2Sum] error is nonzero (thereby  *)
+(* dropping interleaving zeros); it is error-free, whence the sum is          *)
+(* preserved. The F-nonoverlap bound [|e_{i+1}| <= 1/2 uls(e_i)] makes every  *)
+(* step a Fast2Sum with no rounding, so consecutive emitted terms satisfy the *)
+(* STRICT [|y_{i+1}| < ulp(y_i)]; the [size e <= p + 1] hypothesis rules out  *)
+(* the carry that could turn [<] into [=].                                    *)
 Lemma vseb_Pnonoverlap e :
   (Z.of_nat (size e) <= p + 1)%Z ->
   {in e, forall z, format z} -> Fnonoverlap e ->
@@ -786,19 +882,19 @@ have Hz_ulp : pairwise_ulp z.
 (* VecSum preserves the exact sum (Algorithm 4 is error-free).                *)
 have He_sum : sumR e = sumR z by apply: vecSum_sum.
 (* VSEB(3) of VecSum is P-nonoverlapping.  The chain (see the lemmas above):  *)
-(*   - [vecSum_Fnonoverlap] (Thm 1): [e = vecSum z] is F-nonoverlapping (its   *)
-(*     [.1]), using [Hz_format], [Hz_sorted] and [Hz_ulp];                     *)
-(*   - [vseb_Pnonoverlap]  (Thm 2): hence [vseb e] is P-nonoverlapping (its    *)
-(*     [.1]); its side conditions are [size e = 6 <= p + 1] and the formatness *)
-(*     [format_vecSum Hz_format];                                              *)
-(*   - [Pnonoverlap_take]         : [vsebK 3 e = take 3 (vseb e)] is a prefix, *)
-(*     so it is P-nonoverlapping too.                                          *)
-(* i.e. once the three lemmas are proved this closes with (writing [Hsz] for   *)
-(* [Z.of_nat (size e) <= p + 1] -- here [size e = 6] as VecSum and Merge       *)
-(* preserve length, and [p = 53])                                              *)
-(*   [rewrite /vsebK; apply: Pnonoverlap_take;                                 *)
-(*    apply: (vseb_Pnonoverlap Hsz (format_vecSum Hz_format)                    *)
-(*             (vecSum_Fnonoverlap Hz_format Hz_sorted Hz_ulp).1).1].          *)
+(*   - [vecSum_Fnonoverlap] (Thm 1): [e = vecSum z] is F-nonoverlapping (its  *)
+(*     [.1]), using [Hz_format], [Hz_sorted] and [Hz_ulp];                    *)
+(*   - [vseb_Pnonoverlap]  (Thm 2): hence [vseb e] is P-nonoverlapping (its   *)
+(*     [.1]); its side conditions are [size e = 6 <= p + 1] and the formatness*)
+(*     [format_vecSum Hz_format];                                             *)
+(*   - [Pnonoverlap_take]         : [vsebK 3 e = take 3 (vseb e)] is a prefix,*)
+(*     so it is P-nonoverlapping too.                                         *)
+(* i.e. once the three lemmas are proved this closes with (writing [Hsz] for  *)
+(* [Z.of_nat (size e) <= p + 1] -- here [size e = 6] as VecSum and Merge      *)
+(* preserve length, and [p = 53])                                             *)
+(*   [rewrite /vsebK; apply: Pnonoverlap_take;                                *)
+(*    apply: (vseb_Pnonoverlap Hsz (format_vecSum Hz_format)                  *)
+(*             (vecSum_Fnonoverlap Hz_format Hz_sorted Hz_ulp).1).1].         *)
 have Hr_nonover : Pnonoverlap (vsebK 3 e) by admit.
 (* and its terms are floating-point numbers.                                  *)
 have Hr_format : {in vsebK 3 e, forall t, format t}.
@@ -826,9 +922,13 @@ case: x => x0 x1 x2; case: y => y0 y1 y2 => Hx Hy.
 pose z := Merge [:: x0; x1; x2] [:: y0; y1; y2].
 pose e := vecSum z.
 (* Merge is a permutation: it preserves the exact sum.                        *)
-have Hmerge_sum : sumR z = (x0 + x1 + x2) + (y0 + y1 + y2) by admit.
+have Hmerge_sum : sumR z = (x0 + x1 + x2) + (y0 + y1 + y2).
+  by rewrite Merge_sumR /=; lra.
 (* VecSum is error-free.                                                      *)
-have Hvec_sum : sumR e = sumR z by admit.
+have Hvec_sum : sumR e = sumR z.
+  rewrite vecSum_sum //; apply: format_Merge; first by apply: (isTW_format Hx).
+  by apply: isTW_format Hy.
+
 (* VSEB is error-free on the full output.                                     *)
 have Hvseb_sum : sumR (vseb e) = sumR e by admit.
 (* Truncating to the first three terms loses at most errc of the sum          *)

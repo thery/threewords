@@ -356,6 +356,14 @@ Definition isTW (x : twR) : Prop :=
 (*  nonzero float has [bpow emin <= Rabs y], so [Rabs y < ulp 0] gives y = 0. *)
 (* ===========================================================================*)
 
+(* [ulp] is strictly positive everywhere: at 0 it is [bpow emin] (FLT), and    *)
+(* elsewhere [bpow (cexp _)].                                                   *)
+Lemma ulp_gt_0 x : 0 < ulp x.
+Proof.
+have [->|xn0] := Req_dec x 0; first by rewrite ulp_FLT_0; apply: bpow_gt_0.
+by rewrite ulp_neq_0 //; apply: bpow_gt_0.
+Qed.
+
 (* A format number strictly below the smallest positive float is 0.           *)
 (* Depends on (all from Flocq.Core, already imported via [Core]):             *)
 (*   - [ulp_FLT_0]    : ulp 0 = bpow emin   (Flocq.Core.FLT)                  *)
@@ -965,8 +973,21 @@ have Hr_nonover : Pnonoverlap (vsebK 3 e) by admit.
 have Hr_format : {in vsebK 3 e, forall t, format t}.
   by apply/format_vsebK/format_vecSum.
 (* Reading the first three terms off the P-nonoverlapping sequence            *)
-(* yields a triple-word number.                                               *)
-admit.
+(* yields a triple-word number.  Case on the (<=3, zero-padded) list [vsebK    *)
+(* 3 e]; formats come from [Hr_format], the strict ulp bounds from either      *)
+(* [Hr_nonover] (real terms) or [0 < ulp _] (the padding zeros).               *)
+rewrite /TWSum -/z -/e.
+move: Hr_nonover Hr_format; case: (vsebK 3 e) => [|r0 [|r1 [|r2 tl]]] Hno Hfmt.
+- by split; [exact: generic_format_0 | exact: generic_format_0
+           | exact: generic_format_0 | rewrite Rabs_R0; exact: ulp_gt_0
+           | rewrite Rabs_R0; exact: ulp_gt_0].
+- by split; [apply: Hfmt; rewrite !inE eqxx | exact: generic_format_0
+           | exact: generic_format_0 | rewrite Rabs_R0; exact: ulp_gt_0
+           | rewrite Rabs_R0; exact: ulp_gt_0].
+- by split; [apply: Hfmt; rewrite !inE eqxx | apply: Hfmt; rewrite !inE eqxx orbT
+           | exact: generic_format_0 | apply: (Hno 0%N) | rewrite Rabs_R0; exact: ulp_gt_0].
+by split; [apply: Hfmt; rewrite !inE eqxx | apply: Hfmt; rewrite !inE eqxx orbT
+         | apply: Hfmt; rewrite !inE eqxx !orbT | apply: (Hno 0%N) | apply: (Hno 1%N)].
 Admitted.
 
 (* ===========================================================================*)

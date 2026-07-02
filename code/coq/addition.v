@@ -1013,8 +1013,14 @@ have Hres : TWval (TWSum (TWR x0 x1 x2) (TWR y0 y1 y2)) = sumR (vsebK 3 e).
   rewrite /TWSum -/z -/e.
   move: Hsz; case: (vsebK 3 e) => [|r0 [|r1 [|r2 [|r3 l]]]] /= H; try by lra.
   by exfalso; move/leP: H; lia.
-(* Chaining the four equalities and the truncation bound concludes.           *)
-admit.
+(* Chaining the equalities and the truncation bound concludes.  Both operands  *)
+(* sum to [sumR (vseb e)] (Merge/VecSum/VSEB preserve the sum), the result is   *)
+(* [sumR (vsebK 3 e)] (Hres), so the error is the dropped tail bounded by       *)
+(* [Htrunc].                                                                    *)
+have E1 : TWval (TWR x0 x1 x2) + TWval (TWR y0 y1 y2) = sumR (vseb e).
+  by rewrite /= Hvseb_sum Hvec_sum Hmerge_sum.
+rewrite Hres E1 Rabs_minus_sym {2}Hvseb_sum.
+exact: Htrunc.
 Admitted.
 
 End TWAdd.

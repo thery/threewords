@@ -429,6 +429,7 @@ Proof.
 by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|[]]].
 Qed.
 
+(* The three limbs of a triple-word are floating-point numbers (part of Def. 5). *)
 Lemma isTW_format x : isTW x -> {in (TW2l x), forall z, format z}.
 Proof.
 by case : x => x0 x1 x2 [x0F x1F x2F _ _] z; rewrite !inE => /or3P[] /eqP->.
@@ -458,9 +459,6 @@ apply: IH2 => // z zIl2.
 by apply: a2l2S; rewrite !inE zIl2 orbT.
 Qed.
 
-Search Z.land.
-
-Compute (Z.land 23 (- 23)).
 (* Merge under a common dominating head [a]: if [a] tops both lists, it still *)
 (* tops the merge, and the merge stays magnitude-sorted.  (Helper for         *)
 (* [Merge_sorted_mag].)                                                       *)
@@ -611,6 +609,7 @@ apply: ulp_le_abs.
 by apply: bb1b2l3F; rewrite !inE eqxx.
 Qed.
 
+(* Merge is a permutation of its two inputs, so it preserves the exact sum.    *)
 Lemma Merge_sumR (l1 l2 : seq R) : sumR (Merge l1 l2) = sumR l1 + sumR l2.
  Proof.
 elim: l1 l2 => /= [|a l1 IH1]; first by elim => [/=| b l2] //; lra.
@@ -680,23 +679,32 @@ Qed.
 (* ===========================================================================*)
 
 (* [uls x] -- "unit in the last significant place": the weight of the         *)
-(* RIGHTMOST nonzero bit of [x]  (whereas [ulp x] is the weight of the        *)
-(* leftmost / most-significant bit).  If [x = m * 2^(cexp x)] with [m] the    *)
-(* integer mantissa, then [uls x = 2^(cexp x + v2 m)], with [v2 m] the        *)
-(* 2-adic valuation of [m]: [Z.land m (- m)] isolates the lowest set bit of   *)
-(* [m] as a power of two, and [Z.log2] of it is exactly [v2 m].  Always       *)
-(* [uls x <= ulp x], with equality iff the mantissa is odd.  (The value at    *)
-(* [x = 0] is irrelevant -- it is never used below.)                          *)
+(* RIGHTMOST NONZERO bit of [x].  ([ulp x = 2^(cexp x)] is the weight of the   *)
+(* last *representable* place -- the grid spacing; the weight of the leftmost  *)
+(* bit is [ufp x], the other extreme.)  If [x = m * 2^(cexp x)] with           *)
+(* [m = Ztrunc (mant x)] the integer mantissa, then [uls x = 2^(cexp x + v2 m)]*)
+(* where [v2 m] is the 2-adic valuation of [m] -- here [trZ m], the count of   *)
+(* trailing binary zeros of [m], built from [trP] on the positive part below.  *)
+(* Hence [uls x = ulp x * 2^(v2 m) >= ulp x] (lemma [ulp_le_ulps]), equality   *)
+(* iff the mantissa is odd -- e.g. for [x = -1.01101_2 * 2^364] the paper has  *)
+(* [ulp x = 2^312] but [uls x = 2^359].  At [x = 0] we set [uls 0 = ulp 0].    *)
+
+(* [trP p] : number of trailing binary zeros of the positive [p] (its 2-adic  *)
+(* valuation).                                                                 *)
 Fixpoint trP (p : positive) := if p is xO p1 then (trP p1).+1 else 0%N.
 
+(* [two_power_pos n] : [2^n] as a positive.                                    *)
 Definition two_power_pos n := iter n xO 1%positive.
 
+(* [2^(trP p)] divides [p] (i.e. [trP p] trailing zeros can be factored out).  *)
 Lemma trPE p1 : (two_power_pos (trP p1) | p1)%positive.
 Proof.
 have div1 q : (1 | q)%positive by exists q; rewrite Pos.mul_comm.
 elim: p1 => //= p1 [q {2}->] /=; exists q; lia.
 Qed.
 
+(* [trZ z] : 2-adic valuation of [z] (its trailing binary zeros), [0] at [0];  *)
+(* it ignores the sign, using [trP] on the positive part.                      *)
 Definition trZ (z : Z) := if z is Zpos p1 then (trP p1) else
                           if z is Zneg p1 then (trP p1) else 0%N.
 
@@ -706,6 +714,7 @@ Proof. by []. Qed.
 Lemma two_power_nat_pos n : (Zpos (two_power_pos n) = two_power_nat n)%Z.
 Proof. by elim: n. Qed.
 
+(* [2^(trZ z)] divides [z]: the valuation really is extractable.               *)
 Lemma trZE p1 : (2 ^ Z.of_nat (trZ p1) | p1)%Z.
 Proof.
 rewrite -two_power_nat_equiv.
@@ -715,6 +724,7 @@ rewrite -two_power_nat_pos /=.
 by apply/Z.divide_Zpos_Zneg_r/Z.divide_Zpos/trPE.
 Qed.
 
+(* uls, as documented above: [ulp 0] at zero, else [2^(cexp x + v2(mantissa))].*)
 Definition uls (x : R) : R :=
   if Req_bool x 0 then ulp 0 else
   let m := Ztrunc (mant x) in pow (cexp x + Z.of_nat (trZ m))%Z.
@@ -722,7 +732,9 @@ Definition uls (x : R) : R :=
 Lemma uls0 : uls 0 = ulp 0.
 Proof. by rewrite /uls; case: Req_bool_spec. Qed.
 
-Lemma ulsE x : 
+(* [x] factors as (its odd mantissa part) * [uls x] -- the defining property   *)
+(* of [uls] as the weight of the rightmost nonzero bit.                        *)
+Lemma ulsE x :
  format x -> 
  x = IZR (Ztrunc (mant x) / (2 ^ Z.of_nat (trZ (Ztrunc (mant x)))))%Z * uls x.
 Proof.
@@ -738,6 +750,7 @@ rewrite Zmult_comm -Znumtheory.Zdivide_Zdiv_eq.
 by apply: trZE.
 Qed.
 
+(* [ulp x <= uls x]: the rightmost nonzero bit is at or above the last place.  *)
 Lemma ulp_le_ulps x : ulp x <= uls x.
 Proof.
 rewrite /uls.
@@ -746,9 +759,10 @@ rewrite ulp_neq_0 //;apply: bpow_le; lia.
 Qed.
 
 (* Definition 2 (Fabiano): [l] is F-nonoverlapping when each term is at most  *)
-(* half the [uls] of its predecessor.  Since [uls <= ulp] this is STRICTLY    *)
-(* stronger than [pairwise_ulp] / [Pnonoverlap]; it is the invariant that     *)
-(* VecSum establishes (Thm 1) and that VSEB consumes (Thm 2).                 *)
+(* half the [uls] of its predecessor.  This is Fabiano's separation (more     *)
+(* restrictive than Shewchuk's ulp-nonoverlapping); it is the invariant that  *)
+(* VecSum establishes (Thm 1) and that VSEB consumes (Thm 2) to yield a       *)
+(* P-nonoverlapping output.                                                   *)
 (* NB: the paper's Thms 1-2 state this "with interleaving zeros" (Def. 3):    *)
 (* interior zeros are simply skipped in the analysis, exactly the phenomenon  *)
 (* handled by [format_lt_ulp_0].  We keep the plain form here for the roadmap.*)

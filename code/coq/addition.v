@@ -670,6 +670,57 @@ case: (@format_vecSumAux (b :: l)) => [z zIl|].
 by rewrite E.
 Qed.
 
+(* Two definitional unfoldings of [vsebAux] (by reflexivity), mirroring        *)
+(* [vecSumAux_cons]: they expose [TwoSum eps e] so the following [case] can     *)
+(* capture it in the goal, keeping the low words as the very variables that     *)
+(* [TwoSum_correct_loc] talks about (otherwise [simpl] re-expands them to       *)
+(* [RND ...] and the correctness fact no longer applies).                       *)
+Lemma vsebAux_1 eps e :
+  vsebAux eps [:: e] = let: DWR y0 y1 := TwoSum eps e in [:: y0; y1].
+Proof. by []. Qed.
+
+Lemma vsebAux_consS eps e e2 l :
+  vsebAux eps [:: e, e2 & l] =
+  let: DWR r et := TwoSum eps e in
+  if Req_EM_T et 0 then vsebAux r (e2 :: l) else r :: vsebAux et (e2 :: l).
+Proof. by []. Qed.
+
+(* VSEB is error-free: [vsebAux] preserves the exact sum, prefix [eps]         *)
+(* included.  Each step is a [TwoSum] (exact by [TwoSum_correct_loc]); whether *)
+(* the error [et] is dropped ([et = 0], so [r = eps + e]) or emitted, the sum  *)
+(* [eps + sumR l] is preserved.                                                *)
+Lemma vsebAux_sum eps l :
+  format eps -> {in l, forall z, format z} ->
+  sumR (vsebAux eps l) = eps + sumR l.
+Proof.
+elim: l eps => [|e l IH] eps epsF lF.
+  by rewrite /=; lra.
+have eF : format e by apply: lF; rewrite inE eqxx.
+case: l IH lF => [|e2 l'] IH lF.
+  rewrite vsebAux_1; case E1 : (TwoSum eps e) => [y0 y1].
+  move: (@TwoSum_correct_loc eps e epsF eF); rewrite E1 /= => Cc.
+  by lra.
+rewrite vsebAux_consS; case E1 : (TwoSum eps e) => [r et].
+move: (@TwoSum_correct_loc eps e epsF eF); rewrite E1 /= => Cc.
+move: (@format_TwoSum eps e epsF eF); rewrite E1 /= => -[rF etF].
+have l'F : {in e2 :: l', forall z, format z}.
+  by move=> z zIl; apply: lF; rewrite inE zIl orbT.
+case: Req_EM_T => [et0|etn0].
+  by rewrite (IH r rF l'F) /=; lra.
+by rewrite /= (IH et etF l'F) /=; lra.
+Qed.
+
+(* VSEB preserves the exact sum (Theorem 2, sum part): [sumR (vseb l) = sumR l].*)
+Lemma vseb_sum l :
+  {in l, forall z, format z} -> sumR (vseb l) = sumR l.
+Proof.
+case: l => [_|e0 l' e0l'F]; first by rewrite /vseb.
+have e0F : format e0 by apply: e0l'F; rewrite inE eqxx.
+have l'F : {in l', forall z, format z}.
+  by move=> z zIl; apply: e0l'F; rewrite inE zIl orbT.
+by rewrite /vseb /= (vsebAux_sum e0F l'F) /=.
+Qed.
+
 (* ===========================================================================*)
 (*  Normalisation: VecSum then VSEB (paper Theorems 1 and 2)                  *)
 (*                                                                            *)
@@ -944,7 +995,10 @@ have Hvec_sum : sumR e = sumR z.
   by apply: isTW_format Hy.
 
 (* VSEB is error-free on the full output.                                     *)
-have Hvseb_sum : sumR (vseb e) = sumR e by admit.
+have Hvseb_sum : sumR (vseb e) = sumR e.
+  apply: vseb_sum; apply: format_vecSum; apply: format_Merge.
+  - by apply: (isTW_format Hx).
+  by apply: isTW_format Hy.
 (* Truncating to the first three terms loses at most errc of the sum          *)
 (* (Theorem 3 with k = 3).                                                    *)
 have Htrunc :

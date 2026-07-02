@@ -1003,9 +1003,16 @@ have Hvseb_sum : sumR (vseb e) = sumR e.
 (* (Theorem 3 with k = 3).                                                    *)
 have Htrunc :
   Rabs (sumR (vseb e) - sumR (vsebK 3 e)) <= errc * Rabs (sumR e) by admit.
-(* The result of TWSum is exactly the value of those three terms.             *)
-have Hres : TWval (TWSum (TWR x0 x1 x2) (TWR y0 y1 y2)) = sumR (vsebK 3 e)
-  by admit.
+(* The result of TWSum is exactly the value of those three terms.  [vsebK 3 e] *)
+(* has length <= 3 (it is a [take 3]); TWSum reads its (zero-padded) first      *)
+(* three entries, whose sum is exactly [sumR (vsebK 3 e)].                      *)
+have Hres : TWval (TWSum (TWR x0 x1 x2) (TWR y0 y1 y2)) = sumR (vsebK 3 e).
+  have Hsz : (size (vsebK 3 e) <= 3)%N.
+    rewrite /vsebK size_take; case: ifP => [_|Hf]; first by [].
+    by rewrite leqNgt Hf.
+  rewrite /TWSum -/z -/e.
+  move: Hsz; case: (vsebK 3 e) => [|r0 [|r1 [|r2 [|r3 l]]]] /= H; try by lra.
+  by exfalso; move/leP: H; lia.
 (* Chaining the four equalities and the truncation bound concludes.           *)
 admit.
 Admitted.

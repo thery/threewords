@@ -178,7 +178,28 @@ case: (IH ll1 d) => // [z2 z2Icl|].
   by apply: blF; rewrite inE z2Icl orbT.
 by move=> ll1F dF; apply: ll1F.
 Qed.
-  
+
+Lemma vecSumAux_cons a b l :
+  vecSumAux [::a, b & l] =
+  let '(es, s) := vecSumAux (b :: l) in 
+  let 'DWR si ei1 := TwoSum a s in (ei1 :: es, si).
+Proof. by []. Qed.
+
+Lemma size_vecSumAux l : size (vecSumAux l).1 = (size l).-1.
+Proof.
+elim: l => // a [//| b l].
+rewrite vecSumAux_cons.
+case : vecSumAux => c l1.
+by case TwoSum => a3 b3 /= ->.
+Qed.
+
+Lemma size_vecSum l : size (vecSum l) = (size l).-1.+1.
+Proof.
+case: l => //= a l.
+rewrite /vecSum.
+by case: vecSumAux (size_vecSumAux (a :: l)) => ? ? /= ->.
+Qed.
+
 (* ===========================================================================*)
 (*  Algorithm 5: VecSumErrBranch (VSEB)                                       *)
 (*  Returns the full normalised output; zero error terms are dropped.         *)
@@ -260,6 +281,14 @@ case: Rle_bool => z; rewrite inE => /orP[/eqP->|zIl] //.
 - by apply: bl2F; rewrite inE eqxx.
 apply: IH1 => // z1 z1Il2.
 by apply: bl2F; rewrite inE z1Il2 orbT.
+Qed.
+
+Lemma size_Merge l1 l2 : size (Merge l1 l2) = (size l1 + size l2)%N.
+Proof.
+elim: l1 l2 => /= [|a1 l1 IH1]; first by elim.
+elim => [/=|a2 l2 IH2]; first by rewrite addn0.
+case: Rle_bool => /=; first by rewrite IH1.
+by rewrite IH2 addnS.
 Qed.
 
 (* ===========================================================================*)
@@ -627,11 +656,6 @@ case: Rle_bool_spec => [bLa|aLb].
 by rewrite /= IH2; lra.
 Qed.
 
-Lemma vecSumAux_cons a b l :
-  vecSumAux [::a, b & l] =
-  let '(es, s) := vecSumAux (b :: l) in 
-  let 'DWR si ei1 := TwoSum a s in (ei1 :: es, si).
-Proof. by []. Qed.
 
 Lemma format_vecSumAux l : 
   {in l, forall z, format z} ->
@@ -876,12 +900,14 @@ have sesF :  Fnonoverlap (s :: es).
 have sF : format s.
   have := @format_vecSumAux (b :: l).
   by rewrite E; case => // z zIl; apply: ablF; rewrite inE zIl orbT.
-move=> [/=|i] _.
-  have :  magnitudeDWR (TwoSum a s).
+move=> [/=|[|i]] /= iLs.
+- have :  magnitudeDWR (TwoSum a s).
     apply: magnitude_TwoSum => //.
     by apply: ablF => //; rewrite !inE eqxx.
- rewrite E1 => /=; rewrite Rmult_comm /Rdiv //.
-  admit.
+  rewrite E1 => /=; rewrite Rmult_comm /Rdiv //.
+  by have := ulp_le_ulps si; lra.
+- admit.
+by apply: (sesF i.+1).
 Admitted.
 
 (* Theorem 2 (VSEB), stated as in the paper: if [e] is F-nonoverlapping (with *)
@@ -968,7 +994,13 @@ have He_sum : sumR e = sumR z by apply: vecSum_sum.
 (*   [rewrite /vsebK; apply: Pnonoverlap_take;                                *)
 (*    apply: (vseb_Pnonoverlap Hsz (format_vecSum Hz_format)                  *)
 (*             (vecSum_Fnonoverlap Hz_format Hz_sorted Hz_ulp).1).1].         *)
-have Hr_nonover : Pnonoverlap (vsebK 3 e) by admit.
+have Hr_nonover : Pnonoverlap (vsebK 3 e).
+  apply/Pnonoverlap_take.
+  case: (@vseb_Pnonoverlap e) => //.
+  - by rewrite size_vecSum size_Merge.
+  - apply/format_vecSum/format_Merge => //; first by apply: (isTW_format Hx).
+    by apply: (isTW_format Hy).
+  by case: (@vecSum_Fnonoverlap z).
 (* and its terms are floating-point numbers.                                  *)
 have Hr_format : {in vsebK 3 e, forall t, format t}.
   by apply/format_vsebK/format_vecSum.
@@ -984,11 +1016,14 @@ move: Hr_nonover Hr_format; case: (vsebK 3 e) => [|r0 [|r1 [|r2 tl]]] Hno Hfmt.
 - by split; [apply: Hfmt; rewrite !inE eqxx | exact: generic_format_0
            | exact: generic_format_0 | rewrite Rabs_R0; exact: ulp_gt_0
            | rewrite Rabs_R0; exact: ulp_gt_0].
-- by split; [apply: Hfmt; rewrite !inE eqxx | apply: Hfmt; rewrite !inE eqxx orbT
-           | exact: generic_format_0 | apply: (Hno 0%N) | rewrite Rabs_R0; exact: ulp_gt_0].
+- by split; [apply: Hfmt; rewrite !inE eqxx | 
+             apply: Hfmt; rewrite !inE eqxx orbT | 
+             exact: generic_format_0 | 
+             apply: (Hno 0%N) | rewrite Rabs_R0; exact: ulp_gt_0].
 by split; [apply: Hfmt; rewrite !inE eqxx | apply: Hfmt; rewrite !inE eqxx orbT
-         | apply: Hfmt; rewrite !inE eqxx !orbT | apply: (Hno 0%N) | apply: (Hno 1%N)].
-Admitted.
+         | apply: Hfmt; rewrite !inE eqxx !orbT | 
+           apply: (Hno 0%N) | apply: (Hno 1%N)].
+Qed.
 
 (* ===========================================================================*)
 (*  Error bound: the "Ensure" clause of Algorithm 8 (p >= 6):                 *)

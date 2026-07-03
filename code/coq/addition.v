@@ -928,6 +928,30 @@ Admitted.
 Lemma VecSum_Thm1 k l : Thm1_hyp k l ->
   Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
 Proof.
+move=> Hk.
+(* Each [x_i = M_i 2^(k_i-p+1)] with [|M_i| < 2^p] is an FLT float.            *)
+have Hfmt : {in l, forall z, format z} by admit.
+(* "with the same sum": VecSum is a chain of error-free 2Sums (Algorithm 4).   *)
+split; last by apply: vecSum_sum.
+(* Firstly (paper): the running high word [s_i = (vecSumAux (drop i l)).2] is   *)
+(* bounded, by induction on the suffix using                                   *)
+(*   |s_{i+1}| + |x_i| <= (4 - 4u) 2^(k_i) <= (2 - 2u) 2^(k_{i-1}),            *)
+(* i.e. |s_i| <= (2 - 2u) 2^(k_i - 1).                                         *)
+have Hrun := VecSum_run_bound Hk.
+(* This gives the error bound |e_i| <= 2 u^2 2^(k_i - 1) (justifies Fast2Sum). *)
+have Herr : forall i, (i.+1 < size l)%N ->
+    Rabs (nth 0 (vecSum l) i.+1) <= 2 * (u * u) * pow (k i - 1)%Z by admit.
+(* F-nonoverlapping (paper, by contradiction).                                 *)
+move=> i iLs Hn0.
+suff : ~ (/ 2 * uls (nth 0 (vecSum l) i) < Rabs (nth 0 (vecSum l) i.+1)) by lra.
+move=> Hover.
+(* Scale so that uls(e_i) = u.  Then [s_j] and [x_0, ..., x_{i-1}] are all      *)
+(* multiples of 2u, so the offending [e_i] (a non-multiple of 2u) forces        *)
+(*   2^(k_{i-2}) <= 1/2, hence 2^(k_{i-1}) <= 1/4,                             *)
+(* i.e. the exponent is small:                                                 *)
+have Hpow : pow (k i - 1)%Z <= / 4 by admit.
+(* which contradicts the error bound [Herr i] together with [Hover].           *)
+admit.
 Admitted.
 
 (* The genuinely hard step of Theorem 1 (the paper's [k_i] exponent argument). *)

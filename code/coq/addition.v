@@ -95,6 +95,17 @@ Definition TwoSum (a b : R) : dwR :=
   let db := RND (b - b') in
   DWR s (RND (da + db)).
 
+(* Named projectors for the double-word record [dwR] (prelim: [DWR xh xl]),  *)
+(* so a [TwoSum]/[Fast2Sum] result's components can be named without a [let]. *)
+Definition dwh (d : dwR) : R := let: DWR xh _ := d in xh.
+Definition dwl (d : dwR) : R := let: DWR _ xl := d in xl.
+
+Lemma dwhE xh xl : dwh (DWR xh xl) = xh. Proof. by []. Qed.
+Lemma dwlE xh xl : dwl (DWR xh xl) = xl. Proof. by []. Qed.
+
+(* The high word of a 2Sum is the rounded sum. *)
+Lemma TwoSum_hi a b : dwh (TwoSum a b) = RND (a + b). Proof. by []. Qed.
+
 Definition formatDWR (a : dwR) := let: DWR b c := a in format b /\ format c.
 
 Lemma format_TwoSum a b : format a -> format b -> formatDWR (TwoSum a b).
@@ -295,6 +306,15 @@ Qed.
 (*  Triple-word numbers                                                       *)
 (* ===========================================================================*)
 Inductive twR := TWR (x0 x1 x2 : R).
+
+(* Named projectors for the triple-word record [twR], mirroring [dwh]/[dwl]. *)
+Definition tw0 (t : twR) : R := let: TWR x0 _ _ := t in x0.
+Definition tw1 (t : twR) : R := let: TWR _ x1 _ := t in x1.
+Definition tw2 (t : twR) : R := let: TWR _ _ x2 := t in x2.
+
+Lemma tw0E x0 x1 x2 : tw0 (TWR x0 x1 x2) = x0. Proof. by []. Qed.
+Lemma tw1E x0 x1 x2 : tw1 (TWR x0 x1 x2) = x1. Proof. by []. Qed.
+Lemma tw2E x0 x1 x2 : tw2 (TWR x0 x1 x2) = x2. Proof. by []. Qed.
 
 Definition TWval (x : twR) : R := let: TWR x0 x1 x2 := x in x0 + x1 + x2.
 
@@ -1025,11 +1045,92 @@ apply: Rle_trans (Rabs_triang _ _) _.
 nra.
 Qed.
 
+(* The running high word [(vecSumAux m).2] of a VecSum is a float.            *)
+Lemma format_vecSumAux2 m :
+  {in m, forall z, format z} -> format (vecSumAux m).2.
+Proof.
+elim: m => [|a [|b m] IH] Hf.
+- exact: generic_format_0.
+- by have -> : (vecSumAux [:: a]).2 = a by []; apply: Hf; rewrite inE eqxx.
+rewrite vecSumAux_cons.
+case E : (vecSumAux (b :: m)) => [es s].
+have -> : (let: DWR si ei1 := TwoSum a s in (ei1 :: es, si)).2 = dwh (TwoSum a s)
+  by case: (TwoSum a s).
+by rewrite TwoSum_hi; apply: generic_format_round.
+Qed.
+
+(* The [i]-th VecSum error [nth 0 (vecSumAux m).1 i] is the low word of the    *)
+(* 2Sum combining [x_i] with the running sum [s_{i+1}] of the tail.           *)
+Lemma vecSumAux_nth1 m i : (i.+1 < size m)%N ->
+  nth 0 (vecSumAux m).1 i =
+  dwl (TwoSum (nth 0 m i) (vecSumAux (drop i.+1 m)).2).
+Proof.
+elim: m i => [|a m' IH] i Hi.
+  by move: Hi; rewrite /= ltn0.
+case: m' IH Hi => [|b m] IH Hi.
+  by move: Hi; rewrite /= ltnS ltn0.
+rewrite vecSumAux_cons.
+case E : (vecSumAux (b :: m)) => [es s].
+case: i Hi => [|i] Hi.
+  have -> : nth 0 [:: a, b & m] 0 = a by [].
+  have -> : drop 1 [:: a, b & m] = b :: m by [].
+  rewrite E [(es, s).2]/=.
+  by case: (TwoSum a s).
+rewrite ltnS in Hi.
+have -> : nth 0 [:: a, b & m] i.+1 = nth 0 (b :: m) i by [].
+have -> : drop i.+2 [:: a, b & m] = drop i.+1 (b :: m) by [].
+by rewrite -(IH i) // E.
+Qed.
+
+(* The low word of a 2Sum [TwoSum x s] is small: its magnitude is at most      *)
+(* [2 u 2^e0], provided [|x| < 2^(e0+1)] and [|s| <= (2-2u) 2^e0] (so the       *)
+(* exact sum has magnitude below [2^(e0+2)]).  This is the tight per-step       *)
+(* error bound behind [Herr] (the paper's [2 u^2 2^(k_{i-1})] would be a        *)
+(* factor [2^p] too small: a single 2Sum error can reach [~u 2^(k_i)]).        *)
+Lemma magnitude_vecSum_err x s e0 : format x -> format s ->
+  Rabs x < pow (e0 + 1) -> Rabs s <= (2 - 2 * u) * pow e0 ->
+  (emin <= e0 - p + 1)%Z ->
+  Rabs (dwl (TwoSum x s)) <= 2 * u * pow e0.
+Proof.
+move=> Fx Fs Hx Hs Hemin.
+have Hc : dwh (TwoSum x s) + dwl (TwoSum x s) = x + s
+  by exact: TwoSum_correct_loc Fx Fs.
+rewrite TwoSum_hi in Hc.
+have -> : dwl (TwoSum x s) = - (RND (x + s) - (x + s)) by lra.
+rewrite Rabs_Ropp.
+have Hz : Rabs (x + s) < pow (e0 + 2).
+  apply: Rle_lt_trans (Rabs_triang _ _) _.
+  have Hs1 : Rabs s < pow (e0 + 1).
+    apply: Rle_lt_trans Hs _.
+    have -> : pow (e0 + 1) = 2 * pow e0 by rewrite bpow_plus bpow_1 /=; lra.
+    have Hu : 0 < u by rewrite uE; apply: bpow_gt_0.
+    have := bpow_gt_0 beta e0; nra.
+  have -> : pow (e0 + 2) = pow (e0 + 1) + pow (e0 + 1)
+    by rewrite !bpow_plus /= /Z.pow_pos /=; lra.
+  lra.
+have Hulp : ulp (x + s) <= pow (e0 + 2 - p).
+  have [z0|z0] := Req_dec (x + s) 0.
+    by rewrite z0 ulp_FLT_0; apply: bpow_le; lia.
+  rewrite ulp_neq_0 //; apply: bpow_le; rewrite /cexp /FLT_exp.
+  have Hm : (mag beta (x + s) <= e0 + 2)%Z by apply: mag_le_bpow.
+  lia.
+apply: (Rle_trans _ (/ 2 * ulp (x + s))).
+  by apply: error_le_half_ulp.
+apply: Rle_trans (_ : / 2 * pow (e0 + 2 - p) <= _).
+  by apply: Rmult_le_compat_l; [lra | exact: Hulp].
+have -> : 2 * u * pow e0 = / 2 * pow (e0 + 2 - p).
+  rewrite uE.
+  have -> : / 2 = pow (-1) by rewrite /= /Z.pow_pos /=; lra.
+  have -> : (2 : R) = pow 1 by rewrite /= /Z.pow_pos /=; lra.
+  by rewrite -!bpow_plus; congr bpow; lia.
+by lra.
+Qed.
+
 (* Theorem 1.  [VecSum l] is F-nonoverlapping (wIZ) with the same sum.          *)
 (* Proof (paper Section 2.1): [VecSum_run_bound] gives the running-sum bound,   *)
-(* whence each error [|e_i| <= 2 u^2 2^(k_i-1)]; the errors are then            *)
-(* F-nonoverlapping by the "multiples of 2u" ([uls]) argument, which           *)
-(* contradicts any overlap [|e_i| >= 1/2 uls(e_{i'})].                          *)
+(* whence each error [|e_{i+1}| <= 2 u 2^(k_i)] ([magnitude_vecSum_err]); the   *)
+(* errors are then F-nonoverlapping by the "multiples of 2u" ([uls]) argument,  *)
+(* which contradicts any overlap [|e_{i+1}| > 1/2 uls(e_i)].                     *)
 Lemma VecSum_Thm1 k l : Thm1_hyp k l ->
   Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
 Proof.
@@ -1044,9 +1145,30 @@ split; last by apply: vecSum_sum.
 (* is bounded, |s_{i+1}| <= (2 - 2u) 2^(k_i), by induction on the suffix using  *)
 (*   |s_{i+2}| + |x_{i+1}| <= (4 - 4u) 2^(k_{i+1}) <= (2 - 2u) 2^(k_i).         *)
 have Hrun := VecSum_run_bound Hk.
-(* This gives the error bound |e_{i+1}| <= 2 u^2 2^(k_i) (justifies Fast2Sum).  *)
-have Herr : forall i, (i.+1 < size l)%N ->
-    Rabs (nth 0 (vecSum l) i.+1) <= 2 * (u * u) * pow (k i) by admit.
+(* This gives the tight error bound |e_{i+1}| <= 2 u 2^(k_i).  (The paper's    *)
+(* 2 u^2 2^(k_i) is a factor 2^p too small and is FALSE: e.g. for l = [1;      *)
+(* 2^-54] the 2Sum error is 2^-54, well above 2 u^2 = 2^-105.)                  *)
+have Herr : forall j, (j.+1 < size l)%N ->
+    Rabs (nth 0 (vecSum l) j.+1) <= 2 * u * pow (k j).
+  have [Hrepr _ _] := Hk.
+  move=> j jLs.
+  have jLl : (j < size l)%N := ltn_trans (ltnSn j) jLs.
+  have [Hemin [M HM Hxeq]] := Hrepr j jLl.
+  have -> : nth 0 (vecSum l) j.+1 = nth 0 (vecSumAux l).1 j
+    by rewrite /vecSum; case: (vecSumAux l).
+  rewrite vecSumAux_nth1 //.
+  apply: magnitude_vecSum_err.
+  - by apply: Hfmt; apply: mem_nth.
+  - apply: format_vecSumAux2 => z zIn.
+    by apply: Hfmt; rewrite -(cat_take_drop j.+1 l) mem_cat zIn orbT.
+  - rewrite Hxeq Rabs_mult (Rabs_pos_eq _ (bpow_ge_0 _ _)) -abs_IZR.
+    have -> : pow (k j + 1) = pow p * pow (k j - p + 1)
+      by rewrite -bpow_plus; congr bpow; lia.
+    apply: Rmult_lt_compat_r; first exact: bpow_gt_0.
+    have -> : pow p = IZR (2 ^ p) by [].
+    by apply: IZR_lt.
+  - exact: Hrun j jLs.
+  - exact: Hemin.
 (* F-nonoverlapping (paper, by contradiction).                                 *)
 move=> i iLs Hn0.
 suff : ~ (/ 2 * uls (nth 0 (vecSum l) i) < Rabs (nth 0 (vecSum l) i.+1)) by lra.
@@ -1054,7 +1176,7 @@ move=> Hover.
 have Hi : (i.+1 < size l)%N by move: iLs; rewrite size_vecSum; case: (size l).
 have He := Herr i Hi.
 (* The paper's key estimate for [e_i = nth 0 (vecSum l) i], SCALE-INVARIANT:     *)
-(*     uls(e_i) >= 4 u^2 2^(k_i).                                                *)
+(*     uls(e_i) >= 4 u 2^(k_i).                                                  *)
 (* This is the multiples-of-2u argument of Theorem 1: after the paper's WLOG     *)
 (* scaling [uls(e_i) = u], the [s_j] and [x_0, ..., x_i] are all multiples of    *)
 (* 2u, and the offending [e_i] (not a multiple of 2u) forces [2^(k_i) <= 1/(4u)].*)
@@ -1062,8 +1184,8 @@ have He := Herr i Hi.
 (* unprovable in isolation -- [Hover] is invariant under scaling [l] by a power  *)
 (* of two (every [k_j] shifts and [vecSum] commutes with the scaling) while      *)
 (* [2^(k_i)] is not; only the ratio [uls(e_i) / 2^(k_i)] is pinned down.         *)
-have Hkey : 4 * (u * u) * pow (k i) <= uls (nth 0 (vecSum l) i) by admit.
-(* [Hover]: |e_{i+1}| > uls(e_i)/2 >= 2u^2 2^(k_i) >= |e_{i+1}| ([Herr]): absurd. *)
+have Hkey : 4 * u * pow (k i) <= uls (nth 0 (vecSum l) i) by admit.
+(* [Hover]: |e_{i+1}| > uls(e_i)/2 >= 2u 2^(k_i) >= |e_{i+1}| ([Herr]): absurd.   *)
 by lra.
 Admitted.
 

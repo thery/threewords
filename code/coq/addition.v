@@ -899,9 +899,25 @@ Qed.
 (* ===========================================================================*)
 
 (* Paper representation: [x = M * 2^(k-p+1)] with [|M| < 2^p], [M] an integer  *)
-(* and the exponent [k] chosen (not necessarily canonical).                    *)
+(* and the exponent [k] chosen (not necessarily canonical).  We also require    *)
+(* [emin <= k - p + 1] so that [x] genuinely lands on the FLT grid -- without   *)
+(* it [x = 2^(emin-1)] (M = 1, k = emin+p-2) satisfies the equation but is not  *)
+(* a float.  The paper's x_i are floats, so this is the intended reading.       *)
 Definition repr (k : Z) (x : R) : Prop :=
+  (emin <= k - p + 1)%Z /\
   exists2 M : Z, (Z.abs M < 2 ^ p)%Z & x = IZR M * pow (k - p + 1)%Z.
+
+(* Being [repr]-esentable at [k] makes [x] an FLT float: it is [F2R] of the     *)
+(* integer float [Float M (k-p+1)], whose mantissa is < 2^p and whose exponent  *)
+(* is >= emin.                                                                  *)
+Lemma repr_format k x : repr k x -> format x.
+Proof.
+move=> [Hemin [M Mlt ->]].
+apply: generic_format_FLT; exists (Float beta M (k - p + 1)%Z).
+- by rewrite /F2R.
+- exact: Mlt.
+exact: Hemin.
+Qed.
 
 (* Hypotheses of Theorem 1 on inputs [l] with a chosen exponent map [k]:        *)
 (*  - every [x_i] is representable at exponent [k_i];                           *)
@@ -912,12 +928,29 @@ Definition Thm1_hyp (k : nat -> Z) (l : seq R) : Prop :=
       forall i, (i.+2 < size l)%N -> (k i.+1 + 1 <= k i)%Z &
       forall i, i.+2 = size l -> (k i.+1 <= k i)%Z ].
 
-(* Paper "Firstly": the running high word [s_i = (vecSumAux (drop i l)).2] is   *)
-(* bounded by [(2-2u) 2^(k_i-1)] (by induction on the suffix, using the gaps).  *)
+(* Paper "Firstly": the running high word [s_{i+1} = (vecSumAux (drop i.+1 l)).2]*)
+(* is bounded by [(2-2u) 2^(k_i)].  (The paper writes |s_i| <= (2-2u)2^(k_{i-1});*)
+(* we index by the *previous* position [i] to avoid [k_{-1}], which is exactly   *)
+(* the induction-hypothesis form used in the proof.)                            *)
 Lemma VecSum_run_bound k l : Thm1_hyp k l ->
-  forall i, (i < size l)%N ->
-  Rabs (vecSumAux (drop i l)).2 <= (2 - 2 * u) * pow (k i - 1)%Z.
+  forall i, (i.+1 < size l)%N ->
+  Rabs (vecSumAux (drop i.+1 l)).2 <= (2 - 2 * u) * pow (k i).
 Proof.
+case=> Hrepr Hgap Hlast.
+(* Each input is bounded: |x_j| = |M_j| 2^(k_j-p+1) <= (2^p-1) 2^(k_j-p+1)       *)
+(*                              = (2 - 2u) 2^(k_j).                              *)
+have Hx : forall j, (j < size l)%N -> Rabs (nth 0 l j) <= (2 - 2 * u) * pow (k j)
+  by admit.
+(* Downward induction on the suffix.  [s_{i+1} = (vecSumAux (drop i.+1 l)).2]:   *)
+(*  - base [i.+2 = size l]: [s_{i+1} = x_{i+1}], and                            *)
+(*      |x_{i+1}| <= (2-2u) 2^(k_{i+1}) <= (2-2u) 2^(k_i)                        *)
+(*    by the weak gap [k_i >= k_{i+1}] (Hlast);                                 *)
+(*  - step [i.+2 < size l]: [s_{i+1} = RN(x_{i+1} + s_{i+2})]; with the IH        *)
+(*      |s_{i+2}| <= (2-2u) 2^(k_{i+1}) and |x_{i+1}| <= (2-2u) 2^(k_{i+1}),     *)
+(*      |x_{i+1}| + |s_{i+2}| <= (4-4u) 2^(k_{i+1}) <= (2-2u) 2^(k_i)           *)
+(*    by the strict gap [k_i >= k_{i+1} + 1] (Hgap), and rounding to nearest     *)
+(*    preserves the bound.                                                       *)
+admit.
 Admitted.
 
 (* Theorem 1.  [VecSum l] is F-nonoverlapping (wIZ) with the same sum.          *)
@@ -929,27 +962,27 @@ Lemma VecSum_Thm1 k l : Thm1_hyp k l ->
   Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
 Proof.
 move=> Hk.
-(* Each [x_i = M_i 2^(k_i-p+1)] with [|M_i| < 2^p] is an FLT float.            *)
-have Hfmt : {in l, forall z, format z} by admit.
+(* Each [x_i = M_i 2^(k_i-p+1)] with [|M_i| < 2^p] is an FLT float ([repr_format]). *)
+have Hfmt : {in l, forall z, format z}.
+  case: Hk => Hrepr _ _ z /(nthP 0)[i iLs <-].
+  exact: repr_format (Hrepr i iLs).
 (* "with the same sum": VecSum is a chain of error-free 2Sums (Algorithm 4).   *)
 split; last by apply: vecSum_sum.
-(* Firstly (paper): the running high word [s_i = (vecSumAux (drop i l)).2] is   *)
-(* bounded, by induction on the suffix using                                   *)
-(*   |s_{i+1}| + |x_i| <= (4 - 4u) 2^(k_i) <= (2 - 2u) 2^(k_{i-1}),            *)
-(* i.e. |s_i| <= (2 - 2u) 2^(k_i - 1).                                         *)
+(* Firstly (paper): the running high word [s_{i+1} = (vecSumAux (drop i.+1 l)).2]*)
+(* is bounded, |s_{i+1}| <= (2 - 2u) 2^(k_i), by induction on the suffix using  *)
+(*   |s_{i+2}| + |x_{i+1}| <= (4 - 4u) 2^(k_{i+1}) <= (2 - 2u) 2^(k_i).         *)
 have Hrun := VecSum_run_bound Hk.
-(* This gives the error bound |e_i| <= 2 u^2 2^(k_i - 1) (justifies Fast2Sum). *)
+(* This gives the error bound |e_{i+1}| <= 2 u^2 2^(k_i) (justifies Fast2Sum).  *)
 have Herr : forall i, (i.+1 < size l)%N ->
-    Rabs (nth 0 (vecSum l) i.+1) <= 2 * (u * u) * pow (k i - 1)%Z by admit.
+    Rabs (nth 0 (vecSum l) i.+1) <= 2 * (u * u) * pow (k i) by admit.
 (* F-nonoverlapping (paper, by contradiction).                                 *)
 move=> i iLs Hn0.
 suff : ~ (/ 2 * uls (nth 0 (vecSum l) i) < Rabs (nth 0 (vecSum l) i.+1)) by lra.
 move=> Hover.
-(* Scale so that uls(e_i) = u.  Then [s_j] and [x_0, ..., x_{i-1}] are all      *)
-(* multiples of 2u, so the offending [e_i] (a non-multiple of 2u) forces        *)
-(*   2^(k_{i-2}) <= 1/2, hence 2^(k_{i-1}) <= 1/4,                             *)
-(* i.e. the exponent is small:                                                 *)
-have Hpow : pow (k i - 1)%Z <= / 4 by admit.
+(* Scale so that uls(e_i) = u.  Then [s_j] and [x_0, ..., x_i] are all          *)
+(* multiples of 2u, so the offending [e_i] (a non-multiple of 2u) forces the    *)
+(* exponent small: 2^(k_{i-1}) <= 1/2, hence 2^(k_i) <= 1/4,                    *)
+have Hpow : pow (k i) <= / 4 by admit.
 (* which contradicts the error bound [Herr i] together with [Hover].           *)
 admit.
 Admitted.

@@ -841,6 +841,27 @@ case: Req_bool_spec => [->//|x_neq0]; first by lra.
 rewrite ulp_neq_0 //;apply: bpow_le; lia.
 Qed.
 
+(* [ufp x] -- "unit in the first place": the weight [2^(mag x - 1)] of the     *)
+(* leftmost bit, i.e. the largest power of two <= |x| (for x <> 0).  Paper     *)
+(* Theorem 1 / Corollary 1 (p.3) state the VecSum input conditions with it.    *)
+Definition ufp (x : R) : R := pow (mag beta x - 1).
+
+Lemma ufp_gt_0 x : 0 < ufp x.
+Proof. by apply: bpow_gt_0. Qed.
+
+(* [ufp x <= |x| < 2 * ufp x]: |x| lies in one binade above [ufp x].          *)
+Lemma ufp_le_abs x : x <> 0 -> ufp x <= Rabs x.
+Proof. exact: bpow_mag_le. Qed.
+
+Lemma abs_lt_2ufp x : Rabs x < 2 * ufp x.
+Proof.
+rewrite /ufp; set m := mag beta x.
+have := bpow_mag_gt beta x; rewrite -/m => H.
+suff -> : (2 * bpow beta (m - 1) = bpow beta m)%R by [].
+have -> : (2 = IZR beta)%R by rewrite /beta /=; lra.
+by rewrite -bpow_plus_1; congr bpow; lia.
+Qed.
+
 (* Definition 2 (Fabiano): [l] is F-nonoverlapping when each term is at most  *)
 (* half the [uls] of its predecessor.  This is Fabiano's separation (more     *)
 (* restrictive than Shewchuk's ulp-nonoverlapping); it is the invariant that  *)
@@ -868,6 +889,46 @@ move=> ablP [|i] /= iLs; first by apply: (ablP 0%N).
 apply: (IH k.+1 _ i) => // z zLs.
 by apply: (ablP z.+1).
 Qed.
+
+(* ===========================================================================*)
+(*  Theorem 1 (VecSum), faithful to paper3 Section 2.1                        *)
+(*                                                                            *)
+(*  The current [vecSum_Fnonoverlap] below uses the simplified inputs         *)
+(*  [sorted_mag]+[pairwise_ulp]; this block states Theorem 1 with the paper's  *)
+(*  actual [k_i] exponent hypotheses, and the proof steps it goes through.     *)
+(* ===========================================================================*)
+
+(* Paper representation: [x = M * 2^(k-p+1)] with [|M| < 2^p], [M] an integer  *)
+(* and the exponent [k] chosen (not necessarily canonical).                    *)
+Definition repr (k : Z) (x : R) : Prop :=
+  exists2 M : Z, (Z.abs M < 2 ^ p)%Z & x = IZR M * pow (k - p + 1)%Z.
+
+(* Hypotheses of Theorem 1 on inputs [l] with a chosen exponent map [k]:        *)
+(*  - every [x_i] is representable at exponent [k_i];                           *)
+(*  - [k_{i-1} >= k_i + 1] for every pair but the last (strict exponent gap);   *)
+(*  - [k_{n-2} >= k_{n-1}] for the last pair (weak gap -- the allowed overlap). *)
+Definition Thm1_hyp (k : nat -> Z) (l : seq R) : Prop :=
+  [/\ forall i, (i < size l)%N -> repr (k i) (nth 0 l i),
+      forall i, (i.+2 < size l)%N -> (k i.+1 + 1 <= k i)%Z &
+      forall i, i.+2 = size l -> (k i.+1 <= k i)%Z ].
+
+(* Paper "Firstly": the running high word [s_i = (vecSumAux (drop i l)).2] is   *)
+(* bounded by [(2-2u) 2^(k_i-1)] (by induction on the suffix, using the gaps).  *)
+Lemma VecSum_run_bound k l : Thm1_hyp k l ->
+  forall i, (i < size l)%N ->
+  Rabs (vecSumAux (drop i l)).2 <= (2 - 2 * u) * pow (k i - 1)%Z.
+Proof.
+Admitted.
+
+(* Theorem 1.  [VecSum l] is F-nonoverlapping (wIZ) with the same sum.          *)
+(* Proof (paper Section 2.1): [VecSum_run_bound] gives the running-sum bound,   *)
+(* whence each error [|e_i| <= 2 u^2 2^(k_i-1)]; the errors are then            *)
+(* F-nonoverlapping by the "multiples of 2u" ([uls]) argument, which           *)
+(* contradicts any overlap [|e_i| >= 1/2 uls(e_{i'})].                          *)
+Lemma VecSum_Thm1 k l : Thm1_hyp k l ->
+  Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
+Proof.
+Admitted.
 
 (* The genuinely hard step of Theorem 1 (the paper's [k_i] exponent argument). *)
 (* When [2Sum a s] produces a NONZERO low word [ei1], the head of the already- *)

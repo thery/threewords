@@ -976,8 +976,54 @@ have [Hi2|Hi2] := eqVneq i.+2 (size l).
   apply: Rmult_le_compat_l; last by apply: bpow_le; exact: (Hlast i Hi2).
   have u_le_1 : u <= 1 by rewrite uE -(pow0E beta); apply: bpow_le; lia.
   lra.
-admit.
-Admitted.
+(* step: the suffix has >= 2 elements, so s_{i+1} = RN(x_{i+1} + s_{i+2}).       *)
+have iLs' : (i < size l)%N := ltn_trans (ltnSn i) iLs.
+have Hi2lt : (i.+2 < size l)%N by rewrite ltn_neqAle Hi2 iLs.
+have [Hemin _] := Hrepr i iLs'.
+have Hd1 : drop i.+1 l = nth 0 l i.+1 :: drop i.+2 l by rewrite (drop_nth 0).
+have Hd2 : drop i.+2 l = nth 0 l i.+2 :: drop i.+3 l by rewrite (drop_nth 0) // Hi2lt.
+have Hs : (vecSumAux (drop i.+1 l)).2
+            = RND (nth 0 l i.+1 + (vecSumAux (drop i.+2 l)).2).
+  rewrite Hd1 Hd2 vecSumAux_cons -Hd2.
+  by case: (vecSumAux (drop i.+2 l)) => es s /=; rewrite /TwoSum.
+rewrite Hs.
+(* the tight bound B = (2 - 2u) 2^{k_i} is itself a float.                        *)
+have Meq : (2 - 2 * u) * pow (k i) = IZR (2 ^ p - 1) * pow (k i - p + 1).
+  have I2p : IZR (2 ^ p) = pow p by [].
+  have Hki : pow (k i) = pow (p - 1) * pow (k i - p + 1)
+    by rewrite -bpow_plus; congr bpow; lia.
+  have Hpm1 : pow (-1)%Z = / 2 by rewrite /= /Z.pow_pos /=; lra.
+  have Hu2 : u * pow (p - 1) = / 2
+    by rewrite uE -bpow_plus (_ : (- p + (p - 1))%Z = (-1)%Z); [exact: Hpm1 | lia].
+  have Hpp : pow p = 2 * pow (p - 1).
+    have H := bpow_plus beta 1 (p - 1); rewrite bpow_1 in H.
+    rewrite (_ : (1 + (p - 1))%Z = p) in H; last by lia.
+    by rewrite H /beta /= /Z.pow_pos /=; lra.
+  rewrite Hki -Rmult_assoc; congr (_ * _).
+  by rewrite minus_IZR I2p Hpp; nra.
+have FB : format ((2 - 2 * u) * pow (k i)).
+  rewrite Meq; apply: generic_format_FLT.
+  exists (Float beta (2 ^ p - 1) (k i - p + 1)); [by rewrite /F2R /= | | exact: Hemin].
+  rewrite [Fnum _]/=; have h : (0 < 2 ^ p)%Z by apply: Z.pow_pos_nonneg; lia.
+  rewrite Z.abs_eq; last by lia.
+  by change (2 ^ p - 1 < 2 ^ p)%Z; lia.
+(* the strict gap [k_i >= k_{i+1} + 1] gives [2 . 2^{k_{i+1}} <= 2^{k_i}].         *)
+have Hgk : (k i.+1 + 1 <= k i)%Z by apply: Hgap.
+have Hpowgap : 2 * pow (k i.+1) <= pow (k i).
+  have E1 : pow (k i.+1 + 1) = 2 * pow (k i.+1) by rewrite bpow_plus bpow_1 /=; lra.
+  by rewrite -E1; apply: bpow_le.
+(* the tail running sum is bounded by the IH at [i.+1].                           *)
+have s2_bnd : Rabs (vecSumAux (drop i.+2 l)).2 <= (2 - 2 * u) * pow (k i.+1).
+  apply: IHd => //.
+  by apply: (leq_trans _ le_d); rewrite subnS prednK ?subn_gt0 //.
+have u_le_1 : u <= 1 by rewrite uE -(pow0E beta); apply: bpow_le; lia.
+have HX := Hx i.+1 iLs.
+(* rounding to nearest preserves the bound B, which is a float.                    *)
+apply: abs_round_le_generic; first exact: FB.
+(* |x_{i+1}| + |s_{i+2}| <= (4 - 4u) 2^{k_{i+1}} <= (2 - 2u) 2^{k_i}.               *)
+apply: Rle_trans (Rabs_triang _ _) _.
+nra.
+Qed.
 
 (* Theorem 1.  [VecSum l] is F-nonoverlapping (wIZ) with the same sum.          *)
 (* Proof (paper Section 2.1): [VecSum_run_bound] gives the running-sum bound,   *)

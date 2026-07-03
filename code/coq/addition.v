@@ -846,11 +846,14 @@ Qed.
 (* restrictive than Shewchuk's ulp-nonoverlapping); it is the invariant that  *)
 (* VecSum establishes (Thm 1) and that VSEB consumes (Thm 2) to yield a       *)
 (* P-nonoverlapping output.                                                   *)
-(* NB: the paper's Thms 1-2 state this "with interleaving zeros" (Def. 3):    *)
-(* interior zeros are simply skipped in the analysis, exactly the phenomenon  *)
-(* handled by [format_lt_ulp_0].  We keep the plain form here for the roadmap.*)
+(* This is the "with interleaving zeros" form (paper Def. 3): the bound is    *)
+(* required only across a NONZERO predecessor [nth 0 l i <> 0], so a zero      *)
+(* error term (e.g. an exact [2Sum]) imposes no constraint on its successor.  *)
+(* Without this guard the statement is false: at a zero predecessor the RHS    *)
+(* would be [/2 * uls 0 = 2^(emin-1)], unreachable by a normal-sized term.     *)
 Definition Fnonoverlap (l : seq R) : Prop :=
-  forall i, (i.+1 < size l)%N -> Rabs (nth 0 l i.+1) <= / 2 * uls (nth 0 l i).
+  forall i, (i.+1 < size l)%N -> nth 0 l i <> 0 ->
+    Rabs (nth 0 l i.+1) <= / 2 * uls (nth 0 l i).
 
 (* A prefix of a P-nonoverlapping sequence is P-nonoverlapping.  Since        *)
 (* [vsebK k = take k \o vseb], this is what turns "VSEB is P-nonoverlapping"  *)
@@ -865,6 +868,20 @@ move=> ablP [|i] /= iLs; first by apply: (ablP 0%N).
 apply: (IH k.+1 _ i) => // z zLs.
 by apply: (ablP z.+1).
 Qed.
+
+(* The genuinely hard step of Theorem 1 (the paper's [k_i] exponent argument). *)
+(* When [2Sum a s] produces a NONZERO low word [ei1], the head of the already- *)
+(* normalised tail [es] stays below [1/2 uls ei1].  Intuition: the low word    *)
+(* carries [s]'s rightmost bit ([a] and the high word are coarser), so         *)
+(* [uls s <= uls ei1]; combine with [Fnonoverlap (s :: es)] at index 0         *)
+(* ([Rabs (nth 0 es 0) <= 1/2 uls s]).  Left admitted for now -- this is the   *)
+(* remaining mathematical content of Theorem 1.                                *)
+Lemma Fnonoverlap_head a s es :
+  format a -> format s -> Fnonoverlap (s :: es) -> (0 < size es)%N ->
+  let: DWR _ ei1 := TwoSum a s in
+  ei1 <> 0 -> Rabs (nth 0 es 0) <= / 2 * uls ei1.
+Proof.
+Admitted.
 
 (* Theorem 1 (VecSum), stated as in the paper: given the input separation,    *)
 (* [vecSum l] is F-nonoverlapping AND has the same exact sum.  The input      *)
@@ -900,15 +917,17 @@ have sesF :  Fnonoverlap (s :: es).
 have sF : format s.
   have := @format_vecSumAux (b :: l).
   by rewrite E; case => // z zIl; apply: ablF; rewrite inE zIl orbT.
-move=> [/=|[|i]] /= iLs.
+have aF : format a by apply: ablF; rewrite !inE eqxx.
+move=> [|[|i]] /= iLs Hn0.
 - have :  magnitudeDWR (TwoSum a s).
-    apply: magnitude_TwoSum => //.
-    by apply: ablF => //; rewrite !inE eqxx.
+    by apply: magnitude_TwoSum.
   rewrite E1 => /=; rewrite Rmult_comm /Rdiv //.
   by have := ulp_le_ulps si; lra.
-- admit.
+- have Hsz : (0 < size es)%N by move: iLs; case: (size es).
+  have H := Fnonoverlap_head aF sF sesF; rewrite E1 in H.
+  exact: (H Hsz Hn0).
 by apply: (sesF i.+1).
-Admitted.
+Qed.
 
 (* Theorem 2 (VSEB), stated as in the paper: if [e] is F-nonoverlapping (with *)
 (* float terms) and the precision is large enough, [size e <= p + 1] (i.e. the*)

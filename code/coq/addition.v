@@ -939,8 +939,23 @@ Proof.
 case=> Hrepr Hgap Hlast.
 (* Each input is bounded: |x_j| = |M_j| 2^(k_j-p+1) <= (2^p-1) 2^(k_j-p+1)       *)
 (*                              = (2 - 2u) 2^(k_j).                              *)
-have Hx : forall j, (j < size l)%N -> Rabs (nth 0 l j) <= (2 - 2 * u) * pow (k j)
-  by admit.
+have Hx : forall j, (j < size l)%N -> Rabs (nth 0 l j) <= (2 - 2 * u) * pow (k j).
+  move=> j jLs; have [_ [M Mlt ->]] := Hrepr j jLs.
+  rewrite Rabs_mult (Rabs_pos_eq _ (bpow_ge_0 _ _)) -abs_IZR.
+  have I2p : IZR (2 ^ p) = pow p by [].
+  have Hkj : pow (k j) = pow (p - 1) * pow (k j - p + 1)
+    by rewrite -bpow_plus; congr bpow; lia.
+  have Hpm1 : pow (-1)%Z = / 2 by rewrite /= /Z.pow_pos /=; lra.
+  have H2u : u * pow (p - 1) = / 2
+    by rewrite uE -bpow_plus (_ : (- p + (p - 1))%Z = (-1)%Z); [exact: Hpm1 | lia].
+  have Hpp : pow p = 2 * pow (p - 1).
+    have H := bpow_plus beta 1 (p - 1); rewrite bpow_1 in H.
+    rewrite (_ : (1 + (p - 1))%Z = p) in H; last by lia.
+    by rewrite H /beta /= /Z.pow_pos /=; lra.
+  rewrite Hkj -Rmult_assoc; apply: Rmult_le_compat_r; first exact: bpow_ge_0.
+  have -> : (2 - 2 * u) * pow (p - 1) = IZR (2 ^ p - 1)
+    by rewrite minus_IZR I2p Hpp; nra.
+  by apply: IZR_le; lia.
 (* Downward induction on the suffix.  [s_{i+1} = (vecSumAux (drop i.+1 l)).2]:   *)
 (*  - base [i.+2 = size l]: [s_{i+1} = x_{i+1}], and                            *)
 (*      |x_{i+1}| <= (2-2u) 2^(k_{i+1}) <= (2-2u) 2^(k_i)                        *)

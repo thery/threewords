@@ -965,6 +965,17 @@ have Hx : forall j, (j < size l)%N -> Rabs (nth 0 l j) <= (2 - 2 * u) * pow (k j
 (*      |x_{i+1}| + |s_{i+2}| <= (4-4u) 2^(k_{i+1}) <= (2-2u) 2^(k_i)           *)
 (*    by the strict gap [k_i >= k_{i+1} + 1] (Hgap), and rounding to nearest     *)
 (*    preserves the bound.                                                       *)
+move=> i iLs; have [d le_d] := ubnP (size l - i.+2).
+elim: d i iLs le_d => // d IHd i iLs; rewrite ltnS => le_d.
+have [Hi2|Hi2] := eqVneq i.+2 (size l).
+- (* base: the suffix is the singleton [x_{i+1}], so s_{i+1} = x_{i+1}. *)
+  have Hdrop : drop i.+1 l = [:: nth 0 l i.+1]
+    by rewrite (drop_nth 0) // Hi2 drop_size.
+  rewrite Hdrop /=.
+  apply: Rle_trans (Hx i.+1 iLs) _.
+  apply: Rmult_le_compat_l; last by apply: bpow_le; exact: (Hlast i Hi2).
+  have u_le_1 : u <= 1 by rewrite uE -(pow0E beta); apply: bpow_le; lia.
+  lra.
 admit.
 Admitted.
 

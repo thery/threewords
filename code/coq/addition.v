@@ -1051,12 +1051,20 @@ have Herr : forall i, (i.+1 < size l)%N ->
 move=> i iLs Hn0.
 suff : ~ (/ 2 * uls (nth 0 (vecSum l) i) < Rabs (nth 0 (vecSum l) i.+1)) by lra.
 move=> Hover.
-(* Scale so that uls(e_i) = u.  Then [s_j] and [x_0, ..., x_i] are all          *)
-(* multiples of 2u, so the offending [e_i] (a non-multiple of 2u) forces the    *)
-(* exponent small: 2^(k_{i-1}) <= 1/2, hence 2^(k_i) <= 1/4,                    *)
-have Hpow : pow (k i) <= / 4 by admit.
-(* which contradicts the error bound [Herr i] together with [Hover].           *)
-admit.
+have Hi : (i.+1 < size l)%N by move: iLs; rewrite size_vecSum; case: (size l).
+have He := Herr i Hi.
+(* The paper's key estimate for [e_i = nth 0 (vecSum l) i], SCALE-INVARIANT:     *)
+(*     uls(e_i) >= 4 u^2 2^(k_i).                                                *)
+(* This is the multiples-of-2u argument of Theorem 1: after the paper's WLOG     *)
+(* scaling [uls(e_i) = u], the [s_j] and [x_0, ..., x_i] are all multiples of    *)
+(* 2u, and the offending [e_i] (not a multiple of 2u) forces [2^(k_i) <= 1/(4u)].*)
+(* NB: the earlier intermediate [2^(k_i) <= 1/4] is NOT scale-invariant, hence   *)
+(* unprovable in isolation -- [Hover] is invariant under scaling [l] by a power  *)
+(* of two (every [k_j] shifts and [vecSum] commutes with the scaling) while      *)
+(* [2^(k_i)] is not; only the ratio [uls(e_i) / 2^(k_i)] is pinned down.         *)
+have Hkey : 4 * (u * u) * pow (k i) <= uls (nth 0 (vecSum l) i) by admit.
+(* [Hover]: |e_{i+1}| > uls(e_i)/2 >= 2u^2 2^(k_i) >= |e_{i+1}| ([Herr]): absurd. *)
+by lra.
 Admitted.
 
 (* The genuinely hard step of Theorem 1 (the paper's [k_i] exponent argument). *)

@@ -1330,19 +1330,43 @@ have Hkey : 4 * u * pow (k i) <= uls (nth 0 (vecSum l) i) by admit.
 by lra.
 Admitted.
 
-(* The genuinely hard step of Theorem 1 (the paper's [k_i] exponent argument). *)
-(* When [2Sum a s] produces a NONZERO low word [ei1], the head of the already- *)
-(* normalised tail [es] stays below [1/2 uls ei1].  Intuition: the low word    *)
-(* carries [s]'s rightmost bit ([a] and the high word are coarser), so         *)
-(* [uls s <= uls ei1]; combine with [Fnonoverlap (s :: es)] at index 0         *)
-(* ([Rabs (nth 0 es 0) <= 1/2 uls s]).  Left admitted for now -- this is the   *)
-(* remaining mathematical content of Theorem 1.                                *)
+(* The key separation step of Theorem 1.  When [2Sum a s] produces a NONZERO  *)
+(* low word [ei1], the head of the already-normalised tail [es] stays below   *)
+(* [1/2 uls ei1].  Given that [s] is on a finer grid than [a] ([uls s <=      *)
+(* uls a]), the low word carries [s]'s rightmost bit, so [uls s <= uls ei1]   *)
+(* ([TwoSum_err_uls_ge]); combine with [Fnonoverlap (s :: es)] at index 0     *)
+(* ([Rabs (nth 0 es 0) <= 1/2 uls s]).  The operands are nonzero because a    *)
+(* zero operand would round exactly and leave [ei1 = 0].  The exponent        *)
+(* premise [uls s <= uls a] is the remaining content, discharged by the       *)
+(* paper's [k_i] argument at the call site.                                   *)
 Lemma Fnonoverlap_head a s es :
-  format a -> format s -> Fnonoverlap (s :: es) -> (0 < size es)%N ->
+  format a -> format s -> uls s <= uls a ->
+  Fnonoverlap (s :: es) -> (0 < size es)%N ->
   let: DWR _ ei1 := TwoSum a s in
   ei1 <> 0 -> Rabs (nth 0 es 0) <= / 2 * uls ei1.
 Proof.
-Admitted.
+move=> Fa Fs Hulsle Fses Hsz.
+case E : (TwoSum a s) => [si ei1] Hn0.
+have Hc : dwh (TwoSum a s) + dwl (TwoSum a s) = a + s.
+  by exact: TwoSum_correct_loc Fa Fs.
+have Hei1 : RND (a + s) + ei1 = a + s by move: Hc; rewrite TwoSum_hi E dwlE.
+have sn0 : s <> 0.
+  move=> s0; apply: Hn0.
+  have Ha : RND (a + s) = a by rewrite s0 Rplus_0_r; apply: round_generic.
+  by lra.
+have an0 : a <> 0.
+  move=> a0; apply: Hn0.
+  have Hb : RND (a + s) = s by rewrite a0 Rplus_0_l; apply: round_generic.
+  by lra.
+have Hle : Rabs (nth 0 es 0) <= / 2 * uls s.
+  apply: (Fses 0%N); last exact: sn0.
+  by rewrite /= ltnS.
+have Hulsei : uls s <= uls ei1.
+  have -> : ei1 = dwl (TwoSum a s) by rewrite E.
+  by apply: (TwoSum_err_uls_ge Fa Fs an0 sn0 Hulsle); rewrite E.
+apply: Rle_trans Hle _.
+by have := Hulsei; lra.
+Qed.
 
 (* Theorem 1 (VecSum), stated as in the paper: given the input separation,    *)
 (* [vecSum l] is F-nonoverlapping AND has the same exact sum.  The input      *)
@@ -1385,10 +1409,15 @@ move=> [|[|i]] /= iLs Hn0.
   rewrite E1 => /=; rewrite Rmult_comm /Rdiv //.
   by have := ulp_le_ulps si; lra.
 - have Hsz : (0 < size es)%N by move: iLs; case: (size es).
-  have H := Fnonoverlap_head aF sF sesF; rewrite E1 in H.
+  (* [uls s <= uls a]: the running high word [s] of the tail sits on a grid  *)
+  (* at least as fine as the coarse head [a].  This is the paper's [k_i]     *)
+  (* exponent argument; not derivable from the simplified [sorted_mag] /     *)
+  (* [pairwise_ulp] inputs alone, so it is the sole remaining gap here.       *)
+  have Huls : uls s <= uls a by admit.
+  have H := Fnonoverlap_head aF sF Huls sesF; rewrite E1 in H.
   exact: (H Hsz Hn0).
 by apply: (sesF i.+1).
-Qed.
+Admitted.
 
 (* Theorem 2 (VSEB), stated as in the paper: if [e] is F-nonoverlapping (with *)
 (* float terms) and the precision is large enough, [size e <= p + 1] (i.e. the*)

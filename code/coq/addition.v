@@ -951,6 +951,41 @@ have Hev : Z.odd (2 ^ (e - g)) = false.
 by rewrite Hev andbF in Ho.
 Qed.
 
+(* The TwoSum error inherits at least the [uls] of the smaller-grid operand:  *)
+(* if [uls s <= uls a] then [uls s <= uls (dwl (TwoSum a s))].  Both operands  *)
+(* lie on the grid [bpow (cexp s + trZ (mant s))] (= [uls s]), hence so does   *)
+(* the exact error [a + s - RND(a + s)]; [is_imul_uls_ge] then lifts that grid *)
+(* up to the error's own [uls].  This is the separation core of Fnonoverlap.   *)
+Lemma TwoSum_err_uls_ge a s : format a -> format s -> a <> 0 -> s <> 0 ->
+  uls s <= uls a -> dwl (TwoSum a s) <> 0 -> uls s <= uls (dwl (TwoSum a s)).
+Proof.
+move=> Fa Fs an0 sn0 Hle en0.
+have Hulss : uls s = bpow beta (cexp s + Z.of_nat (trZ (Ztrunc (mant s)))).
+  by rewrite /uls; case: Req_bool_spec.
+have Hulsa : uls a = bpow beta (cexp a + Z.of_nat (trZ (Ztrunc (mant a)))).
+  by rewrite /uls; case: Req_bool_spec.
+have HleZ : (cexp s + Z.of_nat (trZ (Ztrunc (mant s))) <=
+             cexp a + Z.of_nat (trZ (Ztrunc (mant a))))%Z.
+  by apply: (le_bpow beta); rewrite -Hulss -Hulsa.
+have Ha : is_imul a (bpow beta (cexp s + Z.of_nat (trZ (Ztrunc (mant s))))).
+  by apply: (is_imul_pow_le _ HleZ); rewrite -Hulsa; exact: uls_imul.
+have Hs : is_imul s (bpow beta (cexp s + Z.of_nat (trZ (Ztrunc (mant s))))).
+  by rewrite -Hulss; exact: uls_imul.
+have Herr : is_imul (dwl (TwoSum a s))
+              (bpow beta (cexp s + Z.of_nat (trZ (Ztrunc (mant s))))).
+  have Hc : dwh (TwoSum a s) + dwl (TwoSum a s) = a + s
+    by exact: TwoSum_correct_loc Fa Fs.
+  have -> : dwl (TwoSum a s) = (a + s) - RND (a + s)
+    by move: Hc; rewrite TwoSum_hi; lra.
+  apply: is_imul_minus; first by apply: is_imul_add.
+  by apply: is_imul_pow_round; apply: is_imul_add.
+have Ferr : format (dwl (TwoSum a s)).
+  move: (format_TwoSum Fa Fs); rewrite /formatDWR.
+  by case: (TwoSum a s) => b c [].
+apply: Rle_trans (is_imul_uls_ge Ferr en0 Herr).
+by apply: Req_le.
+Qed.
+
 (* [ufp x] -- "unit in the first place": the weight [2^(mag x - 1)] of the     *)
 (* leftmost bit, i.e. the largest power of two <= |x| (for x <> 0).  Paper     *)
 (* Theorem 1 / Corollary 1 (p.3) state the VecSum input conditions with it.    *)

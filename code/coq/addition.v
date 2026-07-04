@@ -722,6 +722,55 @@ case: (@format_vecSumAux (b :: l)) => [z zIl|].
 by rewrite E.
 Qed.
 
+(* Divisibility propagation -- the induction step of paper Thm 1 ("if         *)
+(* 2^k | s_i, x_{i-1}, ..., x_0 then 2^k | e_i, ..., e_0").  If every input   *)
+(* lies on the grid [pow e], so does the running high word and every error:   *)
+(* [2Sum] preserves it, the rounded sum via [is_imul_pow_round] and the exact *)
+(* error via [is_imul_minus].  [format] is only used for the error identity.  *)
+Lemma vecSumAux_imul e l :
+  {in l, forall z, format z} -> {in l, forall z, is_imul z (pow e)} ->
+  is_imul (vecSumAux l).2 (pow e) /\
+  {in (vecSumAux l).1, forall z, is_imul z (pow e)}.
+Proof.
+elim: l => [_ _|a [|b l] // IH ablF ablM]; split => //.
+- by exists 0%Z; rewrite Rmult_0_l.
+- by apply: ablM; rewrite inE eqxx.
+- rewrite vecSumAux_cons.
+  have Ma : is_imul a (pow e) by apply: ablM; rewrite inE eqxx.
+  have [sM _] : is_imul (vecSumAux (b :: l)).2 (pow e) /\
+                {in (vecSumAux (b :: l)).1, forall z, is_imul z (pow e)}.
+    apply: IH.
+      by move=> z zIl; apply: ablF; rewrite inE zIl orbT.
+    by move=> z zIl; apply: ablM; rewrite inE zIl orbT.
+  move: sM; case E : vecSumAux => [es s] sM.
+  case E1 : TwoSum => [si ei1] /=.
+  have := TwoSum_hi a s; rewrite E1 /= => ->.
+  by apply: is_imul_pow_round; apply: is_imul_add.
+rewrite vecSumAux_cons.
+have Ma : is_imul a (pow e) by apply: ablM; rewrite inE eqxx.
+have Fa : format a by apply: ablF; rewrite inE eqxx.
+have [sM esM] : is_imul (vecSumAux (b :: l)).2 (pow e) /\
+                {in (vecSumAux (b :: l)).1, forall z, is_imul z (pow e)}.
+  apply: IH.
+    by move=> z zIl; apply: ablF; rewrite inE zIl orbT.
+  by move=> z zIl; apply: ablM; rewrite inE zIl orbT.
+have [Fs _] : format (vecSumAux (b :: l)).2 /\
+              {in (vecSumAux (b :: l)).1, forall z, format z}.
+  apply: format_vecSumAux.
+  by move=> z zIl; apply: ablF; rewrite inE zIl orbT.
+move: sM esM Fs; case E : vecSumAux => [es s] sM esM Fs.
+case E1 : TwoSum => [si ei1] /=.
+move=> z; rewrite inE => /orP[/eqP->|zIes]; last by apply: esM.
+have Hsi : si = RND (a + s) by have := TwoSum_hi a s; rewrite E1.
+have Hc : si + ei1 = a + s.
+  have Hcc : dwh (TwoSum a s) + dwl (TwoSum a s) = a + s
+    by exact: TwoSum_correct_loc Fa Fs.
+  by move: Hcc; rewrite E1 /= => ->.
+have -> : ei1 = (a + s) - si by lra.
+apply: is_imul_minus; first by apply: is_imul_add.
+by rewrite Hsi; apply: is_imul_pow_round; apply: is_imul_add.
+Qed.
+
 (* Two definitional unfoldings of [vsebAux] (by reflexivity), mirroring       *)
 (* [vecSumAux_cons]: they expose [TwoSum eps e] so the following [case] can   *)
 (* capture it in the goal, keeping the low words as the very variables that   *)

@@ -1380,6 +1380,133 @@ by split; [apply: Hfmt; rewrite !inE eqxx | apply: Hfmt; rewrite !inE eqxx orbT
            apply: (Hno 0%N) | apply: (Hno 1%N)].
 Qed.
 
+(* A float is at most [(2 - 2u) ufp] of itself (max-mantissa bound).  Holds    *)
+(* also at 0 and in the subnormal range, so no no-underflow hypothesis.        *)
+Lemma abs_le_ufp_norm x : format x -> Rabs x <= (2 - 2 * u) * ufp x.
+Proof.
+move=> Fx.
+have Hu0 : 0 < u by rewrite uE; apply: bpow_gt_0.
+have Hu1 : u <= 1 by rewrite uE -(pow0E beta); apply: bpow_le; lia.
+case: (Req_dec x 0) => [xz|xn0].
+  by rewrite xz Rabs_R0; have := ufp_gt_0 0; nra.
+have Hmx : (emin < mag beta x)%Z.
+  by apply: lt_bpow; apply: Rle_lt_trans (alpha_lB Fx xn0) _; exact: bpow_mag_gt.
+have Hsucc : succ beta fexp (Rabs x) <= bpow beta (mag beta x).
+  apply: succ_le_lt => //; first exact: generic_format_abs.
+    by apply: generic_format_bpow; rewrite /fexp /FLT_exp; lia.
+  by apply: bpow_mag_gt.
+move: Hsucc; rewrite succ_eq_pos; last exact: Rabs_pos.
+rewrite ulp_neq_0; last by move: (Rabs_pos_lt _ xn0); lra.
+move=> Hs.
+have Hcexp : bpow beta (mag beta x - p) <= bpow beta (cexp (Rabs x)).
+  by apply: bpow_le; rewrite /cexp /FLT_exp mag_abs; lia.
+have -> : (2 - 2 * u) * ufp x = bpow beta (mag beta x) - bpow beta (mag beta x - p).
+  rewrite /ufp uE.
+  have -> : (2 - 2 * bpow beta (-p)) = bpow beta 1 - bpow beta (1 - p).
+    by rewrite (bpow_plus beta 1 (-p)) bpow_1 /beta /=; lra.
+  by rewrite Rmult_minus_distr_r -!bpow_plus; congr (bpow _ _ - bpow _ _); lia.
+lra.
+Qed.
+
+(* A nonzero P-nonoverlap successor forces the predecessor away from underflow:*)
+(* [|y| < ulp x] with [y] a nonzero float gives [emin <= mag x - p] (otherwise *)
+(* [ulp x = 2^emin], and [|y| < 2^emin] would force [y = 0]).                   *)
+Lemma nu_of_lt_ulp x y : format y -> y <> 0 -> Rabs y < ulp x ->
+  (emin <= mag beta x - p)%Z.
+Proof.
+move=> Fy yn0 Hlt.
+have Hemin : bpow beta emin <= Rabs y := alpha_lB Fy yn0.
+have xn0 : x <> 0 by move=> xz; move: Hlt; rewrite xz ulp_FLT_0; lra.
+move: Hlt; rewrite ulp_neq_0 // /cexp /FLT_exp => Hlt.
+have Hb : bpow beta emin < bpow beta (Z.max (mag beta x - p) emin) by lra.
+by move: (lt_bpow _ _ _ Hb); lia.
+Qed.
+
+(* A P-nonoverlap list whose head is 0 sums to 0: a zero limb forces its       *)
+(* nonzero-float successors below [2^emin], hence to 0.                        *)
+Lemma small_head_zero l : Pnonoverlap l -> {in l, forall z, format z} ->
+  nth 0 l 0 = 0 -> sumR l = 0.
+Proof.
+elim: l => [//|a l IH] Pl Fl /= a0.
+have Hl0 : sumR l = 0.
+  case: l IH Pl Fl => [//|b l'] IH Pl Fl.
+  apply: IH; first exact: Pnonoverlap_cons Pl.
+    by move=> t tin; apply: Fl; rewrite inE tin orbT.
+  have Hb : Rabs b < ulp a by apply: (Pl 0%N).
+  case: (Req_dec b 0) => [b0|bn0]; first by rewrite /= b0.
+  have Fb : format b by apply: Fl; rewrite !inE eqxx orbT.
+  have Hb2 : bpow beta emin <= Rabs b := alpha_lB Fb bn0.
+  by exfalso; move: Hb; rewrite a0 ulp_FLT_0; lra.
+by rewrite a0 Hl0 Rplus_0_r.
+Qed.
+
+(* Key bound: for a P-nonoverlap list of floats, the whole sum is at most       *)
+(* twice the [ufp] of the leading term -- the geometric series                 *)
+(* [(2-2u)(1 + u + u^2 + ...) = 2] collapses through the induction.  No nonzero *)
+(* / no-underflow hypothesis: zero limbs are absorbed by [small_head_zero], and *)
+(* every non-last limb is non-underflowing by [nu_of_lt_ulp].                  *)
+Lemma sumR_ufp_bound l : Pnonoverlap l -> {in l, forall z, format z} ->
+  Rabs (sumR l) <= 2 * ufp (nth 0 l 0).
+Proof.
+have Hu0 : 0 < u by rewrite uE; apply: bpow_gt_0.
+elim: l => [_ _|a l IH Pl Fl].
+  rewrite Rabs_R0.
+  by have := ufp_gt_0 (nth 0 (@nil R) 0); lra.
+have Fa : format a by apply: Fl; rewrite inE eqxx.
+have Hla : Rabs a <= (2 - 2 * u) * ufp a by apply: abs_le_ufp_norm.
+have Hua : 0 < ufp a := ufp_gt_0 a.
+case: l IH Pl Fl => [|b l] IH Pl Fl.
+  have -> : nth 0 [:: a] 0 = a by [].
+  have -> : sumR [:: a] = a by rewrite /= Rplus_0_r.
+  nra.
+have Hb : Rabs b < ulp a by apply: (Pl 0%N).
+have Fb : format b by apply: Fl; rewrite !inE eqxx orbT.
+have Hub : 0 < ufp b := ufp_gt_0 b.
+have -> : nth 0 (a :: b :: l) 0 = a by [].
+have -> : sumR (a :: b :: l) = a + sumR (b :: l) by [].
+have IHbl : Rabs (sumR (b :: l)) <= 2 * ufp b.
+  apply: IH; first exact: Pnonoverlap_cons Pl.
+  by move=> t tin; apply: Fl; rewrite inE tin orbT.
+case: (Req_dec b 0) => [b0|bn0].
+  have Hs0 : sumR (b :: l) = 0.
+    apply: small_head_zero; first exact: Pnonoverlap_cons Pl.
+      by move=> t tin; apply: Fl; rewrite inE tin orbT.
+    by rewrite /= b0.
+  by rewrite Hs0 Rplus_0_r; nra.
+have Ua : (emin <= mag beta a - p)%Z := nu_of_lt_ulp Fb bn0 Hb.
+have Na : a <> 0.
+  by move=> az; move: Hb; rewrite az ulp_FLT_0 => Hb'; have := alpha_lB Fb bn0; lra.
+have Hstep : ufp b <= u * ufp a by apply: ufp_ulp_step.
+apply: Rle_trans (Rabs_triang _ _) _.
+nra.
+Qed.
+
+(* [sumR] is additive over concatenation, and P-nonoverlap is stable by drop.  *)
+Lemma sumR_cat l1 l2 : sumR (l1 ++ l2) = sumR l1 + sumR l2.
+Proof. by elim: l1 => [|a l1 IH] /=; rewrite ?IH; ring. Qed.
+
+Lemma Pnonoverlap_drop k l : Pnonoverlap l -> Pnonoverlap (drop k l).
+Proof.
+move=> H i; rewrite size_drop ltn_subRL => Hi.
+by rewrite !nth_drop addnS; apply: H; rewrite -addnS.
+Qed.
+
+(* A zero limb propagates: its successor is below [2^emin], hence 0.           *)
+Lemma nth_step_zero l i : Pnonoverlap l -> {in l, forall z, format z} ->
+  nth 0 l i = 0 -> nth 0 l i.+1 = 0.
+Proof.
+move=> Pl Fl Hi.
+case: (ltnP i.+1 (size l)) => [Hlt|Hle]; last by rewrite nth_default.
+have Hb : Rabs (nth 0 l i.+1) < ulp (nth 0 l i) by apply: Pl.
+move: Hb; rewrite Hi ulp_FLT_0 => Hb.
+case: (Req_dec (nth 0 l i.+1) 0) => [->//|Hn0].
+have Hf : format (nth 0 l i.+1) by apply: Fl; apply: mem_nth.
+by have := alpha_lB Hf Hn0; lra.
+Qed.
+
+Lemma sumR_head_drop1 l : sumR l = nth 0 l 0 + sumR (drop 1 l).
+Proof. by case: l => [|a l] /=; rewrite ?drop0; lra. Qed.
+
 (* ===========================================================================*)
 (*  Error bound: the "Ensure" clause of Algorithm 8 (p >= 6):                 *)
 (*    | r - (x + y) | <= (2 u^3 + 4.2 u^4) | x + y |.                         *)
@@ -1413,7 +1540,90 @@ have Hvseb_sum : sumR (vseb e) = sumR e.
 (* Truncating to the first three terms loses at most errc of the sum          *)
 (* (Theorem 3 with k = 3).                                                    *)
 have Htrunc :
-  Rabs (sumR (vseb e) - sumR (vsebK 3 e)) <= errc * Rabs (sumR e) by admit.
+  Rabs (sumR (vseb e) - sumR (vsebK 3 e)) <= errc * Rabs (sumR e).
+  have Hzf : {in z, forall t, format t}.
+    apply: format_Merge.
+      by case: Hx => x0F x1F x2F _ _ t; rewrite !inE => /or3P[] /eqP->.
+    by case: Hy => y0F y1F y2F _ _ t; rewrite !inE => /or3P[] /eqP->.
+  have Hzs : sorted_mag z.
+    by apply: Merge_sorted_mag;
+      [apply: isTW_sorted_mag Hx | apply: isTW_sorted_mag Hy].
+  have Hzu : pairwise_ulp z.
+    apply: Merge_pairwise_ulp => [t|t||].
+    - by rewrite !inE => /or3P[] /eqP->; case: Hx.
+    - by rewrite !inE => /or3P[] /eqP->; case: Hy.
+    - by apply: isTW_Pnonoverlap Hx.
+    by apply: isTW_Pnonoverlap Hy.
+  have HFe : Fnonoverlap e by case: (vecSum_Fnonoverlap Hzf Hzs Hzu).
+  have Fe : {in e, forall t, format t} by apply: format_vecSum.
+  have Py : Pnonoverlap (vseb e).
+    by case: (vseb_Pnonoverlap _ Fe HFe) => //; rewrite /e size_vecSum size_Merge.
+  have Fy : {in vseb e, forall t, format t} by apply: format_vseb.
+  set y := vseb e.
+  have Hsplit : sumR (vseb e) - sumR (vsebK 3 e) = sumR (drop 3 y).
+    by rewrite /vsebK -/y -{1}(cat_take_drop 3 y) sumR_cat; ring.
+  rewrite Hsplit -Hvseb_sum -/y.
+  have Hu0 : 0 < u by rewrite uE; apply: bpow_gt_0.
+  have Hu64 : u <= / 64.
+    rewrite uE; have -> : (/ 64 = bpow beta (-6))%R by rewrite /= /Z.pow_pos /=; lra.
+    by apply: bpow_le; lia.
+  have Herrc : 0 <= errc by nra.
+  have Hsub : {in drop 1 y, forall t, format t} /\ {in drop 3 y, forall t, format t}.
+    by split=> t /mem_drop tin; apply: Fy.
+  case: Hsub => Fd1 Fd3.
+  have Hty : Rabs (sumR (drop 3 y)) <= 2 * ufp (nth 0 (drop 3 y) 0).
+    apply: sumR_ufp_bound; last exact: Fd3.
+    by apply: Pnonoverlap_drop.
+  case: (Req_dec (nth 0 y 3) 0) => [y3z|y3n].
+    suff -> : sumR (drop 3 y) = 0.
+      by rewrite Rabs_R0; apply: Rmult_le_pos => //; exact: Rabs_pos.
+    apply: small_head_zero => //; first exact: Pnonoverlap_drop.
+    by rewrite nth_drop addn0.
+  have S3 : (3 < size y)%N.
+    by rewrite ltnNge; apply/negP => Hle; apply: y3n; rewrite nth_default.
+  have Fk : forall k, format (nth 0 y k).
+    move=> k; case: (ltnP k (size y)) => [Hk|Hk].
+      by apply: Fy; apply: mem_nth.
+    by rewrite nth_default //; apply: generic_format_0.
+  have y2n : nth 0 y 2 <> 0 by move=> H; apply/y3n/(nth_step_zero Py Fy H).
+  have y1n : nth 0 y 1 <> 0 by move=> H; apply/y2n/(nth_step_zero Py Fy H).
+  have y0n : nth 0 y 0 <> 0 by move=> H; apply/y1n/(nth_step_zero Py Fy H).
+  have dstep : forall k, nth 0 y k.+1 <> 0 ->
+                 ufp (nth 0 y k.+1) <= u * ufp (nth 0 y k).
+    move=> k Hkn.
+    have Hk : (k.+1 < size y)%N.
+      by rewrite ltnNge; apply/negP => Hge; apply: Hkn; rewrite nth_default.
+    have Hpk : Rabs (nth 0 y k.+1) < ulp (nth 0 y k) by apply: Py.
+    apply: ufp_ulp_step.
+    - by move=> H; apply: Hkn; apply: (nth_step_zero Py Fy H).
+    - exact: Hkn.
+    - exact: Hpk.
+    exact: (nu_of_lt_ulp (Fk k.+1) Hkn Hpk).
+  have d0 := dstep 0%N y1n.
+  have d1 := dstep 1%N y2n.
+  have d2 := dstep 2%N y3n.
+  have U0 : 0 < ufp (nth 0 y 0) := ufp_gt_0 _.
+  have U1 : 0 < ufp (nth 0 y 1) := ufp_gt_0 _.
+  have U2 : 0 < ufp (nth 0 y 2) := ufp_gt_0 _.
+  have e2 : ufp (nth 0 y 3) <= u * (u * (u * ufp (nth 0 y 0))).
+    apply: Rle_trans d2 _; apply: Rmult_le_compat_l; first lra.
+    apply: Rle_trans d1 _; apply: Rmult_le_compat_l; first lra.
+    exact: d0.
+  move: Hty; rewrite nth_drop addn0 => Hty.
+  have Hd1y : Rabs (sumR (drop 1 y)) <= 2 * ufp (nth 0 y 1).
+    have -> : nth 0 y 1 = nth 0 (drop 1 y) 0 by rewrite nth_drop addn0.
+    apply: sumR_ufp_bound; last exact: Fd1.
+    by apply: Pnonoverlap_drop.
+  have Hlow : (1 - 2 * u) * ufp (nth 0 y 0) <= Rabs (sumR y).
+    have Hy0 : ufp (nth 0 y 0) <= Rabs (nth 0 y 0) by apply: ufp_le_abs.
+    have := Rabs_triang_inv (nth 0 y 0) (- sumR (drop 1 y)).
+    rewrite Rabs_Ropp.
+    have -> : nth 0 y 0 - - sumR (drop 1 y) = sumR y by rewrite [in RHS]sumR_head_drop1; ring.
+    move=> Htri; nra.
+  apply: Rle_trans Hty _.
+  have Hscal : 2 * (u * (u * u)) <=
+               (2 * (u * u * u) + 42 / 10 * (u * u * u * u)) * (1 - 2 * u) by nra.
+  nra.
 (* The result of TWSum is exactly the value of those three terms.  [vsebK 3 e] *)
 (* has length <= 3 (it is a [take 3]); TWSum reads its (zero-padded) first      *)
 (* three entries, whose sum is exactly [sumR (vsebK 3 e)].                      *)
@@ -1432,6 +1642,6 @@ have E1 : TWval (TWR x0 x1 x2) + TWval (TWR y0 y1 y2) = sumR (vseb e).
   by rewrite /= Hvseb_sum Hvec_sum Hmerge_sum.
 rewrite Hres E1 Rabs_minus_sym {2}Hvseb_sum.
 exact: Htrunc.
-Admitted.
+Qed.
 
 End TWAdd.

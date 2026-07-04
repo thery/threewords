@@ -1338,7 +1338,23 @@ have He := Herr i Hi.
 (* unprovable alone -- [Hover] is invariant under scaling [l] by a power      *)
 (* of two (every [k_j] shifts and [vecSum] commutes with the scaling) while   *)
 (* [2^(k_i)] is not; only the ratio [uls(e_i) / 2^(k_i)] is pinned down.      *)
-have Hkey : 4 * u * pow (k i) <= uls (nth 0 (vecSum l) i) by admit.
+have Hilt : (i < size (vecSum l))%N := ltn_trans (ltnSn i) iLs.
+have Hkey : 4 * u * pow (k i) <= uls (nth 0 (vecSum l) i).
+  (* [4 u 2^(k_i)] is the clean power [2^(k_i+2-p)]; then [is_imul_uls_ge]    *)
+  (* turns the [uls] lower bound into "[e_i] is a multiple of that grid".     *)
+  have -> : 4 * u * pow (k i) = pow (k i + 2 - p).
+    rewrite uE.
+    have -> : (4 : R) = pow 2 by rewrite /= /Z.pow_pos /=; lra.
+    by rewrite -!bpow_plus; congr bpow; lia.
+  apply: is_imul_uls_ge.
+  - by apply: (format_vecSum Hfmt); apply: mem_nth.
+  - exact: Hn0.
+  (* Core (paper's multiples-of-2u argument): the i-th VecSum output lies on  *)
+  (* the coarse grid [2^(k_i+2-p) = 4 u 2^(k_i)].  Its rightmost nonzero bit  *)
+  (* is no finer than [2 G_i]: the fine bits of the running sum are absorbed  *)
+  (* into the high word, and the exponent gaps [k_{j-1} >= k_j + 1] make every*)
+  (* [x_j], [s_j] (j <= i) a multiple of it.  This is the remaining hard step.*)
+  by admit.
 (* [Hover]: |e_{i+1}| > uls(e_i)/2 >= 2u 2^(k_i) >= |e_{i+1}| (Herr): absurd. *)
 by lra.
 Admitted.

@@ -48,14 +48,14 @@ Local Notation u_gt_0 := (u_gt_0 p beta).
 Lemma uE : u = pow (- p).
 Proof. by rewrite /u /= /Z.pow_pos /=; lra. Qed.
 
-(* Following paper3, the whole development is under round-to-nearest        *)
-(* (ties broken by [choice]): the paper sets RN(.) as its standing rounding *)
-(* mode in the preliminaries and writes every operation as RN(...).  This   *)
-(* is needed for the error-free transforms (e.g. 2Sum is exact and its low  *)
-(* word is bounded by half an ulp) -- a generic [Valid_rnd] is too weak.    *)
+(* Following paper3, the whole development is under round-to-nearest          *)
+(* (ties broken by [choice]): the paper sets RN(.) as its standing rounding   *)
+(* mode in the preliminaries and writes every operation as RN(...).  This     *)
+(* is needed for the error-free transforms (e.g. 2Sum is exact and its low    *)
+(* word is bounded by half an ulp) -- a generic [Valid_rnd] is too weak.      *)
 Variable choice : Z -> bool.
-(* Ties broken to even (the symmetry [RN(-t) = -RN(t)]); required by         *)
-(* Flocq's [TwoSum_correct].                                                 *)
+(* Ties broken to even (the symmetry [RN(-t) = -RN(t)]); required by          *)
+(* Flocq's [TwoSum_correct].                                                  *)
 Hypothesis choice_sym : forall x, choice x = ~~ choice (- (x + 1))%Z.
 Let rnd : R -> Z := Znearest choice.
 Local Instance valid_rnd : Valid_rnd rnd := valid_rnd_N choice.
@@ -71,12 +71,12 @@ Local Notation mant := (scaled_mantissa beta fexp).
 Local Notation RND := (round beta fexp rnd).
 Local Notation ulp := (ulp beta fexp).
 Local Notation fastTwoSum := (fastTwoSum beta emin p rnd).
-(* Round-to-nearest half-ulp error bound with this section's format and tie- *)
-(* breaking pre-applied: [error_le_half_ulp_RN x : Prec_gt_0 p -> ...].      *)
+(* Round-to-nearest half-ulp error bound with this section's format and tie-  *)
+(* breaking pre-applied: [error_le_half_ulp_RN x : Prec_gt_0 p -> ...].       *)
 Local Notation error_le_half_ulp_RN :=
   (@error_le_half_ulp_round beta (FLT_exp emin p)
      (FLT_exp_valid emin p) (FLT_exp_monotone emin p) choice).
-(* Flocq's [TwoSum_correct] with this section's parameters and hypotheses    *)
+(* Flocq's [TwoSum_correct] with this section's parameters and hypotheses     *)
 (* pre-applied: [TwoSum_correct_RN x y : format x -> format y -> ...].        *)
 Local Notation TwoSum_correct_RN :=
   (@TwoSum_correct emin p choice Hp2 emin_le_0 choice_sym).
@@ -95,7 +95,7 @@ Definition TwoSum (a b : R) : dwR :=
   let db := RND (b - b') in
   DWR s (RND (da + db)).
 
-(* Named projectors for the double-word record [dwR] (prelim: [DWR xh xl]),  *)
+(* Named projectors for the double-word record [dwR] (prelim: [DWR xh xl]),   *)
 (* so a [TwoSum]/[Fast2Sum] result's components can be named without a [let]. *)
 Definition dwh (d : dwR) : R := let: DWR xh _ := d in xh.
 Definition dwl (d : dwR) : R := let: DWR _ xl := d in xl.
@@ -103,7 +103,7 @@ Definition dwl (d : dwR) : R := let: DWR _ xl := d in xl.
 Lemma dwhE xh xl : dwh (DWR xh xl) = xh. Proof. by []. Qed.
 Lemma dwlE xh xl : dwl (DWR xh xl) = xl. Proof. by []. Qed.
 
-(* The high word of a 2Sum is the rounded sum. *)
+(* The high word of a 2Sum is the rounded sum.                                *)
 Lemma TwoSum_hi a b : dwh (TwoSum a b) = RND (a + b). Proof. by []. Qed.
 
 Definition formatDWR (a : dwR) := let: DWR b c := a in format b /\ format c.
@@ -111,15 +111,15 @@ Definition formatDWR (a : dwR) := let: DWR b c := a in format b /\ format c.
 Lemma format_TwoSum a b : format a -> format b -> formatDWR (TwoSum a b).
 Proof. by move=> Fa Fb; split; try apply: generic_format_round. Qed.
 
-(* The magnitude counterpart of [formatDWR]: in a 2Sum result [DWR s e]   *)
-(* the error word [e] is at most half an ulp of the high word [s].        *)
+(* The magnitude counterpart of [formatDWR]: in a 2Sum result [DWR s e]       *)
+(* the error word [e] is at most half an ulp of the high word [s].            *)
 Definition magnitudeDWR (a : dwR) := let: DWR s e := a in Rabs e <= ulp s / 2.
 
-(* 2Sum is error-free: s + e = a + b.  We reuse Flocq's [TwoSum_correct]  *)
-(* (the Pff bridge), instantiated with the operands SWAPPED: paper3's      *)
-(* Algorithm 2 subtracts [b] first, whereas Flocq's variant subtracts its  *)
-(* first argument first, so [TwoSum_correct b a] has exactly our           *)
-(* intermediate values (up to commutativity of [+]).                       *)
+(* 2Sum is error-free: s + e = a + b.  We reuse Flocq's [TwoSum_correct]      *)
+(* (the Pff bridge), instantiated with the operands SWAPPED: paper3's         *)
+(* Algorithm 2 subtracts [b] first, whereas Flocq's variant subtracts its     *)
+(* first argument first, so [TwoSum_correct b a] has exactly our              *)
+(* intermediate values (up to commutativity of [+]).                          *)
 Lemma TwoSum_correct_loc a b : format a -> format b ->
   let: DWR s e := TwoSum a b in s + e = a + b.
 Proof.
@@ -130,8 +130,8 @@ set DA := RND (a - _); set DB := RND (b - _).
 by rewrite (Rplus_comm DA DB).
 Qed.
 
-(* Magnitude analogue of [format_TwoSum] (Algorithm 2): the low word of a  *)
-(* 2Sum is bounded by half an ulp of its high word.  Combine exactness     *)
+(* Magnitude analogue of [format_TwoSum] (Algorithm 2): the low word of a     *)
+(* 2Sum is bounded by half an ulp of its high word.  Combine exactness        *)
 (* [e = (a+b) - s] with the round-to-nearest bound |RN(x)-x| <= ulp(RN x)/2.*)
 Lemma magnitude_TwoSum a b :
   format a -> format b -> magnitudeDWR (TwoSum a b).
@@ -307,7 +307,7 @@ Qed.
 (* ===========================================================================*)
 Inductive twR := TWR (x0 x1 x2 : R).
 
-(* Named projectors for the triple-word record [twR], mirroring [dwh]/[dwl]. *)
+(* Named projectors for the triple-word record [twR], mirroring [dwh]/[dwl].  *)
 Definition tw0 (t : twR) : R := let: TWR x0 _ _ := t in x0.
 Definition tw1 (t : twR) : R := let: TWR _ x1 _ := t in x1.
 Definition tw2 (t : twR) : R := let: TWR _ _ x2 := t in x2.
@@ -325,18 +325,18 @@ Fixpoint sumR (l : seq R) : R := if l is a :: l' then a + sumR l' else 0.
 Definition Pnonoverlap (l : seq R) : Prop :=
   forall i, (i.+1 < size l)%N -> Rabs (nth 0 l i.+1) < ulp (nth 0 l i).
 
-(* Dropping the head of a P-nonoverlapping sequence keeps it P-nonoverlapping. *)
+(* Dropping the head of a P-nonoverlapping sequence keeps it P-nonoverlapping.*)
 Lemma Pnonoverlap_cons a l : Pnonoverlap (a :: l) -> Pnonoverlap l.
 Proof. by move=> alP i iLs; apply: (alP i.+1). Qed.
 
 (* The two preconditions of Theorem 6 on the merged sequence.                 *)
 
-(* --- magnitude order ----------------------------------------------------- *)
+(* --- magnitude order -----------------------------------------------------  *)
 (* [sorted_mag l]: the sequence is non-increasing in magnitude.               *)
 Definition sorted_mag (l : seq R) : Prop :=
   forall i, (i.+1 < size l)%N -> Rabs (nth 0 l i.+1) <= Rabs (nth 0 l i).
 
-(* Peel the head of a [sorted_mag] sequence: the first step plus the tail.     *)
+(* Peel the head of a [sorted_mag] sequence: the first step plus the tail.    *)
 Lemma sorted_mag_cons a1 a2 l :
   sorted_mag [:: a1,  a2 & l] -> Rabs a2 <= Rabs a1 /\ sorted_mag (a2 :: l).
 Proof.
@@ -344,12 +344,12 @@ move=> a1a2lM; split; first by apply: (a1a2lM 0%N).
 by move=> n Hn; apply: (a1a2lM n.+1).
 Qed.
 
-(* Cons a larger-magnitude head onto a [sorted_mag] sequence.                  *)
+(* Cons a larger-magnitude head onto a [sorted_mag] sequence.                 *)
 Lemma sorted_mag_cons_inv a1 a2 l :
   Rabs a2 <= Rabs a1 -> sorted_mag (a2 :: l) -> sorted_mag [:: a1,  a2 & l].
 Proof. by move=> a2La1 a2lN [//|i Hi]; apply: (a2lN i). Qed.
 
-(* Replace the head by an even larger one (still [sorted_mag]).                *)
+(* Replace the head by an even larger one (still [sorted_mag]).               *)
 Lemma sorted_mag_le a1 a2 l :
   sorted_mag (a1 :: l) -> Rabs a1 <= Rabs a2 -> sorted_mag (a2 :: l).
 Proof.
@@ -357,13 +357,13 @@ case: l => // a3 l /sorted_mag_cons[a1La3 a3lS] a1La2.
 by apply: sorted_mag_cons_inv => //; lra.
 Qed.
 
-(* --- pairwise ulp separation --------------------------------------------- *)
+(* --- pairwise ulp separation ---------------------------------------------  *)
 (* [pairwise_ulp l]: each term is below ulp of the term two positions before; *)
 (* this tolerates a single overlap but never two in a row.                    *)
 Definition pairwise_ulp (l : seq R) : Prop :=
   forall i, (i.+2 < size l)%N -> Rabs (nth 0 l i.+2) < ulp (nth 0 l i).
 
-(* Peel the head: the third-term bound [Rabs a3 < ulp a1] plus the tail.       *)
+(* Peel the head: the third-term bound [Rabs a3 < ulp a1] plus the tail.      *)
 Lemma pairwise_ulp_cons a1 a2 a3 l :
   pairwise_ulp [:: a1, a2, a3 & l] ->
   Rabs a3 < ulp a1 /\ pairwise_ulp [::a2, a3 & l].
@@ -405,8 +405,8 @@ Definition isTW (x : twR) : Prop :=
 (*  nonzero float has [bpow emin <= Rabs y], so [Rabs y < ulp 0] gives y = 0. *)
 (* ===========================================================================*)
 
-(* [ulp] is strictly positive everywhere: at 0 it is [bpow emin] (FLT), and    *)
-(* elsewhere [bpow (cexp _)].                                                   *)
+(* [ulp] is strictly positive everywhere: at 0 it is [bpow emin] (FLT), and   *)
+(* elsewhere [bpow (cexp _)].                                                 *)
 Lemma ulp_gt_0 x : 0 < ulp x.
 Proof.
 have [->|xn0] := Req_dec x 0; first by rewrite ulp_FLT_0; apply: bpow_gt_0.
@@ -486,7 +486,7 @@ Proof.
 by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|[]]].
 Qed.
 
-(* The three limbs of a triple-word are floating-point numbers (part of Def. 5). *)
+(* The three limbs of a triple-word are floats (part of Def. 5).              *)
 Lemma isTW_format x : isTW x -> {in (TW2l x), forall z, format z}.
 Proof.
 by case : x => x0 x1 x2 [x0F x1F x2F _ _] z; rewrite !inE => /or3P[] /eqP->.
@@ -666,7 +666,7 @@ apply: ulp_le_abs.
 by apply: bb1b2l3F; rewrite !inE eqxx.
 Qed.
 
-(* Merge is a permutation of its two inputs, so it preserves the exact sum.    *)
+(* Merge is a permutation of its two inputs, so it preserves the exact sum.   *)
 Lemma Merge_sumR (l1 l2 : seq R) : sumR (Merge l1 l2) = sumR l1 + sumR l2.
  Proof.
 elim: l1 l2 => /= [|a l1 IH1]; first by elim => [/=| b l2] //; lra.
@@ -722,11 +722,11 @@ case: (@format_vecSumAux (b :: l)) => [z zIl|].
 by rewrite E.
 Qed.
 
-(* Two definitional unfoldings of [vsebAux] (by reflexivity), mirroring        *)
-(* [vecSumAux_cons]: they expose [TwoSum eps e] so the following [case] can     *)
-(* capture it in the goal, keeping the low words as the very variables that     *)
-(* [TwoSum_correct_loc] talks about (otherwise [simpl] re-expands them to       *)
-(* [RND ...] and the correctness fact no longer applies).                       *)
+(* Two definitional unfoldings of [vsebAux] (by reflexivity), mirroring       *)
+(* [vecSumAux_cons]: they expose [TwoSum eps e] so the following [case] can   *)
+(* capture it in the goal, keeping the low words as the very variables that   *)
+(* [TwoSum_correct_loc] talks about (otherwise [simpl] re-expands them to     *)
+(* [RND ...] and the correctness fact no longer applies).                     *)
 Lemma vsebAux_1 eps e :
   vsebAux eps [:: e] = let: DWR y0 y1 := TwoSum eps e in [:: y0; y1].
 Proof. by []. Qed.
@@ -737,10 +737,10 @@ Lemma vsebAux_consS eps e e2 l :
   if Req_EM_T et 0 then vsebAux r (e2 :: l) else r :: vsebAux et (e2 :: l).
 Proof. by []. Qed.
 
-(* VSEB is error-free: [vsebAux] preserves the exact sum, prefix [eps]         *)
-(* included.  Each step is a [TwoSum] (exact by [TwoSum_correct_loc]); whether *)
-(* the error [et] is dropped ([et = 0], so [r = eps + e]) or emitted, the sum  *)
-(* [eps + sumR l] is preserved.                                                *)
+(* VSEB is error-free: [vsebAux] preserves the exact sum, prefix [eps]        *)
+(* included.  Each step is a [TwoSum] (exact by [TwoSum_correct_loc]); whether*)
+(* the error [et] is dropped ([et = 0], so [r = eps + e]) or emitted, the sum *)
+(* [eps + sumR l] is preserved.                                               *)
 Lemma vsebAux_sum eps l :
   format eps -> {in l, forall z, format z} ->
   sumR (vsebAux eps l) = eps + sumR l.
@@ -782,32 +782,32 @@ Qed.
 (* ===========================================================================*)
 
 (* [uls x] -- "unit in the last significant place": the weight of the         *)
-(* RIGHTMOST NONZERO bit of [x].  ([ulp x = 2^(cexp x)] is the weight of the   *)
-(* last *representable* place -- the grid spacing; the weight of the leftmost  *)
-(* bit is [ufp x], the other extreme.)  If [x = m * 2^(cexp x)] with           *)
+(* RIGHTMOST NONZERO bit of [x].  ([ulp x = 2^(cexp x)] is the weight of the  *)
+(* last *representable* place -- the grid spacing; the weight of the leftmost *)
+(* bit is [ufp x], the other extreme.)  If [x = m * 2^(cexp x)] with          *)
 (* [m = Ztrunc (mant x)] the integer mantissa, then [uls x = 2^(cexp x + v2 m)]*)
-(* where [v2 m] is the 2-adic valuation of [m] -- here [trZ m], the count of   *)
-(* trailing binary zeros of [m], built from [trP] on the positive part below.  *)
-(* Hence [uls x = ulp x * 2^(v2 m) >= ulp x] (lemma [ulp_le_ulps]), equality   *)
-(* iff the mantissa is odd -- e.g. for [x = -1.01101_2 * 2^364] the paper has  *)
-(* [ulp x = 2^312] but [uls x = 2^359].  At [x = 0] we set [uls 0 = ulp 0].    *)
+(* where [v2 m] is the 2-adic valuation of [m] -- here [trZ m], the count of  *)
+(* trailing binary zeros of [m], built from [trP] on the positive part below. *)
+(* Hence [uls x = ulp x * 2^(v2 m) >= ulp x] (lemma [ulp_le_ulps]), equality  *)
+(* iff the mantissa is odd -- e.g. for [x = -1.01101_2 * 2^364] the paper has *)
+(* [ulp x = 2^312] but [uls x = 2^359].  At [x = 0] we set [uls 0 = ulp 0].   *)
 
 (* [trP p] : number of trailing binary zeros of the positive [p] (its 2-adic  *)
-(* valuation).                                                                 *)
+(* valuation).                                                                *)
 Fixpoint trP (p : positive) := if p is xO p1 then (trP p1).+1 else 0%N.
 
-(* [two_power_pos n] : [2^n] as a positive.                                    *)
+(* [two_power_pos n] : [2^n] as a positive.                                   *)
 Definition two_power_pos n := iter n xO 1%positive.
 
-(* [2^(trP p)] divides [p] (i.e. [trP p] trailing zeros can be factored out).  *)
+(* [2^(trP p)] divides [p] (i.e. [trP p] trailing zeros can be factored out). *)
 Lemma trPE p1 : (two_power_pos (trP p1) | p1)%positive.
 Proof.
 have div1 q : (1 | q)%positive by exists q; rewrite Pos.mul_comm.
 elim: p1 => //= p1 [q {2}->] /=; exists q; lia.
 Qed.
 
-(* [trZ z] : 2-adic valuation of [z] (its trailing binary zeros), [0] at [0];  *)
-(* it ignores the sign, using [trP] on the positive part.                      *)
+(* [trZ z] : 2-adic valuation of [z] (its trailing binary zeros), [0] at [0]; *)
+(* it ignores the sign, using [trP] on the positive part.                     *)
 Definition trZ (z : Z) := if z is Zpos p1 then (trP p1) else
                           if z is Zneg p1 then (trP p1) else 0%N.
 
@@ -817,7 +817,7 @@ Proof. by []. Qed.
 Lemma two_power_nat_pos n : (Zpos (two_power_pos n) = two_power_nat n)%Z.
 Proof. by elim: n. Qed.
 
-(* [2^(trZ z)] divides [z]: the valuation really is extractable.               *)
+(* [2^(trZ z)] divides [z]: the valuation really is extractable.              *)
 Lemma trZE p1 : (2 ^ Z.of_nat (trZ p1) | p1)%Z.
 Proof.
 rewrite -two_power_nat_equiv.
@@ -835,8 +835,8 @@ Definition uls (x : R) : R :=
 Lemma uls0 : uls 0 = ulp 0.
 Proof. by rewrite /uls; case: Req_bool_spec. Qed.
 
-(* [x] factors as (its odd mantissa part) * [uls x] -- the defining property   *)
-(* of [uls] as the weight of the rightmost nonzero bit.                        *)
+(* [x] factors as (its odd mantissa part) * [uls x] -- the defining property  *)
+(* of [uls] as the weight of the rightmost nonzero bit.                       *)
 Lemma ulsE x :
  format x -> 
  x = IZR (Ztrunc (mant x) / (2 ^ Z.of_nat (trZ (Ztrunc (mant x)))))%Z * uls x.
@@ -853,7 +853,7 @@ rewrite Zmult_comm -Znumtheory.Zdivide_Zdiv_eq.
 by apply: trZE.
 Qed.
 
-(* [ulp x <= uls x]: the rightmost nonzero bit is at or above the last place.  *)
+(* [ulp x <= uls x]: the rightmost nonzero bit is at or above the last place. *)
 Lemma ulp_le_ulps x : ulp x <= uls x.
 Proof.
 rewrite /uls.
@@ -880,8 +880,8 @@ by move=> xF; apply: (is_imul_format_mag_pow xF); rewrite /cexp; apply: Z.le_ref
 Qed.
 
 (* The low word (error) of a 2Sum is a multiple of the coarser input grid     *)
-(* [bpow (min (cexp a) (cexp b))]: [a], [b], and [RN(a+b)] all live on it, so  *)
-(* so does [a + b - RN(a+b)].                                                  *)
+(* [bpow (min (cexp a) (cexp b))]: [a], [b], and [RN(a+b)] all live on it, so *)
+(* so does [a + b - RN(a+b)].                                                 *)
 Lemma TwoSum_err_imul a b : format a -> format b ->
   is_imul (dwl (TwoSum a b)) (bpow beta (Z.min (cexp a) (cexp b))).
 Proof.
@@ -895,8 +895,8 @@ have Hab : is_imul (a + b) (bpow beta (Z.min (cexp a) (cexp b))).
 by apply: is_imul_minus => //; apply: is_imul_pow_round.
 Qed.
 
-(* The odd part of a positive is odd: [p / 2^(trP p)] strips all trailing      *)
-(* zeros.  Hence [trP] (and [trZ]) really is the MAXIMAL power of two dividing. *)
+(* The odd part of a positive is odd: [p / 2^(trP p)] strips all trailing     *)
+(* zeros.  So [trP] (and [trZ]) really is the MAXIMAL power of two dividing.  *)
 Lemma trP_odd q : Z.odd (Zpos q / 2 ^ Z.of_nat (trP q)).
 Proof.
 elim: q => [q IH|q IH|] //.
@@ -917,9 +917,9 @@ have -> : (Z.neg q = - Z.pos q)%Z by [].
 by rewrite (_ : trZ (- Z.pos q) = trP q) // Z.div_opp_l_z // Z.odd_opp; exact: trP_odd.
 Qed.
 
-(* Converse of [uls_imul]: any power grid a nonzero float lies on is at most    *)
-(* its [uls].  If [g > uls x] then [x] would be an ODD multiple of [uls x] that *)
-(* is also a multiple of [2 * uls x] -- impossible.                            *)
+(* Converse of [uls_imul]: any power grid a nonzero float lies on is at most  *)
+(* its [uls].  If [g > uls x] then [x] is an ODD multiple of [uls x] that     *)
+(* is also a multiple of [2 * uls x] -- impossible.                           *)
 Lemma is_imul_uls_ge x e : format x -> x <> 0 ->
   is_imul x (bpow beta e) -> bpow beta e <= uls x.
 Proof.
@@ -952,10 +952,10 @@ by rewrite Hev andbF in Ho.
 Qed.
 
 (* The TwoSum error inherits at least the [uls] of the smaller-grid operand:  *)
-(* if [uls s <= uls a] then [uls s <= uls (dwl (TwoSum a s))].  Both operands  *)
-(* lie on the grid [bpow (cexp s + trZ (mant s))] (= [uls s]), hence so does   *)
-(* the exact error [a + s - RND(a + s)]; [is_imul_uls_ge] then lifts that grid *)
-(* up to the error's own [uls].  This is the separation core of Fnonoverlap.   *)
+(* if [uls s <= uls a] then [uls s <= uls (dwl (TwoSum a s))].  Both operands *)
+(* lie on the grid [bpow (cexp s + trZ (mant s))] (= [uls s]), hence so does  *)
+(* the exact error [a + s - RND(a + s)]; [is_imul_uls_ge] then lifts that grid*)
+(* up to the error's own [uls].  This is the separation core of Fnonoverlap.  *)
 Lemma TwoSum_err_uls_ge a s : format a -> format s -> a <> 0 -> s <> 0 ->
   uls s <= uls a -> dwl (TwoSum a s) <> 0 -> uls s <= uls (dwl (TwoSum a s)).
 Proof.
@@ -986,9 +986,9 @@ apply: Rle_trans (is_imul_uls_ge Ferr en0 Herr).
 by apply: Req_le.
 Qed.
 
-(* [ufp x] -- "unit in the first place": the weight [2^(mag x - 1)] of the     *)
-(* leftmost bit, i.e. the largest power of two <= |x| (for x <> 0).  Paper     *)
-(* Theorem 1 / Corollary 1 (p.3) state the VecSum input conditions with it.    *)
+(* [ufp x] -- "unit in the first place": the weight [2^(mag x - 1)] of the    *)
+(* leftmost bit, i.e. the largest power of two <= |x| (for x <> 0).  Paper    *)
+(* Theorem 1 / Corollary 1 (p.3) state the VecSum input conditions with it.   *)
 Definition ufp (x : R) : R := pow (mag beta x - 1).
 
 Lemma ufp_gt_0 x : 0 < ufp x.
@@ -1007,10 +1007,10 @@ have -> : (2 = IZR beta)%R by rewrite /beta /=; lra.
 by rewrite -bpow_plus_1; congr bpow; lia.
 Qed.
 
-(* One P-nonoverlap step makes [ufp] shrink by a factor [u]: if [|y| < ulp x]  *)
-(* (Priest's [Pnonoverlap]) and [x] is not near underflow, then                *)
-(* [ufp y <= u * ufp x].  This is the geometric decay behind Theorem 3's tail  *)
-(* bound [2 u^3 + 4.2 u^4] (each kept term is [u] times finer than the last).  *)
+(* One P-nonoverlap step makes [ufp] shrink by a factor [u]: if [|y| < ulp x] *)
+(* (Priest's [Pnonoverlap]) and [x] is not near underflow, then               *)
+(* [ufp y <= u * ufp x].  This is the geometric decay behind Theorem 3's tail *)
+(* bound [2 u^3 + 4.2 u^4] (each kept term is [u] times finer than the last). *)
 Lemma ufp_ulp_step x y : x <> 0 -> y <> 0 -> Rabs y < ulp x ->
   (emin <= mag beta x - p)%Z -> ufp y <= u * ufp x.
 Proof.
@@ -1029,10 +1029,10 @@ Qed.
 (* VecSum establishes (Thm 1) and that VSEB consumes (Thm 2) to yield a       *)
 (* P-nonoverlapping output.                                                   *)
 (* This is the "with interleaving zeros" form (paper Def. 3): the bound is    *)
-(* required only across a NONZERO predecessor [nth 0 l i <> 0], so a zero      *)
+(* required only across a NONZERO predecessor [nth 0 l i <> 0], so a zero     *)
 (* error term (e.g. an exact [2Sum]) imposes no constraint on its successor.  *)
-(* Without this guard the statement is false: at a zero predecessor the RHS    *)
-(* would be [/2 * uls 0 = 2^(emin-1)], unreachable by a normal-sized term.     *)
+(* Without this guard the statement is false: at a zero predecessor the RHS   *)
+(* would be [/2 * uls 0 = 2^(emin-1)], unreachable by a normal-sized term.    *)
 Definition Fnonoverlap (l : seq R) : Prop :=
   forall i, (i.+1 < size l)%N -> nth 0 l i <> 0 ->
     Rabs (nth 0 l i.+1) <= / 2 * uls (nth 0 l i).
@@ -1055,22 +1055,22 @@ Qed.
 (*  Theorem 1 (VecSum), faithful to paper3 Section 2.1                        *)
 (*                                                                            *)
 (*  The current [vecSum_Fnonoverlap] below uses the simplified inputs         *)
-(*  [sorted_mag]+[pairwise_ulp]; this block states Theorem 1 with the paper's  *)
-(*  actual [k_i] exponent hypotheses, and the proof steps it goes through.     *)
+(*  [sorted_mag]+[pairwise_ulp]; this block states Theorem 1 with the paper's *)
+(*  actual [k_i] exponent hypotheses, and the proof steps it goes through.    *)
 (* ===========================================================================*)
 
-(* Paper representation: [x = M * 2^(k-p+1)] with [|M| < 2^p], [M] an integer  *)
-(* and the exponent [k] chosen (not necessarily canonical).  We also require    *)
-(* [emin <= k - p + 1] so that [x] genuinely lands on the FLT grid -- without   *)
-(* it [x = 2^(emin-1)] (M = 1, k = emin+p-2) satisfies the equation but is not  *)
-(* a float.  The paper's x_i are floats, so this is the intended reading.       *)
+(* Paper representation: [x = M * 2^(k-p+1)] with [|M| < 2^p], [M] an integer *)
+(* and the exponent [k] chosen (not necessarily canonical).  We also require  *)
+(* [emin <= k - p + 1] so that [x] genuinely lands on the FLT grid -- without *)
+(* it [x = 2^(emin-1)] (M = 1, k = emin+p-2) satisfies the equation but is not*)
+(* a float.  The paper's x_i are floats, so this is the intended reading.     *)
 Definition repr (k : Z) (x : R) : Prop :=
   (emin <= k - p + 1)%Z /\
   exists2 M : Z, (Z.abs M < 2 ^ p)%Z & x = IZR M * pow (k - p + 1)%Z.
 
-(* Being [repr]-esentable at [k] makes [x] an FLT float: it is [F2R] of the     *)
-(* integer float [Float M (k-p+1)], whose mantissa is < 2^p and whose exponent  *)
-(* is >= emin.                                                                  *)
+(* Being [repr]-esentable at [k] makes [x] an FLT float: it is [F2R] of the   *)
+(* integer float [Float M (k-p+1)], whose mantissa is < 2^p and whose exponent*)
+(* is >= emin.                                                                *)
 Lemma repr_format k x : repr k x -> format x.
 Proof.
 move=> [Hemin [M Mlt ->]].
@@ -1080,10 +1080,10 @@ apply: generic_format_FLT; exists (Float beta M (k - p + 1)%Z).
 exact: Hemin.
 Qed.
 
-(* Hypotheses of Theorem 1 on inputs [l] with a chosen exponent map [k]:        *)
-(*  - every [x_i] is representable at exponent [k_i];                           *)
-(*  - [k_{i-1} >= k_i + 1] for every pair but the last (strict exponent gap);   *)
-(*  - [k_{n-2} >= k_{n-1}] for the last pair (weak gap -- the allowed overlap). *)
+(* Hypotheses of Theorem 1 on inputs [l] with a chosen exponent map [k]:      *)
+(*  - every [x_i] is representable at exponent [k_i];                         *)
+(*  - [k_{i-1} >= k_i + 1] for every pair but the last (strict exponent gap); *)
+(*  - [k_{n-2} >= k_{n-1}] for the last pair (weak gap: allowed overlap).     *)
 Definition Thm1_hyp (k : nat -> Z) (l : seq R) : Prop :=
   [/\ forall i, (i < size l)%N -> repr (k i) (nth 0 l i),
       forall i, (i.+2 < size l)%N -> (k i.+1 + 1 <= k i)%Z &
@@ -1091,15 +1091,15 @@ Definition Thm1_hyp (k : nat -> Z) (l : seq R) : Prop :=
 
 (* Paper "Firstly": the running high word [s_{i+1} = (vecSumAux (drop i.+1 l)).2]*)
 (* is bounded by [(2-2u) 2^(k_i)].  (The paper writes |s_i| <= (2-2u)2^(k_{i-1});*)
-(* we index by the *previous* position [i] to avoid [k_{-1}], which is exactly   *)
-(* the induction-hypothesis form used in the proof.)                            *)
+(* we index by the *previous* position [i] to avoid [k_{-1}], which is exactly*)
+(* the induction-hypothesis form used in the proof.)                          *)
 Lemma VecSum_run_bound k l : Thm1_hyp k l ->
   forall i, (i.+1 < size l)%N ->
   Rabs (vecSumAux (drop i.+1 l)).2 <= (2 - 2 * u) * pow (k i).
 Proof.
 case=> Hrepr Hgap Hlast.
-(* Each input is bounded: |x_j| = |M_j| 2^(k_j-p+1) <= (2^p-1) 2^(k_j-p+1)       *)
-(*                              = (2 - 2u) 2^(k_j).                              *)
+(* Each input is bounded: |x_j| = |M_j| 2^(k_j-p+1) <= (2^p-1) 2^(k_j-p+1)    *)
+(*                              = (2 - 2u) 2^(k_j).                           *)
 have Hx : forall j, (j < size l)%N -> Rabs (nth 0 l j) <= (2 - 2 * u) * pow (k j).
   move=> j jLs; have [_ [M Mlt ->]] := Hrepr j jLs.
   rewrite Rabs_mult (Rabs_pos_eq _ (bpow_ge_0 _ _)) -abs_IZR.
@@ -1117,19 +1117,19 @@ have Hx : forall j, (j < size l)%N -> Rabs (nth 0 l j) <= (2 - 2 * u) * pow (k j
   have -> : (2 - 2 * u) * pow (p - 1) = IZR (2 ^ p - 1)
     by rewrite minus_IZR I2p Hpp; nra.
   by apply: IZR_le; lia.
-(* Downward induction on the suffix.  [s_{i+1} = (vecSumAux (drop i.+1 l)).2]:   *)
-(*  - base [i.+2 = size l]: [s_{i+1} = x_{i+1}], and                            *)
-(*      |x_{i+1}| <= (2-2u) 2^(k_{i+1}) <= (2-2u) 2^(k_i)                        *)
-(*    by the weak gap [k_i >= k_{i+1}] (Hlast);                                 *)
-(*  - step [i.+2 < size l]: [s_{i+1} = RN(x_{i+1} + s_{i+2})]; with the IH        *)
-(*      |s_{i+2}| <= (2-2u) 2^(k_{i+1}) and |x_{i+1}| <= (2-2u) 2^(k_{i+1}),     *)
-(*      |x_{i+1}| + |s_{i+2}| <= (4-4u) 2^(k_{i+1}) <= (2-2u) 2^(k_i)           *)
-(*    by the strict gap [k_i >= k_{i+1} + 1] (Hgap), and rounding to nearest     *)
-(*    preserves the bound.                                                       *)
+(* Downward induction on the suffix.  [s_{i+1} = (vecSumAux (drop i.+1 l)).2]:*)
+(*  - base [i.+2 = size l]: [s_{i+1} = x_{i+1}], and                          *)
+(*      |x_{i+1}| <= (2-2u) 2^(k_{i+1}) <= (2-2u) 2^(k_i)                     *)
+(*    by the weak gap [k_i >= k_{i+1}] (Hlast);                               *)
+(*  - step [i.+2 < size l]: [s_{i+1} = RN(x_{i+1} + s_{i+2})]; with the IH    *)
+(*      |s_{i+2}| <= (2-2u) 2^(k_{i+1}) and |x_{i+1}| <= (2-2u) 2^(k_{i+1}),  *)
+(*      |x_{i+1}| + |s_{i+2}| <= (4-4u) 2^(k_{i+1}) <= (2-2u) 2^(k_i)         *)
+(*    by the strict gap [k_i >= k_{i+1} + 1] (Hgap), and rounding to nearest  *)
+(*    preserves the bound.                                                    *)
 move=> i iLs; have [d le_d] := ubnP (size l - i.+2).
 elim: d i iLs le_d => // d IHd i iLs; rewrite ltnS => le_d.
 have [Hi2|Hi2] := eqVneq i.+2 (size l).
-- (* base: the suffix is the singleton [x_{i+1}], so s_{i+1} = x_{i+1}. *)
+- (* base: the suffix is the singleton [x_{i+1}], so s_{i+1} = x_{i+1}.       *)
   have Hdrop : drop i.+1 l = [:: nth 0 l i.+1]
     by rewrite (drop_nth 0) // Hi2 drop_size.
   rewrite Hdrop /=.
@@ -1137,7 +1137,7 @@ have [Hi2|Hi2] := eqVneq i.+2 (size l).
   apply: Rmult_le_compat_l; last by apply: bpow_le; exact: (Hlast i Hi2).
   have u_le_1 : u <= 1 by rewrite uE -(pow0E beta); apply: bpow_le; lia.
   lra.
-(* step: the suffix has >= 2 elements, so s_{i+1} = RN(x_{i+1} + s_{i+2}).       *)
+(* step: the suffix has >= 2 elements, so s_{i+1} = RN(x_{i+1} + s_{i+2}).    *)
 have iLs' : (i < size l)%N := ltn_trans (ltnSn i) iLs.
 have Hi2lt : (i.+2 < size l)%N by rewrite ltn_neqAle Hi2 iLs.
 have [Hemin _] := Hrepr i iLs'.
@@ -1148,7 +1148,7 @@ have Hs : (vecSumAux (drop i.+1 l)).2
   rewrite Hd1 Hd2 vecSumAux_cons -Hd2.
   by case: (vecSumAux (drop i.+2 l)) => es s /=; rewrite /TwoSum.
 rewrite Hs.
-(* the tight bound B = (2 - 2u) 2^{k_i} is itself a float.                        *)
+(* the tight bound B = (2 - 2u) 2^{k_i} is itself a float.                    *)
 have Meq : (2 - 2 * u) * pow (k i) = IZR (2 ^ p - 1) * pow (k i - p + 1).
   have I2p : IZR (2 ^ p) = pow p by [].
   have Hki : pow (k i) = pow (p - 1) * pow (k i - p + 1)
@@ -1168,20 +1168,20 @@ have FB : format ((2 - 2 * u) * pow (k i)).
   rewrite [Fnum _]/=; have h : (0 < 2 ^ p)%Z by apply: Z.pow_pos_nonneg; lia.
   rewrite Z.abs_eq; last by lia.
   by change (2 ^ p - 1 < 2 ^ p)%Z; lia.
-(* the strict gap [k_i >= k_{i+1} + 1] gives [2 . 2^{k_{i+1}} <= 2^{k_i}].         *)
+(* the strict gap [k_i >= k_{i+1} + 1] gives [2 . 2^{k_{i+1}} <= 2^{k_i}].    *)
 have Hgk : (k i.+1 + 1 <= k i)%Z by apply: Hgap.
 have Hpowgap : 2 * pow (k i.+1) <= pow (k i).
   have E1 : pow (k i.+1 + 1) = 2 * pow (k i.+1) by rewrite bpow_plus bpow_1 /=; lra.
   by rewrite -E1; apply: bpow_le.
-(* the tail running sum is bounded by the IH at [i.+1].                           *)
+(* the tail running sum is bounded by the IH at [i.+1].                       *)
 have s2_bnd : Rabs (vecSumAux (drop i.+2 l)).2 <= (2 - 2 * u) * pow (k i.+1).
   apply: IHd => //.
   by apply: (leq_trans _ le_d); rewrite subnS prednK ?subn_gt0 //.
 have u_le_1 : u <= 1 by rewrite uE -(pow0E beta); apply: bpow_le; lia.
 have HX := Hx i.+1 iLs.
-(* rounding to nearest preserves the bound B, which is a float.                    *)
+(* rounding to nearest preserves the bound B, which is a float.               *)
 apply: abs_round_le_generic; first exact: FB.
-(* |x_{i+1}| + |s_{i+2}| <= (4 - 4u) 2^{k_{i+1}} <= (2 - 2u) 2^{k_i}.               *)
+(* |x_{i+1}| + |s_{i+2}| <= (4 - 4u) 2^{k_{i+1}} <= (2 - 2u) 2^{k_i}.         *)
 apply: Rle_trans (Rabs_triang _ _) _.
 nra.
 Qed.
@@ -1200,7 +1200,7 @@ have -> : (let: DWR si ei1 := TwoSum a s in (ei1 :: es, si)).2 = dwh (TwoSum a s
 by rewrite TwoSum_hi; apply: generic_format_round.
 Qed.
 
-(* The [i]-th VecSum error [nth 0 (vecSumAux m).1 i] is the low word of the    *)
+(* The [i]-th VecSum error [nth 0 (vecSumAux m).1 i] is the low word of the   *)
 (* 2Sum combining [x_i] with the running sum [s_{i+1}] of the tail.           *)
 Lemma vecSumAux_nth1 m i : (i.+1 < size m)%N ->
   nth 0 (vecSumAux m).1 i =
@@ -1223,11 +1223,11 @@ have -> : drop i.+2 [:: a, b & m] = drop i.+1 (b :: m) by [].
 by rewrite -(IH i) // E.
 Qed.
 
-(* The low word of a 2Sum [TwoSum x s] is small: its magnitude is at most      *)
-(* [2 u 2^e0], provided [|x| < 2^(e0+1)] and [|s| <= (2-2u) 2^e0] (so the       *)
-(* exact sum has magnitude below [2^(e0+2)]).  This is the tight per-step       *)
-(* error bound behind [Herr] (the paper's [2 u^2 2^(k_{i-1})] would be a        *)
-(* factor [2^p] too small: a single 2Sum error can reach [~u 2^(k_i)]).        *)
+(* The low word of a 2Sum [TwoSum x s] is small: its magnitude is at most     *)
+(* [2 u 2^e0], provided [|x| < 2^(e0+1)] and [|s| <= (2-2u) 2^e0] (so the     *)
+(* exact sum has magnitude below [2^(e0+2)]).  This is the tight per-step     *)
+(* error bound behind [Herr] (the paper's [2 u^2 2^(k_{i-1})] would be a      *)
+(* factor [2^p] too small: a single 2Sum error can reach [~u 2^(k_i)]).       *)
 Lemma magnitude_vecSum_err x s e0 : format x -> format s ->
   Rabs x < pow (e0 + 1) -> Rabs s <= (2 - 2 * u) * pow e0 ->
   (emin <= e0 - p + 1)%Z ->
@@ -1267,28 +1267,28 @@ have -> : 2 * u * pow e0 = / 2 * pow (e0 + 2 - p).
 by lra.
 Qed.
 
-(* Theorem 1.  [VecSum l] is F-nonoverlapping (wIZ) with the same sum.          *)
-(* Proof (paper Section 2.1): [VecSum_run_bound] gives the running-sum bound,   *)
-(* whence each error [|e_{i+1}| <= 2 u 2^(k_i)] ([magnitude_vecSum_err]); the   *)
-(* errors are then F-nonoverlapping by the "multiples of 2u" ([uls]) argument,  *)
-(* which contradicts any overlap [|e_{i+1}| > 1/2 uls(e_i)].                     *)
+(* Theorem 1.  [VecSum l] is F-nonoverlapping (wIZ) with the same sum.        *)
+(* Proof (paper Section 2.1): [VecSum_run_bound] gives the running-sum bound, *)
+(* whence each error [|e_{i+1}| <= 2 u 2^(k_i)] ([magnitude_vecSum_err]); the *)
+(* errors are then F-nonoverlapping by the "multiples of 2u" ([uls]) argument,*)
+(* which contradicts any overlap [|e_{i+1}| > 1/2 uls(e_i)].                  *)
 Lemma VecSum_Thm1 k l : Thm1_hyp k l ->
   Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
 Proof.
 move=> Hk.
-(* Each [x_i = M_i 2^(k_i-p+1)] with [|M_i| < 2^p] is an FLT float ([repr_format]). *)
+(* Each [x_i = M_i 2^(k_i-p+1)] with [|M_i| < 2^p] is FLT ([repr_format]).    *)
 have Hfmt : {in l, forall z, format z}.
   case: Hk => Hrepr _ _ z /(nthP 0)[i iLs <-].
   exact: repr_format (Hrepr i iLs).
-(* "with the same sum": VecSum is a chain of error-free 2Sums (Algorithm 4).   *)
+(* "with the same sum": VecSum is a chain of error-free 2Sums (Algorithm 4).  *)
 split; last by apply: vecSum_sum.
 (* Firstly (paper): the running high word [s_{i+1} = (vecSumAux (drop i.+1 l)).2]*)
-(* is bounded, |s_{i+1}| <= (2 - 2u) 2^(k_i), by induction on the suffix using  *)
-(*   |s_{i+2}| + |x_{i+1}| <= (4 - 4u) 2^(k_{i+1}) <= (2 - 2u) 2^(k_i).         *)
+(* is bounded, |s_{i+1}| <= (2 - 2u) 2^(k_i), by induction on the suffix using*)
+(*   |s_{i+2}| + |x_{i+1}| <= (4 - 4u) 2^(k_{i+1}) <= (2 - 2u) 2^(k_i).       *)
 have Hrun := VecSum_run_bound Hk.
-(* This gives the tight error bound |e_{i+1}| <= 2 u 2^(k_i).  (The paper's    *)
-(* 2 u^2 2^(k_i) is a factor 2^p too small and is FALSE: e.g. for l = [1;      *)
-(* 2^-54] the 2Sum error is 2^-54, well above 2 u^2 = 2^-105.)                  *)
+(* This gives the tight error bound |e_{i+1}| <= 2 u 2^(k_i).  (The paper's   *)
+(* 2 u^2 2^(k_i) is a factor 2^p too small and is FALSE: e.g. for l = [1;     *)
+(* 2^-54] the 2Sum error is 2^-54, well above 2 u^2 = 2^-105.)                *)
 have Herr : forall j, (j.+1 < size l)%N ->
     Rabs (nth 0 (vecSum l) j.+1) <= 2 * u * pow (k j).
   have [Hrepr _ _] := Hk.
@@ -1310,23 +1310,23 @@ have Herr : forall j, (j.+1 < size l)%N ->
     by apply: IZR_lt.
   - exact: Hrun j jLs.
   - exact: Hemin.
-(* F-nonoverlapping (paper, by contradiction).                                 *)
+(* F-nonoverlapping (paper, by contradiction).                                *)
 move=> i iLs Hn0.
 suff : ~ (/ 2 * uls (nth 0 (vecSum l) i) < Rabs (nth 0 (vecSum l) i.+1)) by lra.
 move=> Hover.
 have Hi : (i.+1 < size l)%N by move: iLs; rewrite size_vecSum; case: (size l).
 have He := Herr i Hi.
-(* The paper's key estimate for [e_i = nth 0 (vecSum l) i], SCALE-INVARIANT:     *)
-(*     uls(e_i) >= 4 u 2^(k_i).                                                  *)
-(* This is the multiples-of-2u argument of Theorem 1: after the paper's WLOG     *)
-(* scaling [uls(e_i) = u], the [s_j] and [x_0, ..., x_i] are all multiples of    *)
+(* The paper's key estimate for [e_i = nth 0 (vecSum l) i], SCALE-INVARIANT:  *)
+(*     uls(e_i) >= 4 u 2^(k_i).                                               *)
+(* This is the multiples-of-2u argument of Theorem 1: after the paper's WLOG  *)
+(* scaling [uls(e_i) = u], the [s_j] and [x_0, ..., x_i] are all multiples of *)
 (* 2u, and the offending [e_i] (not a multiple of 2u) forces [2^(k_i) <= 1/(4u)].*)
-(* NB: the earlier intermediate [2^(k_i) <= 1/4] is NOT scale-invariant, hence   *)
-(* unprovable in isolation -- [Hover] is invariant under scaling [l] by a power  *)
-(* of two (every [k_j] shifts and [vecSum] commutes with the scaling) while      *)
-(* [2^(k_i)] is not; only the ratio [uls(e_i) / 2^(k_i)] is pinned down.         *)
+(* NB: the earlier intermediate [2^(k_i) <= 1/4] is NOT scale-invariant, hence*)
+(* unprovable alone -- [Hover] is invariant under scaling [l] by a power      *)
+(* of two (every [k_j] shifts and [vecSum] commutes with the scaling) while   *)
+(* [2^(k_i)] is not; only the ratio [uls(e_i) / 2^(k_i)] is pinned down.      *)
 have Hkey : 4 * u * pow (k i) <= uls (nth 0 (vecSum l) i) by admit.
-(* [Hover]: |e_{i+1}| > uls(e_i)/2 >= 2u 2^(k_i) >= |e_{i+1}| ([Herr]): absurd.   *)
+(* [Hover]: |e_{i+1}| > uls(e_i)/2 >= 2u 2^(k_i) >= |e_{i+1}| (Herr): absurd. *)
 by lra.
 Admitted.
 
@@ -1409,9 +1409,9 @@ move=> [|[|i]] /= iLs Hn0.
   rewrite E1 => /=; rewrite Rmult_comm /Rdiv //.
   by have := ulp_le_ulps si; lra.
 - have Hsz : (0 < size es)%N by move: iLs; case: (size es).
-  (* [uls s <= uls a]: the running high word [s] of the tail sits on a grid  *)
-  (* at least as fine as the coarse head [a].  This is the paper's [k_i]     *)
-  (* exponent argument; not derivable from the simplified [sorted_mag] /     *)
+  (* [uls s <= uls a]: the running high word [s] of the tail sits on a grid   *)
+  (* at least as fine as the coarse head [a].  This is the paper's [k_i]      *)
+  (* exponent argument; not derivable from the simplified [sorted_mag] /      *)
   (* [pairwise_ulp] inputs alone, so it is the sole remaining gap here.       *)
   have Huls : uls s <= uls a by admit.
   have H := Fnonoverlap_head aF sF Huls sesF; rewrite E1 in H.
@@ -1514,9 +1514,9 @@ have Hr_nonover : Pnonoverlap (vsebK 3 e).
 have Hr_format : {in vsebK 3 e, forall t, format t}.
   by apply/format_vsebK/format_vecSum.
 (* Reading the first three terms off the P-nonoverlapping sequence            *)
-(* yields a triple-word number.  Case on the (<=3, zero-padded) list [vsebK    *)
-(* 3 e]; formats come from [Hr_format], the strict ulp bounds from either      *)
-(* [Hr_nonover] (real terms) or [0 < ulp _] (the padding zeros).               *)
+(* yields a triple-word number.  Case on the (<=3, zero-padded) list [vsebK   *)
+(* 3 e]; formats come from [Hr_format], the strict ulp bounds from either     *)
+(* [Hr_nonover] (real terms) or [0 < ulp _] (the padding zeros).              *)
 rewrite /TWSum -/z -/e.
 move: Hr_nonover Hr_format; case: (vsebK 3 e) => [|r0 [|r1 [|r2 tl]]] Hno Hfmt.
 - by split; [exact: generic_format_0 | exact: generic_format_0
@@ -1534,8 +1534,8 @@ by split; [apply: Hfmt; rewrite !inE eqxx | apply: Hfmt; rewrite !inE eqxx orbT
            apply: (Hno 0%N) | apply: (Hno 1%N)].
 Qed.
 
-(* A float is at most [(2 - 2u) ufp] of itself (max-mantissa bound).  Holds    *)
-(* also at 0 and in the subnormal range, so no no-underflow hypothesis.        *)
+(* A float is at most [(2 - 2u) ufp] of itself (max-mantissa bound).  Holds   *)
+(* also at 0 and in the subnormal range, so no no-underflow hypothesis.       *)
 Lemma abs_le_ufp_norm x : format x -> Rabs x <= (2 - 2 * u) * ufp x.
 Proof.
 move=> Fx.
@@ -1563,8 +1563,8 @@ lra.
 Qed.
 
 (* A nonzero P-nonoverlap successor forces the predecessor away from underflow:*)
-(* [|y| < ulp x] with [y] a nonzero float gives [emin <= mag x - p] (otherwise *)
-(* [ulp x = 2^emin], and [|y| < 2^emin] would force [y = 0]).                   *)
+(* [|y| < ulp x] with [y] a nonzero float gives [emin <= mag x - p] (otherwise*)
+(* [ulp x = 2^emin], and [|y| < 2^emin] would force [y = 0]).                 *)
 Lemma nu_of_lt_ulp x y : format y -> y <> 0 -> Rabs y < ulp x ->
   (emin <= mag beta x - p)%Z.
 Proof.
@@ -1576,8 +1576,8 @@ have Hb : bpow beta emin < bpow beta (Z.max (mag beta x - p) emin) by lra.
 by move: (lt_bpow _ _ _ Hb); lia.
 Qed.
 
-(* A P-nonoverlap list whose head is 0 sums to 0: a zero limb forces its       *)
-(* nonzero-float successors below [2^emin], hence to 0.                        *)
+(* A P-nonoverlap list whose head is 0 sums to 0: a zero limb forces its      *)
+(* nonzero-float successors below [2^emin], hence to 0.                       *)
 Lemma small_head_zero l : Pnonoverlap l -> {in l, forall z, format z} ->
   nth 0 l 0 = 0 -> sumR l = 0.
 Proof.
@@ -1594,11 +1594,11 @@ have Hl0 : sumR l = 0.
 by rewrite a0 Hl0 Rplus_0_r.
 Qed.
 
-(* Key bound: for a P-nonoverlap list of floats, the whole sum is at most       *)
-(* twice the [ufp] of the leading term -- the geometric series                 *)
-(* [(2-2u)(1 + u + u^2 + ...) = 2] collapses through the induction.  No nonzero *)
-(* / no-underflow hypothesis: zero limbs are absorbed by [small_head_zero], and *)
-(* every non-last limb is non-underflowing by [nu_of_lt_ulp].                  *)
+(* Key bound: for a P-nonoverlap list of floats, the whole sum is at most     *)
+(* twice the [ufp] of the leading term -- the geometric series                *)
+(* [(2-2u)(1 + u + u^2 + ...) = 2] collapses in the induction. No nonzero     *)
+(* / no-underflow hyp: zero limbs are absorbed by [small_head_zero], and      *)
+(* every non-last limb is non-underflowing by [nu_of_lt_ulp].                 *)
 Lemma sumR_ufp_bound l : Pnonoverlap l -> {in l, forall z, format z} ->
   Rabs (sumR l) <= 2 * ufp (nth 0 l 0).
 Proof.
@@ -1635,7 +1635,7 @@ apply: Rle_trans (Rabs_triang _ _) _.
 nra.
 Qed.
 
-(* [sumR] is additive over concatenation, and P-nonoverlap is stable by drop.  *)
+(* [sumR] is additive over concatenation, and P-nonoverlap is stable by drop. *)
 Lemma sumR_cat l1 l2 : sumR (l1 ++ l2) = sumR l1 + sumR l2.
 Proof. by elim: l1 => [|a l1 IH] /=; rewrite ?IH; ring. Qed.
 
@@ -1645,7 +1645,7 @@ move=> H i; rewrite size_drop ltn_subRL => Hi.
 by rewrite !nth_drop addnS; apply: H; rewrite -addnS.
 Qed.
 
-(* A zero limb propagates: its successor is below [2^emin], hence 0.           *)
+(* A zero limb propagates: its successor is below [2^emin], hence 0.          *)
 Lemma nth_step_zero l i : Pnonoverlap l -> {in l, forall z, format z} ->
   nth 0 l i = 0 -> nth 0 l i.+1 = 0.
 Proof.
@@ -1778,9 +1778,9 @@ have Htrunc :
   have Hscal : 2 * (u * (u * u)) <=
                (2 * (u * u * u) + 42 / 10 * (u * u * u * u)) * (1 - 2 * u) by nra.
   nra.
-(* The result of TWSum is exactly the value of those three terms.  [vsebK 3 e] *)
-(* has length <= 3 (it is a [take 3]); TWSum reads its (zero-padded) first      *)
-(* three entries, whose sum is exactly [sumR (vsebK 3 e)].                      *)
+(* The result of TWSum is exactly the value of those three terms.  [vsebK 3 e]*)
+(* has length <= 3 (it is a [take 3]); TWSum reads its (zero-padded) first    *)
+(* three entries, whose sum is exactly [sumR (vsebK 3 e)].                    *)
 have Hres : TWval (TWSum (TWR x0 x1 x2) (TWR y0 y1 y2)) = sumR (vsebK 3 e).
   have Hsz : (size (vsebK 3 e) <= 3)%N.
     rewrite /vsebK size_take; case: ifP => [_|Hf]; first by [].
@@ -1788,10 +1788,10 @@ have Hres : TWval (TWSum (TWR x0 x1 x2) (TWR y0 y1 y2)) = sumR (vsebK 3 e).
   rewrite /TWSum -/z -/e.
   move: Hsz; case: (vsebK 3 e) => [|r0 [|r1 [|r2 [|r3 l]]]] /= H; try by lra.
   by exfalso; move/leP: H; lia.
-(* Chaining the equalities and the truncation bound concludes.  Both operands  *)
-(* sum to [sumR (vseb e)] (Merge/VecSum/VSEB preserve the sum), the result is   *)
-(* [sumR (vsebK 3 e)] (Hres), so the error is the dropped tail bounded by       *)
-(* [Htrunc].                                                                    *)
+(* Chaining the equalities and the truncation bound concludes.  Both operands *)
+(* sum to [sumR (vseb e)] (Merge/VecSum/VSEB preserve the sum), the result is *)
+(* [sumR (vsebK 3 e)] (Hres), so the error is the dropped tail bounded by     *)
+(* [Htrunc].                                                                  *)
 have E1 : TWval (TWR x0 x1 x2) + TWval (TWR y0 y1 y2) = sumR (vseb e).
   by rewrite /= Hvseb_sum Hvec_sum Hmerge_sum.
 rewrite Hres E1 Rabs_minus_sym {2}Hvseb_sum.

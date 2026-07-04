@@ -882,6 +882,22 @@ have -> : (2 = IZR beta)%R by rewrite /beta /=; lra.
 by rewrite -bpow_plus_1; congr bpow; lia.
 Qed.
 
+(* One P-nonoverlap step makes [ufp] shrink by a factor [u]: if [|y| < ulp x]  *)
+(* (Priest's [Pnonoverlap]) and [x] is not near underflow, then                *)
+(* [ufp y <= u * ufp x].  This is the geometric decay behind Theorem 3's tail  *)
+(* bound [2 u^3 + 4.2 u^4] (each kept term is [u] times finer than the last).  *)
+Lemma ufp_ulp_step x y : x <> 0 -> y <> 0 -> Rabs y < ulp x ->
+  (emin <= mag beta x - p)%Z -> ufp y <= u * ufp x.
+Proof.
+move=> xn0 yn0 Hxy Hx1.
+have Hmagy : (mag beta y <= mag beta x - p)%Z.
+  apply: mag_le_bpow => //.
+  apply: Rlt_le_trans Hxy _.
+  rewrite ulp_neq_0 //.
+  by rewrite /cexp /FLT_exp; apply: bpow_le; lia.
+by rewrite /ufp uE -bpow_plus; apply: bpow_le; lia.
+Qed.
+
 (* Definition 2 (Fabiano): [l] is F-nonoverlapping when each term is at most  *)
 (* half the [uls] of its predecessor.  This is Fabiano's separation (more     *)
 (* restrictive than Shewchuk's ulp-nonoverlapping); it is the invariant that  *)

@@ -895,6 +895,62 @@ have Hab : is_imul (a + b) (bpow beta (Z.min (cexp a) (cexp b))).
 by apply: is_imul_minus => //; apply: is_imul_pow_round.
 Qed.
 
+(* The odd part of a positive is odd: [p / 2^(trP p)] strips all trailing      *)
+(* zeros.  Hence [trP] (and [trZ]) really is the MAXIMAL power of two dividing. *)
+Lemma trP_odd q : Z.odd (Zpos q / 2 ^ Z.of_nat (trP q)).
+Proof.
+elim: q => [q IH|q IH|] //.
+- by rewrite [Z.of_nat (trP q~1)]/= Z.pow_0_r Zdiv_1_r.
+have hpow : (2 ^ Z.of_nat (trP q) <> 0)%Z by apply: Z.pow_nonzero; lia.
+have -> : trP q~0 = (trP q).+1 by [].
+rewrite Nat2Z.inj_succ Z.pow_succ_r; last by apply: Zle_0_nat.
+by have -> : (Z.pos q~0 = 2 * Z.pos q)%Z by []; rewrite Z.div_mul_cancel_l.
+Qed.
+
+Lemma trZ_odd z : (z <> 0)%Z -> Z.odd (z / 2 ^ Z.of_nat (trZ z)).
+Proof.
+case: z => [//|q _|q _]; first exact: trP_odd.
+have hne : (2 ^ Z.of_nat (trP q) <> 0)%Z by apply: Z.pow_nonzero; lia.
+have Hmod : (Z.pos q mod 2 ^ Z.of_nat (trP q) = 0)%Z :=
+  (Z.mod_divide _ _ hne).2 (trZE (Z.pos q)).
+have -> : (Z.neg q = - Z.pos q)%Z by [].
+by rewrite (_ : trZ (- Z.pos q) = trP q) // Z.div_opp_l_z // Z.odd_opp; exact: trP_odd.
+Qed.
+
+(* Converse of [uls_imul]: any power grid a nonzero float lies on is at most    *)
+(* its [uls].  If [g > uls x] then [x] would be an ODD multiple of [uls x] that *)
+(* is also a multiple of [2 * uls x] -- impossible.                            *)
+Lemma is_imul_uls_ge x e : format x -> x <> 0 ->
+  is_imul x (bpow beta e) -> bpow beta e <= uls x.
+Proof.
+move=> xF xn0 [z Hz].
+set m := Ztrunc (mant x).
+have Huls : uls x = bpow beta (cexp x + Z.of_nat (trZ m)).
+  by rewrite /uls; case: Req_bool_spec.
+have Hx : x = IZR (m / 2 ^ Z.of_nat (trZ m)) * uls x by exact: ulsE.
+have mn0 : (m <> 0)%Z by move=> H0; apply: xn0; rewrite Hx H0 Zdiv_0_l; lra.
+rewrite Huls.
+case: (Rle_lt_dec (bpow beta e) (bpow beta (cexp x + Z.of_nat (trZ m)))) =>
+  [//|Hlt]; exfalso.
+set g := (cexp x + Z.of_nat (trZ m))%Z in Hlt.
+have He : (g < e)%Z by apply: (lt_bpow beta).
+have Hpow : bpow beta e = bpow beta g * IZR (2 ^ (e - g)).
+  by rewrite (IZR_Zpower beta (e - g)); [rewrite -bpow_plus; congr bpow; lia | lia].
+have Heq : IZR (m / 2 ^ Z.of_nat (trZ m)) * bpow beta g =
+           IZR z * (bpow beta g * IZR (2 ^ (e - g))).
+  by rewrite -Hpow -Huls -Hx.
+have Hodeq : (m / 2 ^ Z.of_nat (trZ m) = z * 2 ^ (e - g))%Z.
+  apply: eq_IZR; rewrite mult_IZR.
+  apply: (Rmult_eq_reg_r (bpow beta g)); last by have := bpow_gt_0 beta g; lra.
+  by rewrite Heq; ring.
+have Ho := trZ_odd mn0; rewrite Hodeq Z.odd_mul in Ho.
+have Hev : Z.odd (2 ^ (e - g)) = false.
+  have He1 : (e - g = Z.succ (e - g - 1))%Z by lia.
+  rewrite He1 Z.pow_succ_r; last by lia.
+  by rewrite Z.odd_mul.
+by rewrite Hev andbF in Ho.
+Qed.
+
 (* [ufp x] -- "unit in the first place": the weight [2^(mag x - 1)] of the     *)
 (* leftmost bit, i.e. the largest power of two <= |x| (for x <> 0).  Paper     *)
 (* Theorem 1 / Corollary 1 (p.3) state the VecSum input conditions with it.    *)

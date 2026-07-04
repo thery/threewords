@@ -46,8 +46,9 @@ PAT = re.compile(r'^(.*?)( +)\*\)$')
 def fix_line(line):
     """Return (new_line, status).
 
-    status is 'ok' (unchanged/aligned), 'fixed' (repadded), or
-    'overflow' (text too long -- needs manual rewording; line untouched).
+    status is 'ok' (unchanged/aligned) or 'fixed' (repadded).  Lines whose
+    text is too long to close at column 80 are left untouched here and caught
+    afterwards by the generic over-length check in ``process``.
     """
     m = PAT.match(line)
     if not m:
@@ -58,7 +59,7 @@ def fix_line(line):
         return line, 'ok'
     pad = WIDTH - 2 - len(core)      # so len(core)+pad+len("*)") == WIDTH
     if pad < 0:
-        return line, 'overflow'
+        return line, 'ok'            # can't pad; reported as over-length later
     new = core + (' ' * pad) + '*)'
     return new, ('ok' if new == line else 'fixed')
 
@@ -72,11 +73,12 @@ def process(path, mode):
         out.append(new)
         if status == 'fixed':
             fixed.append(i)
-        elif status == 'overflow':
-            overflow.append((i, len(line), line))
     if mode == 'fix' and fixed:
         with open(path, 'w') as f:
             f.write('\n'.join(out))
+    # Any remaining over-long line (glued-*) overflow, long comment text, or
+    # over-long code) can only be fixed by hand -- report, never mangle.
+    overflow = [(i, len(l), l) for i, l in enumerate(out, 1) if len(l) > WIDTH]
     return fixed, overflow
 
 
@@ -109,8 +111,8 @@ def main(argv):
                 problems += 1
         if overflow:
             problems += 1
-            print(f'{path}: {len(overflow)} line(s) need MANUAL rewording '
-                  f'(text passes column {WIDTH - 2}):')
+            print(f'{path}: {len(overflow)} line(s) over {WIDTH} chars, need '
+                  f'MANUAL rewrap/rewording (comment text, glued *), or code):')
             for ln, length, text in overflow:
                 print(f'  L{ln} (len {length}): {text}')
     return 1 if problems else 0

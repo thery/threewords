@@ -861,6 +861,40 @@ case: Req_bool_spec => [->//|x_neq0]; first by lra.
 rewrite ulp_neq_0 //;apply: bpow_le; lia.
 Qed.
 
+(* ===========================================================================*)
+(*  [is_imul] bridge: reusable "multiples of a power grid" facts, feeding the *)
+(*  paper's "multiples of 2u" argument (Theorem 1) via Flocq's [is_imul].     *)
+(* ===========================================================================*)
+
+(* [x] is an integer multiple of its [uls] (the weight of its rightmost bit). *)
+Lemma uls_imul x : format x -> is_imul x (uls x).
+Proof.
+move=> xF.
+by exists (Ztrunc (mant x) / 2 ^ Z.of_nat (trZ (Ztrunc (mant x))))%Z; exact: ulsE.
+Qed.
+
+(* A float is an integer multiple of its own [ulp] ([= bpow (cexp x)]).       *)
+Lemma format_imul_cexp x : format x -> is_imul x (bpow beta (cexp x)).
+Proof.
+by move=> xF; apply: (is_imul_format_mag_pow xF); rewrite /cexp; apply: Z.le_refl.
+Qed.
+
+(* The low word (error) of a 2Sum is a multiple of the coarser input grid     *)
+(* [bpow (min (cexp a) (cexp b))]: [a], [b], and [RN(a+b)] all live on it, so  *)
+(* so does [a + b - RN(a+b)].                                                  *)
+Lemma TwoSum_err_imul a b : format a -> format b ->
+  is_imul (dwl (TwoSum a b)) (bpow beta (Z.min (cexp a) (cexp b))).
+Proof.
+move=> Fa Fb.
+have Hc : dwh (TwoSum a b) + dwl (TwoSum a b) = a + b by exact: TwoSum_correct_loc Fa Fb.
+have -> : dwl (TwoSum a b) = (a + b) - RND (a + b) by move: Hc; rewrite TwoSum_hi; lra.
+have Hab : is_imul (a + b) (bpow beta (Z.min (cexp a) (cexp b))).
+  apply: is_imul_add.
+    by apply: (is_imul_pow_le _ (Z.le_min_l _ _)); apply: format_imul_cexp.
+  by apply: (is_imul_pow_le _ (Z.le_min_r _ _)); apply: format_imul_cexp.
+by apply: is_imul_minus => //; apply: is_imul_pow_round.
+Qed.
+
 (* [ufp x] -- "unit in the first place": the weight [2^(mag x - 1)] of the     *)
 (* leftmost bit, i.e. the largest power of two <= |x| (for x <> 0).  Paper     *)
 (* Theorem 1 / Corollary 1 (p.3) state the VecSum input conditions with it.    *)

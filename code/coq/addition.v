@@ -18,6 +18,7 @@ From Flocq Require Import Core Relative Sterbenz Operations Mult_error.
 Require Import Nmore Rmore Fmore Rstruct MULTmore prelim.
 From Flocq Require Import Pff.Pff2Flocq.
 Require Import Uls.
+Require Import TwoSum.
 
 Delimit Scope R_scope with R.
 Delimit Scope Z_scope with Z.
@@ -32,7 +33,12 @@ Let p := 53%Z.
 Let emax := 1024%Z.
 Let emin := (3 - emax - p)%Z.
 
-Let beta := radix2.
+(* [beta]/[rnd] are concrete notations (not [Let]s) so goals show [radix2] /  *)
+(* [Znearest choice] literally, matching the (inlined) statements of imported *)
+(* [TwoSum]/[Uls] lemmas -- so [lra] sees the same atoms across files.  [p] / *)
+(* [emin] stay [Let]s: the imported lemmas are generic in them and instantiate*)
+(* at these values.                                                           *)
+Local Notation beta := radix2.
 
 Hypothesis Hp2 : Z.lt 1 p.
 Local Notation pow e := (bpow beta e).
@@ -58,7 +64,7 @@ Variable choice : Z -> bool.
 (* Ties broken to even (the symmetry [RN(-t) = -RN(t)]); required by          *)
 (* Flocq's [TwoSum_correct].                                                  *)
 Hypothesis choice_sym : forall x, choice x = ~~ choice (- (x + 1))%Z.
-Let rnd : R -> Z := Znearest choice.
+Local Notation rnd := (Znearest choice).
 Local Instance valid_rnd : Valid_rnd rnd := valid_rnd_N choice.
 
 Lemma emin_le_0 : (emin <= 0)%Z.
@@ -84,73 +90,21 @@ Local Notation error_le_half_ulp_RN :=
 Local Notation TwoSum_correct_RN :=
   (@TwoSum_correct emin p choice Hp2 emin_le_0 choice_sym).
 
-(* ===========================================================================*)
-(*  Basic error-free transforms                                               *)
-(* ===========================================================================*)
-
-(* Algorithm 2 of the paper: the 6-operation 2Sum.  Always exact:             *)
-(*   s + e = a + b, with no assumption on the magnitudes of a and b.          *)
-Definition TwoSum (a b : R) : dwR :=
-  let s  := RND (a + b) in
-  let a' := RND (s - b) in
-  let b' := RND (s - a') in
-  let da := RND (a - a') in
-  let db := RND (b - b') in
-  DWR s (RND (da + db)).
-
-(* Named projectors for the double-word record [dwR] (prelim: [DWR xh xl]),   *)
-(* so a [TwoSum]/[Fast2Sum] result's components can be named without a [let]. *)
-Definition dwh (d : dwR) : R := let: DWR xh _ := d in xh.
-Definition dwl (d : dwR) : R := let: DWR _ xl := d in xl.
-
-Lemma dwhE xh xl : dwh (DWR xh xl) = xh. Proof. by []. Qed.
-Lemma dwlE xh xl : dwl (DWR xh xl) = xl. Proof. by []. Qed.
-
-(* The high word of a 2Sum is the rounded sum.                                *)
-Lemma TwoSum_hi a b : dwh (TwoSum a b) = RND (a + b). Proof. by []. Qed.
-
-Definition formatDWR (a : dwR) := let: DWR b c := a in format b /\ format c.
-
-Lemma format_TwoSum a b : format a -> format b -> formatDWR (TwoSum a b).
-Proof. by move=> Fa Fb; split; try apply: generic_format_round. Qed.
-
-(* The magnitude counterpart of [formatDWR]: in a 2Sum result [DWR s e]       *)
-(* the error word [e] is at most half an ulp of the high word [s].            *)
-Definition magnitudeDWR (a : dwR) := let: DWR s e := a in Rabs e <= ulp s / 2.
-
-(* 2Sum is error-free: s + e = a + b.  We reuse Flocq's [TwoSum_correct]      *)
-(* (the Pff bridge), instantiated with the operands SWAPPED: paper3's         *)
-(* Algorithm 2 subtracts [b] first, whereas Flocq's variant subtracts its     *)
-(* first argument first, so [TwoSum_correct b a] has exactly our              *)
-(* intermediate values (up to commutativity of [+]).                          *)
-Lemma TwoSum_correct_loc a b : format a -> format b ->
-  let: DWR s e := TwoSum a b in s + e = a + b.
-Proof.
-move=> Fa Fb.
-have := TwoSum_correct_RN b a Fb Fa.
-rewrite -[radix2]/beta -[Znearest _]/rnd (Rplus_comm b a) /=.
-set DA := RND (a - _); set DB := RND (b - _).
-by rewrite (Rplus_comm DA DB).
-Qed.
-
-(* Magnitude analogue of [format_TwoSum] (Algorithm 2): the low word of a     *)
-(* 2Sum is bounded by half an ulp of its high word.  Combine exactness        *)
-(* [e = (a+b) - s] with the round-to-nearest bound |RN(x)-x| <= ulp(RN x)/2.*)
-Lemma magnitude_TwoSum a b :
-  format a -> format b -> magnitudeDWR (TwoSum a b).
-Proof.
-move=> Fa Fb.
-have Hc := TwoSum_correct_loc Fa Fb.
-move: Hc; rewrite /magnitudeDWR /TwoSum /=.
-set s := RND (a + b).
-set e := RND (RND (a - _) + RND (b - _)).
-move=> Hc.
-have He : e = a + b - s by lra.
-rewrite He Rabs_minus_sym.
-have /(_ p_gt_0) Hh := error_le_half_ulp_RN (a + b).
-rewrite -[Znearest _]/rnd -/s in Hh.
-lra.
-Qed.
+(* [TwoSum] and its lemmas now live in [TwoSum.v], generic over [p]/[emin];   *)
+(* re-hide this format's [p], [emin], [choice] (and the [Hp2]/[emin_le_0]/    *)
+(* [choice_sym] proofs) so the names read exactly as before.                  *)
+Local Notation TwoSum := (TwoSum p emin choice).
+Local Notation TwoSum_hi := (TwoSum_hi p emin choice).
+Local Notation formatDWR := (formatDWR p emin).
+Local Notation magnitudeDWR := (magnitudeDWR p emin).
+Local Notation format_TwoSum := (format_TwoSum Hp2 choice).
+Local Notation TwoSum_correct_loc :=
+  (TwoSum_correct_loc Hp2 emin_le_0 choice_sym).
+Local Notation magnitude_TwoSum :=
+  (magnitude_TwoSum Hp2 emin_le_0 choice_sym).
+Local Notation TwoSum_err_imul := (TwoSum_err_imul Hp2 emin_le_0 choice_sym).
+Local Notation TwoSum_err_uls_ge :=
+  (TwoSum_err_uls_ge Hp2 emin_le_0 choice_sym).
 
 (* ===========================================================================*)
 (*  Algorithm 4: VecSum                                                       *)
@@ -684,19 +638,23 @@ elim: l => [_|a [|b l] // IH ablF]; split => //.
   have /IH[] :  {in b :: l,  forall z : R, format z}.
     by move=> z zIl; apply: ablF; rewrite inE zIl orbT.
   case E : vecSumAux => [es s].
-  case E1 : TwoSum => [si ei1] => sF esF.
-  have := @format_TwoSum a s => //.
-  rewrite E1; case => //.
-  by apply: ablF; rewrite inE eqxx.
+  case E1 : (TwoSum a s) => [si ei1] => sF esF.
+  have Fa : format a by apply: ablF; rewrite inE eqxx.
+  have [Hsi Hei1] : format (dwh (TwoSum a s)) /\ format (dwl (TwoSum a s))
+    by exact: format_TwoSum Fa sF.
+  rewrite E1 /= in Hsi Hei1.
+  by first [exact: Hsi | exact: Hei1].
 have /IH[] :  {in b :: l,  forall z : R, format z}.
   by move=> z zIl; apply: ablF; rewrite inE zIl orbT.
   rewrite vecSumAux_cons.
 case E : vecSumAux => [es s].
-case E1 : TwoSum => [si ei1] => sF esF.
+case E1 : (TwoSum a s) => [si ei1] => sF esF.
 move=> z; rewrite inE => /orP[/eqP->|zIes].
-  have := @format_TwoSum a s => //.
-  rewrite E1; case => //.
-  by apply: ablF; rewrite inE eqxx.
+  have Fa : format a by apply: ablF; rewrite inE eqxx.
+  have [Hsi Hei1] : format (dwh (TwoSum a s)) /\ format (dwl (TwoSum a s))
+    by exact: format_TwoSum Fa sF.
+  rewrite E1 /= in Hsi Hei1.
+  by first [exact: Hsi | exact: Hei1].
 by apply: esF.
 Qed.
 
@@ -708,14 +666,18 @@ rewrite vecSumAux_cons.
 have : sumR (let '(es, s0) := vecSumAux (b :: l) in s0 :: es) = sumR (b :: l).
   by apply: IH => z zIl; apply: ablF; rewrite inE zIl orbT.
 case E : vecSumAux => [es s] ssE; rewrite /= in ssE.
-case E1 : TwoSum => [si ei1] /=.
-have := @TwoSum_correct_loc a s.
-rewrite E1 -Rplus_assoc => -> //.
-- by rewrite Rplus_assoc ssE.
-- by apply: ablF; rewrite inE eqxx.
-case: (@format_vecSumAux (b :: l)) => [z zIl|].
-  by apply: ablF; rewrite inE zIl !orbT.
-by rewrite E.
+case E1 : (TwoSum a s) => [si ei1] /=.
+have Fa : format a by apply: ablF; rewrite inE eqxx.
+have Fs : format s.
+  have [Hs _] :
+      format (vecSumAux (b :: l)).2 /\
+      {in (vecSumAux (b :: l)).1, forall z, format z}.
+    by apply: format_vecSumAux => z zIl; apply: ablF; rewrite inE zIl !orbT.
+  by move: Hs; rewrite E.
+have Hc : dwh (TwoSum a s) + dwl (TwoSum a s) = a + s
+  by exact: TwoSum_correct_loc Fa Fs.
+rewrite E1 /= in Hc.
+lra.
 Qed.
 
 (* Divisibility propagation -- the induction step of paper Thm 1 ("if         *)
@@ -739,7 +701,7 @@ elim: l => [_ _|a [|b l] // IH ablF ablM]; split => //.
       by move=> z zIl; apply: ablF; rewrite inE zIl orbT.
     by move=> z zIl; apply: ablM; rewrite inE zIl orbT.
   move: sM; case E : vecSumAux => [es s] sM.
-  case E1 : TwoSum => [si ei1] /=.
+  case E1 : (TwoSum a s) => [si ei1] /=.
   have := TwoSum_hi a s; rewrite E1 /= => ->.
   by apply: is_imul_pow_round; apply: is_imul_add.
 rewrite vecSumAux_cons.
@@ -755,7 +717,7 @@ have [Fs _] : format (vecSumAux (b :: l)).2 /\
   apply: format_vecSumAux.
   by move=> z zIl; apply: ablF; rewrite inE zIl orbT.
 move: sM esM Fs; case E : vecSumAux => [es s] sM esM Fs.
-case E1 : TwoSum => [si ei1] /=.
+case E1 : (TwoSum a s) => [si ei1] /=.
 move=> z; rewrite inE => /orP[/eqP->|zIes]; last by apply: esM.
 have Hsi : si = RND (a + s) by have := TwoSum_hi a s; rewrite E1.
 have Hc : si + ei1 = a + s.
@@ -795,11 +757,16 @@ elim: l eps => [|e l IH] eps epsF lF.
 have eF : format e by apply: lF; rewrite inE eqxx.
 case: l IH lF => [|e2 l'] IH lF.
   rewrite vsebAux_1; case E1 : (TwoSum eps e) => [y0 y1].
-  move: (@TwoSum_correct_loc eps e epsF eF); rewrite E1 /= => Cc.
-  by lra.
+  have Cc : dwh (TwoSum eps e) + dwl (TwoSum eps e) = eps + e
+    by exact: TwoSum_correct_loc epsF eF.
+  rewrite E1 /= in Cc.
+  by rewrite /=; lra.
 rewrite vsebAux_consS; case E1 : (TwoSum eps e) => [r et].
-move: (@TwoSum_correct_loc eps e epsF eF); rewrite E1 /= => Cc.
-move: (@format_TwoSum eps e epsF eF); rewrite E1 /= => -[rF etF].
+have Cc : dwh (TwoSum eps e) + dwl (TwoSum eps e) = eps + e
+  by exact: TwoSum_correct_loc epsF eF.
+have [rF etF] : format (dwh (TwoSum eps e)) /\ format (dwl (TwoSum eps e))
+  by exact: format_TwoSum epsF eF.
+rewrite E1 /= in Cc rF etF.
 have l'F : {in e2 :: l', forall z, format z}.
   by move=> z zIl; apply: lF; rewrite inE zIl orbT.
 case: Req_EM_T => [et0|etn0].
@@ -827,59 +794,8 @@ Qed.
 (* ===========================================================================*)
 
 
-(* The low word (error) of a 2Sum is a multiple of the coarser input grid     *)
-(* [bpow (min (cexp a) (cexp b))]: [a], [b], and [RN(a+b)] all live on it, so *)
-(* so does [a + b - RN(a+b)].                                                 *)
-Lemma TwoSum_err_imul a b : format a -> format b ->
-  is_imul (dwl (TwoSum a b)) (bpow beta (Z.min (cexp a) (cexp b))).
-Proof.
-move=> Fa Fb.
-have Hc : dwh (TwoSum a b) + dwl (TwoSum a b) = a + b
-  by exact: TwoSum_correct_loc Fa Fb.
-have -> : dwl (TwoSum a b) = (a + b) - RND (a + b)
-  by move: Hc; rewrite TwoSum_hi; lra.
-have Hab : is_imul (a + b) (bpow beta (Z.min (cexp a) (cexp b))).
-  apply: is_imul_add.
-    by apply: (is_imul_pow_le _ (Z.le_min_l _ _)); apply: format_imul_cexp.
-  by apply: (is_imul_pow_le _ (Z.le_min_r _ _)); apply: format_imul_cexp.
-by apply: is_imul_minus => //; apply: is_imul_pow_round.
-Qed.
 
 
-(* The TwoSum error inherits at least the [uls] of the smaller-grid operand:  *)
-(* if [uls s <= uls a] then [uls s <= uls (dwl (TwoSum a s))].  Both operands *)
-(* lie on the grid [bpow (cexp s + trZ (mant s))] (= [uls s]), hence so does  *)
-(* the exact error [a + s - RND(a + s)]; [is_imul_uls_ge] then lifts that grid*)
-(* up to the error's own [uls].  This is the separation core of Fnonoverlap.  *)
-Lemma TwoSum_err_uls_ge a s : format a -> format s -> a <> 0 -> s <> 0 ->
-  uls s <= uls a -> dwl (TwoSum a s) <> 0 -> uls s <= uls (dwl (TwoSum a s)).
-Proof.
-move=> Fa Fs an0 sn0 Hle en0.
-have Hulss : uls s = bpow beta (cexp s + Z.of_nat (trZ (Ztrunc (mant s)))).
-  by rewrite /uls; case: Req_bool_spec.
-have Hulsa : uls a = bpow beta (cexp a + Z.of_nat (trZ (Ztrunc (mant a)))).
-  by rewrite /uls; case: Req_bool_spec.
-have HleZ : (cexp s + Z.of_nat (trZ (Ztrunc (mant s))) <=
-             cexp a + Z.of_nat (trZ (Ztrunc (mant a))))%Z.
-  by apply: (le_bpow beta); rewrite -Hulss -Hulsa.
-have Ha : is_imul a (bpow beta (cexp s + Z.of_nat (trZ (Ztrunc (mant s))))).
-  by apply: (is_imul_pow_le _ HleZ); rewrite -Hulsa; exact: uls_imul.
-have Hs : is_imul s (bpow beta (cexp s + Z.of_nat (trZ (Ztrunc (mant s))))).
-  by rewrite -Hulss; exact: uls_imul.
-have Herr : is_imul (dwl (TwoSum a s))
-              (bpow beta (cexp s + Z.of_nat (trZ (Ztrunc (mant s))))).
-  have Hc : dwh (TwoSum a s) + dwl (TwoSum a s) = a + s
-    by exact: TwoSum_correct_loc Fa Fs.
-  have -> : dwl (TwoSum a s) = (a + s) - RND (a + s)
-    by move: Hc; rewrite TwoSum_hi; lra.
-  apply: is_imul_minus; first by apply: is_imul_add.
-  by apply: is_imul_pow_round; apply: is_imul_add.
-have Ferr : format (dwl (TwoSum a s)).
-  move: (format_TwoSum Fa Fs); rewrite /formatDWR.
-  by case: (TwoSum a s) => b c [].
-apply: Rle_trans (is_imul_uls_ge Ferr en0 Herr).
-by apply: Req_le.
-Qed.
 
 (* [ufp x] -- "unit in the first place": the weight [2^(mag x - 1)] of the    *)
 (* leftmost bit, i.e. the largest power of two <= |x| (for x <> 0).  Paper    *)
@@ -898,7 +814,7 @@ Proof.
 rewrite /ufp; set m := mag beta x.
 have := bpow_mag_gt beta x; rewrite -/m => H.
 suff -> : (2 * bpow beta (m - 1) = bpow beta m)%R by [].
-have -> : (2 = IZR beta)%R by rewrite /beta /=; lra.
+have -> : (2 = IZR beta)%R by rewrite /=; lra.
 by rewrite -bpow_plus_1; congr bpow; lia.
 Qed.
 
@@ -1009,7 +925,7 @@ have Hx : forall j, (j < size l)%N ->
   have Hpp : pow p = 2 * pow (p - 1).
     have H := bpow_plus beta 1 (p - 1); rewrite bpow_1 in H.
     rewrite (_ : (1 + (p - 1))%Z = p) in H; last by lia.
-    by rewrite H /beta /= /Z.pow_pos /=; lra.
+    by rewrite H /= /Z.pow_pos /=; lra.
   rewrite Hkj -Rmult_assoc; apply: Rmult_le_compat_r; first exact: bpow_ge_0.
   have -> : (2 - 2 * u) * pow (p - 1) = IZR (2 ^ p - 1)
     by rewrite minus_IZR I2p Hpp; nra.
@@ -1058,7 +974,7 @@ have Meq : (2 - 2 * u) * pow (k i) = IZR (2 ^ p - 1) * pow (k i - p + 1).
   have Hpp : pow p = 2 * pow (p - 1).
     have H := bpow_plus beta 1 (p - 1); rewrite bpow_1 in H.
     rewrite (_ : (1 + (p - 1))%Z = p) in H; last by lia.
-    by rewrite H /beta /= /Z.pow_pos /=; lra.
+    by rewrite H /= /Z.pow_pos /=; lra.
   rewrite Hki -Rmult_assoc; congr (_ * _).
   by rewrite minus_IZR I2p Hpp; nra.
 have FB : format ((2 - 2 * u) * pow (k i)).
@@ -1582,7 +1498,7 @@ have -> : (2 - 2 * u) * ufp x =
   bpow beta (mag beta x) - bpow beta (mag beta x - p).
   rewrite /ufp uE.
   have -> : (2 - 2 * bpow beta (-p)) = bpow beta 1 - bpow beta (1 - p).
-    by rewrite (bpow_plus beta 1 (-p)) bpow_1 /beta /=; lra.
+    by rewrite (bpow_plus beta 1 (-p)) bpow_1 /=; lra.
   by rewrite Rmult_minus_distr_r -!bpow_plus; congr (bpow _ _ - bpow _ _); lia.
 lra.
 Qed.

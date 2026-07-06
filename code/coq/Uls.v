@@ -21,18 +21,17 @@ Unset Printing Implicit Defensive.
 
 Section Uls.
 
-Let p := 53%Z.
-Let emax := 1024%Z.
-Let emin := (3 - emax - p)%Z.
+(* Generic over the precision [p] and minimal exponent [emin]: the specific   *)
+(* binary64 values (p = 53, emin = -1074) are fixed only in [addition.v], so  *)
+(* these lemmas are reusable at any FLT format.  Radix is binary ([trP]/[trZ] *)
+(* are 2-adic valuations).                                                    *)
+Variable p : Z.
+Variable emin : Z.
+Context { prec_gt_0 : Prec_gt_0 p }.
 
 Let beta := radix2.
 
 Local Notation pow e := (bpow beta e).
-
-(* [p = 53] is concrete, so [Prec_gt_0 p] needs no hypothesis; keeping this   *)
-(* instance parameter-free means the exported lemmas carry no discharged args.*)
-Local Instance p_gt_0 : Prec_gt_0 p.
-Proof. red; rewrite /p; lia. Qed.
 
 Open Scope R_scope.
 

@@ -71,6 +71,8 @@ Local Notation cexp := (cexp beta fexp).
 Local Notation mant := (scaled_mantissa beta fexp).
 Local Notation RND := (round beta fexp rnd).
 Local Notation ulp := (ulp beta fexp).
+(* [uls] (from [Uls.v]) is generic over [p]/[emin]; fix them to this format.  *)
+Local Notation uls := (uls p emin).
 Local Notation fastTwoSum := (fastTwoSum beta emin p rnd).
 (* Round-to-nearest half-ulp error bound with this section's format and tie-  *)
 (* breaking pre-applied: [error_le_half_ulp_RN x : Prec_gt_0 p -> ...].       *)

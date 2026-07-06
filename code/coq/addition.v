@@ -1533,8 +1533,9 @@ case: l' IH lF Fno Hsz => [|e2 l''] IH lF Fno Hsz.
   (* bound (no carry, using [p >= n - 1]).                                    *)
   rewrite vsebAux_1; case E1 : (TwoSum eps e) => [y0 y1].
   move=> [|i] /= Hi; last by move: Hi; rewrite ltnS ltnS ltn0.
-  (* |y1| < ulp y0                                                            *)
-  admit.
+  (* |y1| < ulp y0: the 2Sum error is <= half an ulp of the high word.        *)
+  have Hm := magnitude_TwoSum epsF Fe; rewrite E1 /= in Hm.
+  by have := ulp_gt_0 y0; lra.
 (* General step: [2Sum(eps, e) = (r, et)].                                    *)
 rewrite vsebAux_consS; case E1 : (TwoSum eps e) => [r et].
 have Hr : r = RND (eps + e) by have := TwoSum_hi eps e; rewrite E1.
@@ -1552,8 +1553,8 @@ case: Req_EM_T => [et0|etn0].
 have Hrec : Pnonoverlap (vsebAux et (e2 :: l'')).
   apply: IH.
   - by move: Hsz; rewrite /=; lia.
-  (* [et] is the nonzero 2Sum error, a float.                                 *)
-  - admit.
+  (* [et] is the low word of [2Sum(eps, e)], hence a float.                   *)
+  - by have H := format_TwoSum epsF Fe; rewrite E1 /= in H; case: H.
   - by move=> z zI; apply: lF; rewrite inE zI orbT.
   (* Fnonoverlap (et :: e2 :: l''): [et] is finer than the remaining terms.   *)
   - admit.

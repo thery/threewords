@@ -17,6 +17,7 @@ From mathcomp Require Import all_ssreflect all_algebra.
 From Flocq Require Import Core Relative Sterbenz Operations Mult_error.
 Require Import Nmore Rmore Fmore Rstruct MULTmore prelim.
 From Flocq Require Import Pff.Pff2Flocq.
+Require Import Uls.
 
 Delimit Scope R_scope with R.
 Delimit Scope Z_scope with Z.
@@ -405,13 +406,6 @@ Definition isTW (x : twR) : Prop :=
 (*  nonzero float has [bpow emin <= Rabs y], so [Rabs y < ulp 0] gives y = 0. *)
 (* ===========================================================================*)
 
-(* [ulp] is strictly positive everywhere: at 0 it is [bpow emin] (FLT), and   *)
-(* elsewhere [bpow (cexp _)].                                                 *)
-Lemma ulp_gt_0 x : 0 < ulp x.
-Proof.
-have [->|xn0] := Req_dec x 0; first by rewrite ulp_FLT_0; apply: bpow_gt_0.
-by rewrite ulp_neq_0 //; apply: bpow_gt_0.
-Qed.
 
 (* A format number strictly below the smallest positive float is 0.           *)
 (* Depends on (all from Flocq.Core, already imported via [Core]):             *)
@@ -830,126 +824,6 @@ Qed.
 (*  chain is  VecSum (Thm 1) -> VSEB (Thm 2) -> take the first 3 terms.       *)
 (* ===========================================================================*)
 
-(* [uls x] -- "unit in the last significant place": the weight of the         *)
-(* RIGHTMOST NONZERO bit of [x].  ([ulp x = 2^(cexp x)] is the weight of the  *)
-(* last *representable* place -- the grid spacing; the weight of the leftmost *)
-(* bit is [ufp x], the other extreme.)  If [x = m * 2^(cexp x)] with          *)
-(* [m = Ztrunc (mant x)] the mantissa, then [uls x = 2^(cexp x + v2 m)]       *)
-(* where [v2 m] is the 2-adic valuation of [m] -- here [trZ m], the count of  *)
-(* trailing binary zeros of [m], built from [trP] on the positive part below. *)
-(* Hence [uls x = ulp x * 2^(v2 m) >= ulp x] (lemma [ulp_le_ulps]), equality  *)
-(* iff the mantissa is odd -- e.g. for [x = -1.01101_2 * 2^364] the paper has *)
-(* [ulp x = 2^312] but [uls x = 2^359].  At [x = 0] we set [uls 0 = ulp 0].   *)
-
-(* [trP p] : number of trailing binary zeros of the positive [p] (its 2-adic  *)
-(* valuation).                                                                *)
-Fixpoint trP (p : positive) := if p is xO p1 then (trP p1).+1 else 0%N.
-
-(* [two_power_pos n] : [2^n] as a positive.                                   *)
-Definition two_power_pos n := iter n xO 1%positive.
-
-(* [2^(trP p)] divides [p] (i.e. [trP p] trailing zeros can be factored out). *)
-Lemma trPE p1 : (two_power_pos (trP p1) | p1)%positive.
-Proof.
-have div1 q : (1 | q)%positive by exists q; rewrite Pos.mul_comm.
-elim: p1 => //= p1 [q {2}->] /=; exists q; lia.
-Qed.
-
-(* [trZ z] : 2-adic valuation of [z] (its trailing binary zeros), [0] at [0]; *)
-(* it ignores the sign, using [trP] on the positive part.                     *)
-Definition trZ (z : Z) := if z is Zpos p1 then (trP p1) else
-                          if z is Zneg p1 then (trP p1) else 0%N.
-
-Lemma trZ0 : trZ 0 = 0%N.
-Proof. by []. Qed.
-
-Lemma two_power_nat_pos n : (Zpos (two_power_pos n) = two_power_nat n)%Z.
-Proof. by elim: n. Qed.
-
-(* [2^(trZ z)] divides [z]: the valuation really is extractable.              *)
-Lemma trZE p1 : (2 ^ Z.of_nat (trZ p1) | p1)%Z.
-Proof.
-rewrite -two_power_nat_equiv.
-case: p1 => [|p1|p1]; first by apply: Z.divide_0_r.
-  by rewrite -two_power_nat_pos /=; apply/Z.divide_Zpos/trPE.
-rewrite -two_power_nat_pos /=.
-by apply/Z.divide_Zpos_Zneg_r/Z.divide_Zpos/trPE.
-Qed.
-
-(* uls, as above: [ulp 0] at zero, else [2^(cexp x + v2(mantissa))].          *)
-Definition uls (x : R) : R :=
-  if Req_bool x 0 then ulp 0 else
-  let m := Ztrunc (mant x) in pow (cexp x + Z.of_nat (trZ m))%Z.
-
-Lemma uls0 : uls 0 = ulp 0.
-Proof. by rewrite /uls; case: Req_bool_spec. Qed.
-
-(* [x] factors as (its odd mantissa part) * [uls x] -- the defining property  *)
-(* of [uls] as the weight of the rightmost nonzero bit.                       *)
-Lemma ulsE x :
- format x -> 
- x = IZR (Ztrunc (mant x) / (2 ^ Z.of_nat (trZ (Ztrunc (mant x)))))%Z * uls x.
-Proof.
-move=> xF; rewrite /uls.
-case: (Req_bool_spec x 0) => [->|x_neq0].
-  by rewrite scaled_mantissa_0 Ztrunc_IZR Rmult_0_l.
-rewrite -[X in X = _](scaled_mantissa_mult_bpow beta fexp) bpow_plus.
-rewrite -[X in _ = _ * (_ * X)]IZR_Zpower; last by lia.
-rewrite [X in _ = _ * X]Rmult_comm -[RHS]Rmult_assoc -mult_IZR.
-rewrite Zmult_comm -Znumtheory.Zdivide_Zdiv_eq.
-- by rewrite -scaled_mantissa_generic //.
-- by apply: Zpower_gt_0; lia.
-by apply: trZE.
-Qed.
-
-(* [ulp x <= uls x]: the rightmost nonzero bit is at or above the last place. *)
-Lemma ulp_le_ulps x : ulp x <= uls x.
-Proof.
-rewrite /uls.
-case: Req_bool_spec => [->//|x_neq0]; first by lra.
-rewrite ulp_neq_0 //;apply: bpow_le; lia.
-Qed.
-
-(* [uls] is always positive (a power of two, or [ulp 0] at zero).             *)
-Lemma uls_gt_0 x : 0 < uls x.
-Proof.
-by rewrite /uls; case: Req_bool_spec => _; [exact: ulp_gt_0 | exact: bpow_gt_0].
-Qed.
-
-(* The rightmost nonzero bit is at most the magnitude: [uls x <= |x|] for a   *)
-(* nonzero float.  [x = M' * uls x] with [M'] a nonzero integer, so           *)
-(* [|x| = |M'| * uls x >= uls x].                                             *)
-Lemma uls_le_abs x : format x -> x <> 0 -> uls x <= Rabs x.
-Proof.
-move=> xF xn0; have Hu := uls_gt_0 x.
-have Hx := ulsE xF.
-set M := (Ztrunc (mant x) / 2 ^ Z.of_nat (trZ (Ztrunc (mant x))))%Z in Hx.
-have M0 : M <> 0%Z by move=> H0; apply: xn0; rewrite Hx H0 /= Rmult_0_l.
-have H1 : 1 <= Rabs (IZR M) by rewrite -abs_IZR; apply: IZR_le; lia.
-have -> : Rabs x = Rabs (IZR M) * uls x.
-  by rewrite {1}Hx Rabs_mult (Rabs_pos_eq _ (Rlt_le _ _ Hu)).
-nra.
-Qed.
-
-(* ===========================================================================*)
-(*  [is_imul] bridge: reusable "multiples of a power grid" facts, feeding the *)
-(*  paper's "multiples of 2u" argument (Theorem 1) via Flocq's [is_imul].     *)
-(* ===========================================================================*)
-
-(* [x] is an integer multiple of its [uls] (the weight of its rightmost bit). *)
-Lemma uls_imul x : format x -> is_imul x (uls x).
-Proof.
-move=> xF.
-by exists (Ztrunc (mant x) / 2 ^ Z.of_nat (trZ (Ztrunc (mant x))))%Z;
-  exact: ulsE.
-Qed.
-
-(* A float is an integer multiple of its own [ulp] ([= bpow (cexp x)]).       *)
-Lemma format_imul_cexp x : format x -> is_imul x (bpow beta (cexp x)).
-Proof.
-by move=> xF; apply: (is_imul_format_mag_pow xF);
-  rewrite /cexp; apply: Z.le_refl.
-Qed.
 
 (* The low word (error) of a 2Sum is a multiple of the coarser input grid     *)
 (* [bpow (min (cexp a) (cexp b))]: [a], [b], and [RN(a+b)] all live on it, so *)
@@ -969,63 +843,6 @@ have Hab : is_imul (a + b) (bpow beta (Z.min (cexp a) (cexp b))).
 by apply: is_imul_minus => //; apply: is_imul_pow_round.
 Qed.
 
-(* The odd part of a positive is odd: [p / 2^(trP p)] strips all trailing     *)
-(* zeros.  So [trP] (and [trZ]) really is the MAXIMAL power of two dividing.  *)
-Lemma trP_odd q : Z.odd (Zpos q / 2 ^ Z.of_nat (trP q)).
-Proof.
-elim: q => [q IH|q IH|] //.
-- by rewrite [Z.of_nat (trP q~1)]/= Z.pow_0_r Zdiv_1_r.
-have hpow : (2 ^ Z.of_nat (trP q) <> 0)%Z by apply: Z.pow_nonzero; lia.
-have -> : trP q~0 = (trP q).+1 by [].
-rewrite Nat2Z.inj_succ Z.pow_succ_r; last by apply: Zle_0_nat.
-by have -> : (Z.pos q~0 = 2 * Z.pos q)%Z by []; rewrite Z.div_mul_cancel_l.
-Qed.
-
-Lemma trZ_odd z : (z <> 0)%Z -> Z.odd (z / 2 ^ Z.of_nat (trZ z)).
-Proof.
-case: z => [//|q _|q _]; first exact: trP_odd.
-have hne : (2 ^ Z.of_nat (trP q) <> 0)%Z by apply: Z.pow_nonzero; lia.
-have Hmod : (Z.pos q mod 2 ^ Z.of_nat (trP q) = 0)%Z :=
-  (Z.mod_divide _ _ hne).2 (trZE (Z.pos q)).
-have -> : (Z.neg q = - Z.pos q)%Z by [].
-by rewrite (_ : trZ (- Z.pos q) = trP q) // Z.div_opp_l_z // Z.odd_opp;
-  exact: trP_odd.
-Qed.
-
-(* Converse of [uls_imul]: any power grid a nonzero float lies on is at most  *)
-(* its [uls].  If [g > uls x] then [x] is an ODD multiple of [uls x] that     *)
-(* is also a multiple of [2 * uls x] -- impossible.                           *)
-Lemma is_imul_uls_ge x e : format x -> x <> 0 ->
-  is_imul x (bpow beta e) -> bpow beta e <= uls x.
-Proof.
-move=> xF xn0 [z Hz].
-set m := Ztrunc (mant x).
-have Huls : uls x = bpow beta (cexp x + Z.of_nat (trZ m)).
-  by rewrite /uls; case: Req_bool_spec.
-have Hx : x = IZR (m / 2 ^ Z.of_nat (trZ m)) * uls x by exact: ulsE.
-have mn0 : (m <> 0)%Z by move=> H0; apply: xn0; rewrite Hx H0 Zdiv_0_l; lra.
-rewrite Huls.
-case: (Rle_lt_dec (bpow beta e) (bpow beta (cexp x + Z.of_nat (trZ m)))) =>
-  [//|Hlt]; exfalso.
-set g := (cexp x + Z.of_nat (trZ m))%Z in Hlt.
-have He : (g < e)%Z by apply: (lt_bpow beta).
-have Hpow : bpow beta e = bpow beta g * IZR (2 ^ (e - g)).
-  by rewrite (IZR_Zpower beta (e - g));
-     [rewrite -bpow_plus; congr bpow; lia | lia].
-have Heq : IZR (m / 2 ^ Z.of_nat (trZ m)) * bpow beta g =
-           IZR z * (bpow beta g * IZR (2 ^ (e - g))).
-  by rewrite -Hpow -Huls -Hx.
-have Hodeq : (m / 2 ^ Z.of_nat (trZ m) = z * 2 ^ (e - g))%Z.
-  apply: eq_IZR; rewrite mult_IZR.
-  apply: (Rmult_eq_reg_r (bpow beta g)); last by have := bpow_gt_0 beta g; lra.
-  by rewrite Heq; ring.
-have Ho := trZ_odd mn0; rewrite Hodeq Z.odd_mul in Ho.
-have Hev : Z.odd (2 ^ (e - g)) = false.
-  have He1 : (e - g = Z.succ (e - g - 1))%Z by lia.
-  rewrite He1 Z.pow_succ_r; last by lia.
-  by rewrite Z.odd_mul.
-by rewrite Hev andbF in Ho.
-Qed.
 
 (* The TwoSum error inherits at least the [uls] of the smaller-grid operand:  *)
 (* if [uls s <= uls a] then [uls s <= uls (dwl (TwoSum a s))].  Both operands *)
@@ -1506,7 +1323,8 @@ move=> [|[|i]] /= iLs Hn0.
 - have :  magnitudeDWR (TwoSum a s).
     by apply: magnitude_TwoSum.
   rewrite E1 => /=; rewrite Rmult_comm /Rdiv //.
-  by have := ulp_le_ulps si; lra.
+  move=> Hm; have H : ulp si <= uls si by apply: ulp_le_ulps.
+  by lra.
 - have Hsz : (0 < size es)%N by move: iLs; case: (size es).
   (* [uls s <= uls a]: the running high word [s] of the tail sits on a grid   *)
   (* at least as fine as the coarse head [a].  This is the paper's [k_i]      *)
@@ -1586,7 +1404,8 @@ case: l' IH lF Fno Hsz => [|e2 l''] IH lF Fno Hsz.
   move=> [|i] /= Hi; last by move: Hi; rewrite ltnS ltnS ltn0.
   (* |y1| < ulp y0: the 2Sum error is <= half an ulp of the high word.        *)
   have Hm := magnitude_TwoSum epsF Fe; rewrite E1 /= in Hm.
-  by have := ulp_gt_0 y0; lra.
+  have Hy : 0 < ulp y0 by apply: ulp_gt_0.
+  by lra.
 (* General step: [2Sum(eps, e) = (r, et)].                                    *)
 rewrite vsebAux_consS; case E1 : (TwoSum eps e) => [r et].
 have Hr : r = RND (eps + e) by have := TwoSum_hi eps e; rewrite E1.

@@ -20,6 +20,7 @@ From Flocq Require Import Pff.Pff2Flocq.
 Require Import Uls.
 Require Import TwoSum.
 Require Import Nonoverlap.
+Require Import TWR.
 
 Delimit Scope R_scope with R.
 Delimit Scope Z_scope with Z.
@@ -111,6 +112,15 @@ Local Notation TwoSum_err_uls_ge :=
 (* and [sumR] are format-independent, used unqualified.)                      *)
 Local Notation Pnonoverlap := (Pnonoverlap p emin).
 Local Notation pairwise_ulp := (pairwise_ulp p emin).
+Local Notation format_lt_ulp_0 := (@format_lt_ulp_0 p emin Hp2).
+Local Notation format_lt_ulp_le := (@format_lt_ulp_le p emin Hp2).
+Local Notation Pnonoverlap_imp_pairwise_ul :=
+  (Pnonoverlap_imp_pairwise_ul Hp2).
+
+(* Triple-word type and predicates from [TWR.v]; fix [p]/[emin].              *)
+(* ([isTW_Pnonoverlap]/[isTW_format] take everything implicit, used bare.)    *)
+Local Notation isTW := (isTW p emin).
+Local Notation isTW_sorted_mag := (isTW_sorted_mag Hp2).
 
 (* ===========================================================================*)
 (*  Algorithm 4: VecSum                                                       *)
@@ -268,117 +278,6 @@ Qed.
 (* ===========================================================================*)
 (*  Triple-word numbers                                                       *)
 (* ===========================================================================*)
-Inductive twR := TWR (x0 x1 x2 : R).
-
-(* Named projectors for the triple-word record [twR], mirroring [dwh]/[dwl].  *)
-Definition tw0 (t : twR) : R := let: TWR x0 _ _ := t in x0.
-Definition tw1 (t : twR) : R := let: TWR _ x1 _ := t in x1.
-Definition tw2 (t : twR) : R := let: TWR _ _ x2 := t in x2.
-
-Lemma tw0E x0 x1 x2 : tw0 (TWR x0 x1 x2) = x0. Proof. by []. Qed.
-Lemma tw1E x0 x1 x2 : tw1 (TWR x0 x1 x2) = x1. Proof. by []. Qed.
-Lemma tw2E x0 x1 x2 : tw2 (TWR x0 x1 x2) = x2. Proof. by []. Qed.
-
-Definition TWval (x : twR) : R := let: TWR x0 x1 x2 := x in x0 + x1 + x2.
-
-
-(* Definition 5: a triple-word number is a P-nonoverlapping triplet           *)
-(* of floating-point numbers.                                                 *)
-Definition isTW (x : twR) : Prop :=
-  let: TWR x0 x1 x2 := x in
-  [/\ format x0, format x1, format x2, Rabs x1 < ulp x0 & Rabs x2 < ulp x1].
-
-(* ===========================================================================*)
-(*  From P-nonoverlap to magnitude order, with the zero case.                 *)
-(*                                                                            *)
-(*  [isTW] is P-nonoverlapping (Def. 1/5): the separation is the *strict*     *)
-(*  [Rabs x_{i+1} < ulp x_i].  To feed [Merge] (which orders by [Rabs]) we    *)
-(*  need the magnitude order [Rabs x_{i+1} <= Rabs x_i].  The usual argument  *)
-(*  [ulp x_i <= Rabs x_i] breaks at x_i = 0, since in FLT                     *)
-(*    ulp 0 = bpow emin > 0 = Rabs 0      (Flocq: [ulp_FLT_0]).               *)
-(*  But that very value is what forces a zero limb to be *trailing*: a        *)
-(*  nonzero float has [bpow emin <= Rabs y], so [Rabs y < ulp 0] gives y = 0. *)
-(* ===========================================================================*)
-
-
-(* A format number strictly below the smallest positive float is 0.           *)
-(* Depends on (all from Flocq.Core, already imported via [Core]):             *)
-(*   - [ulp_FLT_0]    : ulp 0 = bpow emin   (Flocq.Core.FLT)                  *)
-(*   - [ulp_ge_ulp_0] : Exp_not_FTZ fexp -> ulp 0 <= ulp y   (Flocq.Core.Ulp) *)
-(*   - [ulp_le_abs]   : y <> 0 -> format y -> ulp y <= Rabs y (Flocq.Core.Ulp)*)
-(*   the [Exp_not_FTZ (FLT_exp emin p)] instance comes from                   *)
-(*   [FLT_exp_monotone] + [monotone_exp_not_FTZ].                             *)
-Lemma format_lt_ulp_0 y : format y -> Rabs y < ulp 0 -> y = 0.
-Proof.
-move=> yF yLu.
-suff : ~ (0 < Rabs y) by split_Rabs; lra.
-move=> ay_gt0.
-have ayF : format (Rabs y) by apply: generic_format_abs.
-have pLw : pow emin <= Rabs y by apply: alpha_LB ayF _.
-rewrite ulp_FLT_0 in yLu; lra.
-Qed.
-
-(* P-nonoverlap separation implies magnitude order, zeros included.           *)
-(* Depends on:                                                                *)
-(*   - [ulp_le_abs] : x <> 0 -> format x -> ulp x <= Rabs x  (Flocq.Core.Ulp) *)
-(*     for the x <> 0 case (then Rabs y < ulp x <= Rabs x);                   *)
-(*   - [ulp_FLT_0] + [format_lt_ulp_0] above for the x = 0 case (then y = 0). *)
-Lemma format_lt_ulp_le x y :
-  format x -> format y -> Rabs y < ulp x -> Rabs y <= Rabs x.
-Proof.
-move=> xF yF yLux.
-have [x_eq0|x_neq0 ]:= Req_dec x 0; last first.
-  apply: Rle_trans (Rlt_le _ _ yLux) _.
-  by apply: ulp_le_abs.
-have -> : y = 0 by apply: format_lt_ulp_0 => //; rewrite -x_eq0.
-split_Rabs; lra.
-Qed.
-
-(* P-nonoverlap implies pairwise-ulp separation on a single (format) list,    *)
-(* zeros included: |x_{i+2}| < ulp x_{i+1} <= ulp x_i, the last step via      *)
-(* [ulp_le_abs] (and [format_lt_ulp_0] when x_{i+1} = 0).                     *)
-Lemma Pnonoverlap_imp_pairwise_ul l :
-  {in l,  forall z : R, format z} -> Pnonoverlap l -> pairwise_ulp l.
-Proof.
-elim: l => //= a [|b [|c l]] // IH abclF abclP.
-apply: pairwise_ulp_cons_inv.
-  have /= bLua := abclP 0%N isT.
-  apply: Rle_lt_trans bLua.
-  have /= := abclP 1%N isT.
-  have [->/format_lt_ulp_0->//|y_neq0 cLub] := Req_dec b 0; try lra.
-    by apply: abclF; rewrite !inE eqxx !orbT.
-  apply: Rle_trans (Rlt_le _ _ cLub) _.
-  apply: ulp_le_abs => //.
-  by apply: abclF; rewrite !inE eqxx !orbT.
-apply: IH.
-  by move=> z zIl; apply: abclF; rewrite inE zIl orbT.
-by move=> i iLs; apply: (abclP i.+1).
-Qed.
-
-(* ===========================================================================*)
-(*  Triple-word numbers as 3-element sequences                                *)
-(* ===========================================================================*)
-Definition TW2l x := let: TWR x0 x1 x2 := x in [:: x0; x1; x2].
-
-(* The merge precondition for a single TW: its three limbs are magnitude-     *)
-(* sorted.  Two applications of [format_lt_ulp_le] to the [isTW] conjuncts.   *)
-Lemma isTW_sorted_mag x : isTW x -> sorted_mag (TW2l x).
-Proof.
-by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|//]] _; 
-   apply: format_lt_ulp_le.
-Qed.
-
-(* A triple-word, viewed as a 3-element list, is P-nonoverlapping (Def. 5).   *)
-Lemma isTW_Pnonoverlap x : isTW x -> Pnonoverlap (TW2l x).
-Proof.
-by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|[]]].
-Qed.
-
-(* The three limbs of a triple-word are floats (part of Def. 5).              *)
-Lemma isTW_format x : isTW x -> {in (TW2l x), forall z, format z}.
-Proof.
-by case : x => x0 x1 x2 [x0F x1F x2F _ _] z; rewrite !inE => /or3P[] /eqP->.
-Qed.
 
 (* ===========================================================================*)
 (*  Merge lemmas (beyond [format_Merge] above): a common magnitude bound, and *)

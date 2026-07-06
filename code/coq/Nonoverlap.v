@@ -11,6 +11,7 @@ From mathcomp Require Import all_ssreflect all_algebra.
 From Flocq Require Import Core Relative Sterbenz Operations Mult_error.
 Require Import Nmore Rmore Fmore Rstruct MULTmore prelim.
 From Flocq Require Import Pff.Pff2Flocq.
+Require Import Uls.
 
 Delimit Scope R_scope with R.
 Delimit Scope Z_scope with Z.
@@ -33,9 +34,21 @@ Local Instance p_gt_0 : Prec_gt_0 p.
 Proof. now apply Z.lt_trans with (2 := Hp2). Qed.
 
 Local Notation pow e := (bpow beta e).
+Local Notation u := (u p beta).
 Local Notation fexp := (FLT_exp emin p).
 Local Notation format := (generic_format beta fexp).
+Local Notation cexp := (cexp beta fexp).
+Local Notation mant := (scaled_mantissa beta fexp).
 Local Notation ulp := (ulp beta fexp).
+Local Notation uls := (uls p emin).
+
+(* [u = 2^-p] (generic form of the roundoff unit [/2 * 2^(1-p)]).             *)
+Lemma uE : u = pow (- p).
+Proof.
+rewrite /u.
+have -> : (1 - p = 1 + - p)%Z by lia.
+by rewrite bpow_plus bpow_1 /=; lra.
+Qed.
 
 (* Sum of a sequence, used to state exactness of the building blocks.         *)
 Fixpoint sumR (l : seq R) : R := if l is a :: l' then a + sumR l' else 0.
@@ -160,5 +173,221 @@ apply: IH.
   by move=> z zIl; apply: abclF; rewrite inE zIl orbT.
 by move=> i iLs; apply: (abclP i.+1).
 Qed.
+
+
+Definition ufp (x : R) : R := pow (mag beta x - 1).
+
+Lemma ufp_gt_0 x : 0 < ufp x.
+Proof. by apply: bpow_gt_0. Qed.
+
+(* [ufp x <= |x| < 2 * ufp x]: |x| lies in one binade above [ufp x].          *)
+Lemma ufp_le_abs x : x <> 0 -> ufp x <= Rabs x.
+Proof. exact: bpow_mag_le. Qed.
+
+Lemma abs_lt_2ufp x : Rabs x < 2 * ufp x.
+Proof.
+rewrite /ufp; set m := mag beta x.
+have := bpow_mag_gt beta x; rewrite -/m => H.
+suff -> : (2 * bpow beta (m - 1) = bpow beta m)%R by [].
+have -> : (2 = IZR beta)%R by rewrite /=; lra.
+by rewrite -bpow_plus_1; congr bpow; lia.
+Qed.
+
+(* One P-nonoverlap step makes [ufp] shrink by a factor [u]: if [|y| < ulp x] *)
+(* (Priest's [Pnonoverlap]) and [x] is not near underflow, then               *)
+(* [ufp y <= u * ufp x].  This is the geometric decay behind Theorem 3's tail *)
+(* bound [2 u^3 + 4.2 u^4] (each kept term is [u] times finer than the last). *)
+Lemma ufp_ulp_step x y : x <> 0 -> y <> 0 -> Rabs y < ulp x ->
+  (emin <= mag beta x - p)%Z -> ufp y <= u * ufp x.
+Proof.
+move=> xn0 yn0 Hxy Hx1.
+have Hmagy : (mag beta y <= mag beta x - p)%Z.
+  apply: mag_le_bpow => //.
+  apply: Rlt_le_trans Hxy _.
+  rewrite ulp_neq_0 //.
+  by rewrite /cexp /FLT_exp; apply: bpow_le; lia.
+by rewrite /ufp uE -bpow_plus; apply: bpow_le; lia.
+Qed.
+
+(* Definition 2 (Fabiano): [l] is F-nonoverlapping when each term is at most  *)
+(* half the [uls] of its predecessor.  This is Fabiano's separation (more     *)
+(* restrictive than Shewchuk's ulp-nonoverlapping); it is the invariant that  *)
+(* VecSum establishes (Thm 1) and that VSEB consumes (Thm 2) to yield a       *)
+(* P-nonoverlapping output.                                                   *)
+(* This is the "with interleaving zeros" form (paper Def. 3): the bound is    *)
+(* required only across a NONZERO predecessor [nth 0 l i <> 0], so a zero     *)
+(* error term (e.g. an exact [2Sum]) imposes no constraint on its successor.  *)
+(* Without this guard the statement is false: at a zero predecessor the RHS   *)
+(* would be [/2 * uls 0 = 2^(emin-1)], unreachable by a normal-sized term.    *)
+Definition Fnonoverlap (l : seq R) : Prop :=
+  forall i, (i.+1 < size l)%N -> nth 0 l i <> 0 ->
+    Rabs (nth 0 l i.+1) <= / 2 * uls (nth 0 l i).
+
+(* A prefix of a P-nonoverlapping sequence is P-nonoverlapping.  Since        *)
+(* [vsebK k = take k \o vseb], this is what turns "VSEB is P-nonoverlapping"  *)
+(* into "VSEB(k) is P-nonoverlapping".                                        *)
+(* Proof: [take k] leaves the [nth]s at indices < k unchanged and only        *)
+(* shortens the list, so every instance of the [Pnonoverlap] condition on     *)
+(* [take k l] is an instance already available on [l].                        *)
+Lemma Pnonoverlap_take k l : Pnonoverlap l -> Pnonoverlap (take k l).
+Proof.
+elim: l k => //= a [| b l] IH [|[|k]] //=.
+move=> ablP [|i] /= iLs; first by apply: (ablP 0%N).
+apply: (IH k.+1 _ i) => // z zLs.
+by apply: (ablP z.+1).
+Qed.
+
+(* ===========================================================================*)
+(*  Theorem 1 (VecSum), faithful to paper3 Section 2.1                        *)
+(*                                                                            *)
+(*  The current [vecSum_Fnonoverlap] below uses the simplified inputs         *)
+(*  [sorted_mag]+[pairwise_ulp]; this block states Theorem 1 with the paper's *)
+(*  actual [k_i] exponent hypotheses, and the proof steps it goes through.    *)
+(* ===========================================================================*)
+
+(* Paper representation: [x = M * 2^(k-p+1)] with [|M| < 2^p], [M] an integer *)
+(* and the exponent [k] chosen (not necessarily canonical).  We also require  *)
+(* [emin <= k - p + 1] so that [x] genuinely lands on the FLT grid -- without *)
+(* it [x = 2^(emin-1)] (M = 1, k = emin+p-2) satisfies the equation but is not*)
+(* a float.  The paper's x_i are floats, so this is the intended reading.     *)
+
+Lemma abs_le_ufp_norm x : format x -> Rabs x <= (2 - 2 * u) * ufp x.
+Proof.
+move=> Fx.
+have Hu0 : 0 < u by rewrite uE; apply: bpow_gt_0.
+have Hu1 : u <= 1 by rewrite uE -(pow0E beta); apply: bpow_le; lia.
+case: (Req_dec x 0) => [xz|xn0].
+  by rewrite xz Rabs_R0; have := ufp_gt_0 0; nra.
+have Hmx : (emin < mag beta x)%Z.
+  by apply: lt_bpow; apply: Rle_lt_trans (alpha_lB Fx xn0) _;
+     exact: bpow_mag_gt.
+have Hsucc : succ beta fexp (Rabs x) <= bpow beta (mag beta x).
+  apply: succ_le_lt => //; first exact: generic_format_abs.
+    by apply: generic_format_bpow; rewrite /fexp /FLT_exp; lia.
+  by apply: bpow_mag_gt.
+move: Hsucc; rewrite succ_eq_pos; last exact: Rabs_pos.
+rewrite ulp_neq_0; last by move: (Rabs_pos_lt _ xn0); lra.
+move=> Hs.
+have Hcexp : bpow beta (mag beta x - p) <= bpow beta (cexp (Rabs x)).
+  by apply: bpow_le; rewrite /cexp /FLT_exp mag_abs; lia.
+have -> : (2 - 2 * u) * ufp x =
+  bpow beta (mag beta x) - bpow beta (mag beta x - p).
+  rewrite /ufp uE.
+  have -> : (2 - 2 * bpow beta (-p)) = bpow beta 1 - bpow beta (1 - p).
+    by rewrite (bpow_plus beta 1 (-p)) bpow_1 /=; lra.
+  by rewrite Rmult_minus_distr_r -!bpow_plus; congr (bpow _ _ - bpow _ _); lia.
+lra.
+Qed.
+
+(* A nonzero P-nonoverlap successor forces the predecessor from underflow:    *)
+(* [|y| < ulp x] with [y] a nonzero float gives [emin <= mag x - p] (otherwise*)
+(* [ulp x = 2^emin], and [|y| < 2^emin] would force [y = 0]).                 *)
+Lemma nu_of_lt_ulp x y : format y -> y <> 0 -> Rabs y < ulp x ->
+  (emin <= mag beta x - p)%Z.
+Proof.
+move=> Fy yn0 Hlt.
+have Hemin : bpow beta emin <= Rabs y := alpha_lB Fy yn0.
+have xn0 : x <> 0 by move=> xz; move: Hlt; rewrite xz ulp_FLT_0; lra.
+move: Hlt; rewrite ulp_neq_0 // /cexp /FLT_exp => Hlt.
+have Hb : bpow beta emin < bpow beta (Z.max (mag beta x - p) emin) by lra.
+by move: (lt_bpow _ _ _ Hb); lia.
+Qed.
+
+(* A P-nonoverlap list whose head is 0 sums to 0: a zero limb forces its      *)
+(* nonzero-float successors below [2^emin], hence to 0.                       *)
+Lemma small_head_zero l : Pnonoverlap l -> {in l, forall z, format z} ->
+  nth 0 l 0 = 0 -> sumR l = 0.
+Proof.
+elim: l => [//|a l IH] Pl Fl /= a0.
+have Hl0 : sumR l = 0.
+  case: l IH Pl Fl => [//|b l'] IH Pl Fl.
+  apply: IH; first exact: Pnonoverlap_cons Pl.
+    by move=> t tin; apply: Fl; rewrite inE tin orbT.
+  have Hb : Rabs b < ulp a by apply: (Pl 0%N).
+  case: (Req_dec b 0) => [b0|bn0]; first by rewrite /= b0.
+  have Fb : format b by apply: Fl; rewrite !inE eqxx orbT.
+  have Hb2 : bpow beta emin <= Rabs b := alpha_lB Fb bn0.
+  by exfalso; move: Hb; rewrite a0 ulp_FLT_0; lra.
+by rewrite a0 Hl0 Rplus_0_r.
+Qed.
+
+(* Key bound: for a P-nonoverlap list of floats, the whole sum is at most     *)
+(* twice the [ufp] of the leading term -- the geometric series                *)
+(* [(2-2u)(1 + u + u^2 + ...) = 2] collapses in the induction. No nonzero     *)
+(* / no-underflow hyp: zero limbs are absorbed by [small_head_zero], and      *)
+(* every non-last limb is non-underflowing by [nu_of_lt_ulp].                 *)
+Lemma sumR_ufp_bound l : Pnonoverlap l -> {in l, forall z, format z} ->
+  Rabs (sumR l) <= 2 * ufp (nth 0 l 0).
+Proof.
+have Hu0 : 0 < u by rewrite uE; apply: bpow_gt_0.
+elim: l => [_ _|a l IH Pl Fl].
+  rewrite Rabs_R0.
+  by have := ufp_gt_0 (nth 0 (@nil R) 0); lra.
+have Fa : format a by apply: Fl; rewrite inE eqxx.
+have Hla : Rabs a <= (2 - 2 * u) * ufp a by apply: abs_le_ufp_norm.
+have Hua : 0 < ufp a := ufp_gt_0 a.
+case: l IH Pl Fl => [|b l] IH Pl Fl.
+  have -> : nth 0 [:: a] 0 = a by [].
+  have -> : sumR [:: a] = a by rewrite /= Rplus_0_r.
+  nra.
+have Hb : Rabs b < ulp a by apply: (Pl 0%N).
+have Fb : format b by apply: Fl; rewrite !inE eqxx orbT.
+have Hub : 0 < ufp b := ufp_gt_0 b.
+have -> : nth 0 (a :: b :: l) 0 = a by [].
+have -> : sumR (a :: b :: l) = a + sumR (b :: l) by [].
+have IHbl : Rabs (sumR (b :: l)) <= 2 * ufp b.
+  apply: IH; first exact: Pnonoverlap_cons Pl.
+  by move=> t tin; apply: Fl; rewrite inE tin orbT.
+case: (Req_dec b 0) => [b0|bn0].
+  have Hs0 : sumR (b :: l) = 0.
+    apply: small_head_zero; first exact: Pnonoverlap_cons Pl.
+      by move=> t tin; apply: Fl; rewrite inE tin orbT.
+    by rewrite /= b0.
+  by rewrite Hs0 Rplus_0_r; nra.
+have Ua : (emin <= mag beta a - p)%Z := nu_of_lt_ulp Fb bn0 Hb.
+have Na : a <> 0.
+  by move=> az; move: Hb; rewrite az ulp_FLT_0 => Hb';
+     have := alpha_lB Fb bn0; lra.
+have Hstep : ufp b <= u * ufp a by apply: ufp_ulp_step.
+apply: Rle_trans (Rabs_triang _ _) _.
+nra.
+Qed.
+
+(* [sumR] is additive over concatenation, and P-nonoverlap is stable by drop. *)
+Lemma sumR_cat l1 l2 : sumR (l1 ++ l2) = sumR l1 + sumR l2.
+Proof. by elim: l1 => [|a l1 IH] /=; rewrite ?IH; ring. Qed.
+
+Lemma Pnonoverlap_drop k l : Pnonoverlap l -> Pnonoverlap (drop k l).
+Proof.
+move=> H i; rewrite size_drop ltn_subRL => Hi.
+by rewrite !nth_drop addnS; apply: H; rewrite -addnS.
+Qed.
+
+(* A zero limb propagates: its successor is below [2^emin], hence 0.          *)
+Lemma nth_step_zero l i : Pnonoverlap l -> {in l, forall z, format z} ->
+  nth 0 l i = 0 -> nth 0 l i.+1 = 0.
+Proof.
+move=> Pl Fl Hi.
+case: (ltnP i.+1 (size l)) => [Hlt|Hle]; last by rewrite nth_default.
+have Hb : Rabs (nth 0 l i.+1) < ulp (nth 0 l i) by apply: Pl.
+move: Hb; rewrite Hi ulp_FLT_0 => Hb.
+case: (Req_dec (nth 0 l i.+1) 0) => [->//|Hn0].
+have Hf : format (nth 0 l i.+1) by apply: Fl; apply: mem_nth.
+by have := alpha_lB Hf Hn0; lra.
+Qed.
+
+Lemma sumR_head_drop1 l : sumR l = nth 0 l 0 + sumR (drop 1 l).
+Proof. by case: l => [|a l] /=; rewrite ?drop0; lra. Qed.
+
+(* ===========================================================================*)
+(*  Error bound: the "Ensure" clause of Algorithm 8 (p >= 6):                 *)
+(*    | r - (x + y) | <= (2 u^3 + 4.2 u^4) | x + y |.                         *)
+(*                                                                            *)
+(*  Sketch (paper, Theorem 3 specialised to k = 3):                           *)
+(*   - Merge, VecSum and VSEB are all exact, so the only error comes          *)
+(*     from keeping the first three terms of the expansion.                   *)
+(*   - The dropped tail of a P-nonoverlapping expansion is bounded by         *)
+(*     (2 u^3 + 4.2 u^4) of the total (Theorem 3, k = 3).                     *)
+(* ===========================================================================*)
 
 End Nonoverlap.

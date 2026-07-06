@@ -21,6 +21,7 @@ Require Import Uls.
 Require Import TwoSum.
 Require Import Nonoverlap.
 Require Import TWR.
+Require Import Merge.
 
 Delimit Scope R_scope with R.
 Delimit Scope Z_scope with Z.
@@ -112,10 +113,19 @@ Local Notation TwoSum_err_uls_ge :=
 (* and [sumR] are format-independent, used unqualified.)                      *)
 Local Notation Pnonoverlap := (Pnonoverlap p emin).
 Local Notation pairwise_ulp := (pairwise_ulp p emin).
+Local Notation Fnonoverlap := (Fnonoverlap p emin).
 Local Notation format_lt_ulp_0 := (@format_lt_ulp_0 p emin Hp2).
 Local Notation format_lt_ulp_le := (@format_lt_ulp_le p emin Hp2).
 Local Notation Pnonoverlap_imp_pairwise_ul :=
   (Pnonoverlap_imp_pairwise_ul Hp2).
+Local Notation abs_le_ufp_norm := (abs_le_ufp_norm Hp2).
+Local Notation nu_of_lt_ulp := (nu_of_lt_ulp Hp2).
+Local Notation small_head_zero := (@small_head_zero p emin Hp2).
+Local Notation sumR_ufp_bound := (@sumR_ufp_bound p emin Hp2).
+Local Notation nth_step_zero := (@nth_step_zero p emin Hp2).
+
+(* Merge lemmas from [Merge.v] needing [Hp2] (rest used bare).                *)
+Local Notation Merge_pairwise_ulp := (Merge_pairwise_ulp Hp2).
 
 (* Triple-word type and predicates from [TWR.v]; fix [p]/[emin].              *)
 (* ([isTW_Pnonoverlap]/[isTW_format] take everything implicit, used bare.)    *)
@@ -234,234 +244,6 @@ move=> lF /= z /mem_take zIl.
 by apply: format_vseb lF _ zIl.
 Qed.
 
-(* ===========================================================================*)
-(*  Merge two magnitude-sorted sequences into a magnitude-sorted one.         *)
-(* ===========================================================================*)
-
-Fixpoint Merge (l1 : seq R) : seq R -> seq R :=
-  fix Merge_aux (l2 : seq R) : seq R :=
-    match l1, l2 with
-    | [::], _ => l2
-    | _, [::] => l1
-    | a1 :: l1', a2 :: l2' =>
-        if Rle_bool (Rabs a2) (Rabs a1)
-        then a1 :: Merge l1' l2
-        else a2 :: Merge_aux l2'
-    end.
-
-Lemma format_Merge l1 l2 :
-  {in l1, forall z, format z} -> {in l2, forall z, format z} -> 
-  {in Merge l1 l2, forall z, format z}.
-Proof.
-elim: l1 l2 => /= [|a l1 IH l2 al1F]; first by elim.
-have aF : format a by apply: al1F; rewrite !inE eqxx.
-set u := (X in _ -> {in X l2, _}).
-elim: l2 IH => /= [IH _ z| b l2 IH1 IH2 bl2F].
-  rewrite inE => /orP[/eqP->|zIl1] //.
-  by apply: al1F; rewrite inE zIl1 orbT.
-case: Rle_bool => z; rewrite inE => /orP[/eqP->|zIl] //.
-- apply: (IH2 (b :: l2)) => // z1 z1Il1.
-  by apply: al1F; rewrite inE z1Il1 orbT.
-- by apply: bl2F; rewrite inE eqxx.
-apply: IH1 => // z1 z1Il2.
-by apply: bl2F; rewrite inE z1Il2 orbT.
-Qed.
-
-Lemma size_Merge l1 l2 : size (Merge l1 l2) = (size l1 + size l2)%N.
-Proof.
-elim: l1 l2 => /= [|a1 l1 IH1]; first by elim.
-elim => [/=|a2 l2 IH2]; first by rewrite addn0.
-case: Rle_bool => /=; first by rewrite IH1.
-by rewrite IH2 addnS.
-Qed.
-
-(* ===========================================================================*)
-(*  Triple-word numbers                                                       *)
-(* ===========================================================================*)
-
-(* ===========================================================================*)
-(*  Merge lemmas (beyond [format_Merge] above): a common magnitude bound, and *)
-(*  the two preconditions of Theorem 6 -- magnitude order and pairwise ulp.   *)
-(* ===========================================================================*)
-
-(* Merge propagates a common upper bound on the elements: if every element of *)
-(* [l1] and of [l2] is below [a], so is every element of the merge.  This is  *)
-(* the key tool for [pairwise_ulp] of the merge -- once the global maximum    *)
-(* (the larger head) is removed, all remaining elements are below ulp of the  *)
-(* head, hence so is the element two positions on.                            *)
-Lemma Merge_head_lt l1 l2 a :
-  {in l1, forall z, Rabs z < a} -> {in l2, forall z, Rabs z < a} ->
-  {in Merge l1 l2, forall z, Rabs z < a}.
-Proof.
-elim: l1 l2 a => /= [|a1 l1 IH1]; first by elim.
-elim => // a2 l2 IH2 a a1l1S a2l2S.
-case: Rle_bool_spec => [a2La1|a1La2] x.
-  rewrite inE => /orP[/eqP->|]; first by apply: a1l1S; rewrite !inE eqxx.
-  by apply: IH1 => [z zIl1|//]; apply: a1l1S; rewrite !inE zIl1 orbT.
-rewrite inE => /orP[/eqP->|]; first by apply: a2l2S; rewrite !inE eqxx.
-apply: IH2 => // z zIl2.
-by apply: a2l2S; rewrite !inE zIl2 orbT.
-Qed.
-
-(* Merge under a common dominating head [a]: if [a] tops both lists, it still *)
-(* tops the merge, and the merge stays magnitude-sorted.  (Helper for         *)
-(* [Merge_sorted_mag].)                                                       *)
-Lemma Merge_asorted_mag a l1 l2 :
-  sorted_mag (a :: l1) -> sorted_mag (a :: l2) -> sorted_mag (a :: Merge l1 l2).
-Proof.
-elim: l1 l2 a => /= [|a1 l1 IH1]; first by elim.
-elim => // a2 l2 IH2 a a1l1S a2l2S.
-case: Rle_bool_spec => [a2La1|a1La2].
-  apply: sorted_mag_cons_inv.
-    by case: (sorted_mag_cons a1l1S).
-  apply: IH1; first by case: (sorted_mag_cons a1l1S).
-  apply: sorted_mag_cons_inv => //.
-  by case: (sorted_mag_cons a2l2S).
-apply: sorted_mag_cons_inv => //.
-  by case: (sorted_mag_cons a2l2S).
-apply: IH2.
-  apply: sorted_mag_cons_inv; first by apply: Rlt_le.
-  by case: (sorted_mag_cons a1l1S).
-by case: (sorted_mag_cons a2l2S).
-Qed.
-
-(* [Merge] picks the larger-magnitude head at each step, so it turns two      *)
-(* magnitude-sorted sequences into a magnitude-sorted one.  Combined with     *)
-(* [isTW_sorted_mag] on each input triple, this discharges [Hz_sorted] in     *)
-(* [TWSum_isTW].                                                              *)
-Lemma Merge_sorted_mag l1 l2 :
-  sorted_mag l1 -> sorted_mag l2 -> sorted_mag (Merge l1 l2).
-Proof.
-elim: l1 l2 => /= [|a l1 IH1]; first by elim.
-elim => // b l2 IH2 al1S bl2S.
-case: Rle_bool_spec => [bLa|aLb].
-  apply: Merge_asorted_mag => //.
-  by apply: sorted_mag_cons_inv.
-move : bl2S.
-have: sorted_mag (b :: l1).
-  case: (l1) al1S => // a3 l3 H.
-  case: (sorted_mag_cons H) => H1 H2.
-  by apply: sorted_mag_cons_inv => //; lra.
-elim: (l2) (b) aLb => 
-    /= [b1 aLb1 b1l1S _|b3 l3 IH3 b4 aLb4 b4l1S /sorted_mag_cons[b4Lb3 b3l3S]].
-  by apply: sorted_mag_cons_inv => //; lra.
-case: Rle_bool_spec => [b3La|aLb3].
-  apply: sorted_mag_cons_inv; first by lra.
-  apply: Merge_asorted_mag => //.
-  by apply: sorted_mag_cons_inv.
-apply: sorted_mag_cons_inv => //.
-apply: IH3 => //.
-by apply: sorted_mag_le al1S _; lra.
-Qed.
-
-(* The main Merge result for Theorem 6: merging two P-nonoverlapping (format) *)
-(* lists yields a [pairwise_ulp] sequence.  The merge's own magnitude tests   *)
-(* supply the ordering, so no [sorted_mag] hypothesis is needed -- among any  *)
-(* three consecutive outputs, two come from the same input list and are       *)
-(* consecutive there, giving the [Pnonoverlap] step; the mixed cases use the  *)
-(* merge's comparison plus ulp monotonicity ([ulp_le]).                       *)
-Lemma Merge_pairwise_ulp (l1 l2 : seq R) :
-  {in l1, forall z, format z} ->   {in l2, forall z, format z} ->
-  Pnonoverlap l1 -> Pnonoverlap l2 -> pairwise_ulp (Merge l1 l2).
-Proof.
-elim: l1 l2 => /= [|a l1 IH1].
-  elim => // b [|c [|d l2]] IH _ bl2F _ bl2P //.
-  apply: pairwise_ulp_cons_inv.
-    have /= cLub := bl2P 0%N isT.
-    apply: Rle_lt_trans cLub.
-    have /= := bl2P 1%N isT.
-    have [->/format_lt_ulp_0->//|y_neq0 dLuc] := Req_dec c 0; try lra.
-      by apply: bl2F; rewrite !inE eqxx !orbT.
-    apply: Rle_trans (Rlt_le _ _ dLuc) _.
-    apply: ulp_le_abs => //.
-    by apply: bl2F; rewrite !inE eqxx !orbT.
-  apply: IH => //.
-    by move=> z zIl; apply: bl2F; rewrite inE zIl orbT.
-  by apply: Pnonoverlap_cons bl2P.
-elim => [al1F _ al1P _|b l2 IH2 al1F bl2F al1P bl2P].
-  by apply: Pnonoverlap_imp_pairwise_ul.
-case: Rle_bool_spec => [bLa|aLb].
-  apply: pairwise_ulp_cons1_inv.
-    apply: IH1 => //.
-      by move=> z zIl; apply: al1F; rewrite inE zIl orbT.
-    by apply: Pnonoverlap_cons al1P.
-  case: (l1) al1P al1F => //.
-    case: (l2) bl2P bl2F => //= c l3 /(_ 0%N isT) /= cLub _ _ _ _.
-    apply: Rlt_le_trans cLub _.
-    by apply: (ulp_le beta fexp _ _ bLa).
-  move=> a1 l3.
-  rewrite /=; case: Rle_bool_spec => /=.
-    case: l3 => //=.
-      move=> bLa1 /(_ 0%N isT) /= a1Lua _ _.
-      by apply: Rle_lt_trans bLa1 a1Lua.
-    move=> a2 l3 bLa1 aa1a2l3P aa1a2l3F _.
-    case: Rle_bool_spec => [bLa2|a2Lb] /=.
-      have /(_ 0%N isT)/= a1Lua :=  aa1a2l3P.
-      apply: Rle_lt_trans (a1Lua).
-      have /(_ 1%N isT)/= a2Lua1 :=  aa1a2l3P.
-      move: a2Lua1.
-      have [->/format_lt_ulp_0->|a1_neq0 a2Lua1] := Req_dec a1 0; try lra.
-        by apply: aa1a2l3F; rewrite !inE eqxx !orbT.
-      apply: Rle_trans (Rlt_le _ _ a2Lua1) _.
-      apply: ulp_le_abs => //.
-      by apply: aa1a2l3F; rewrite !inE eqxx !orbT.
-    have /(_ 0%N isT)/= a1Lua :=  aa1a2l3P.
-    by apply: Rle_lt_trans (a1Lua).
-  move=> a1Lb aa1l3P aa1l3F.
-  case: (l2) bl2F bl2P => /= [_ _ _|b1 l4 bb1F bb1P _] /=.
-    by apply: (aa1l3P 0%N).
-  case: Rle_bool_spec => [b1La1|a1Lb1] /=.
-    by apply: (aa1l3P 0%N).
-  have /(_ 0%N isT)/= b1Lub :=  bb1P.
-  apply: Rlt_le_trans b1Lub _.
-  by apply: (ulp_le beta fexp _ _ bLa).
-apply: pairwise_ulp_cons1_inv.
-  apply: IH2 => //.
-    by move=> z zIl; apply: bl2F; rewrite inE zIl orbT.
-  by apply: Pnonoverlap_cons bl2P.
-case: (l2) bl2F bl2P al1F al1P => /=.
-  case: (l1) => // a1 l3 bF bP aa1l3F aa1l3P /= _.
-  have /(_ 0%N isT)/= a1Lua :=  aa1l3P.
-  apply: Rlt_le_trans a1Lua _.
-  by apply: (ulp_le beta fexp _ _ (Rlt_le _ _ aLb)).
-move=> b1 l3.
-case: Rle_bool_spec => [b1La|aLb1] /=.
-  case: (l1) => //= [_ /(_ 0%N isT) //|a1 l4].
-  case: Rle_bool_spec => [b1La1|a1Lb1]//=.  
-    move=> bb1l3F bb1l3P aa1l4F aa1l4P _.
-    have /(_ 0%N isT)/= a1Lua :=  aa1l4P.
-    apply: Rlt_le_trans a1Lua _.
-    by apply: (ulp_le beta fexp _ _ (Rlt_le _ _ aLb)).
-  case: l3 => /= [bb1F bb1P aa1l4F aa1l4P _|
-                  b2 l3 bb1b2l3F bb1b2l3P aa1l4F aa1l4P _].
-    by apply: (bb1P 0%N).
-  by apply: (bb1b2l3P 0%N).
-case: l3 => /= [bb1F bb1P al1F al1P _|b2 l3 bb1b2l3F bb1b2l3P al1F al1P _].
-  apply: Rlt_trans aLb1 _.
-  by apply: (bb1P 0%N).
-case: Rle_bool_spec => [b2La|aLb2]//=.
-  apply: Rlt_trans aLb1 _.
-  by apply: (bb1b2l3P 0%N).
-have /(_ 1%N isT)/= b2Lub1 := bb1b2l3P.
-  apply: Rlt_le_trans b2Lub1 _.
-apply: (ulp_le beta fexp).
-apply: Rlt_le.
-have /(_ 0%N isT)/= b1Lub := bb1b2l3P.
-apply: Rlt_le_trans b1Lub _.
-apply: ulp_le_abs.
-  move=> b_eq0; move: aLb; rewrite b_eq0; split_Rabs; lra.
-by apply: bb1b2l3F; rewrite !inE eqxx.
-Qed.
-
-(* Merge is a permutation of its two inputs, so it preserves the exact sum.   *)
-Lemma Merge_sumR (l1 l2 : seq R) : sumR (Merge l1 l2) = sumR l1 + sumR l2.
- Proof.
-elim: l1 l2 => /= [|a l1 IH1]; first by elim => [/=| b l2] //; lra.
-elim =>  [/=|b l2 IH2]; first by lra.
-case: Rle_bool_spec => [bLa|aLb].
-  by rewrite /= IH1 /=; lra.
-by rewrite /= IH2; lra.
-Qed.
 
 
 Lemma format_vecSumAux l : 
@@ -637,81 +419,6 @@ Qed.
 (* [ufp x] -- "unit in the first place": the weight [2^(mag x - 1)] of the    *)
 (* leftmost bit, i.e. the largest power of two <= |x| (for x <> 0).  Paper    *)
 (* Theorem 1 / Corollary 1 (p.3) state the VecSum input conditions with it.   *)
-Definition ufp (x : R) : R := pow (mag beta x - 1).
-
-Lemma ufp_gt_0 x : 0 < ufp x.
-Proof. by apply: bpow_gt_0. Qed.
-
-(* [ufp x <= |x| < 2 * ufp x]: |x| lies in one binade above [ufp x].          *)
-Lemma ufp_le_abs x : x <> 0 -> ufp x <= Rabs x.
-Proof. exact: bpow_mag_le. Qed.
-
-Lemma abs_lt_2ufp x : Rabs x < 2 * ufp x.
-Proof.
-rewrite /ufp; set m := mag beta x.
-have := bpow_mag_gt beta x; rewrite -/m => H.
-suff -> : (2 * bpow beta (m - 1) = bpow beta m)%R by [].
-have -> : (2 = IZR beta)%R by rewrite /=; lra.
-by rewrite -bpow_plus_1; congr bpow; lia.
-Qed.
-
-(* One P-nonoverlap step makes [ufp] shrink by a factor [u]: if [|y| < ulp x] *)
-(* (Priest's [Pnonoverlap]) and [x] is not near underflow, then               *)
-(* [ufp y <= u * ufp x].  This is the geometric decay behind Theorem 3's tail *)
-(* bound [2 u^3 + 4.2 u^4] (each kept term is [u] times finer than the last). *)
-Lemma ufp_ulp_step x y : x <> 0 -> y <> 0 -> Rabs y < ulp x ->
-  (emin <= mag beta x - p)%Z -> ufp y <= u * ufp x.
-Proof.
-move=> xn0 yn0 Hxy Hx1.
-have Hmagy : (mag beta y <= mag beta x - p)%Z.
-  apply: mag_le_bpow => //.
-  apply: Rlt_le_trans Hxy _.
-  rewrite ulp_neq_0 //.
-  by rewrite /cexp /FLT_exp; apply: bpow_le; lia.
-by rewrite /ufp uE -bpow_plus; apply: bpow_le; lia.
-Qed.
-
-(* Definition 2 (Fabiano): [l] is F-nonoverlapping when each term is at most  *)
-(* half the [uls] of its predecessor.  This is Fabiano's separation (more     *)
-(* restrictive than Shewchuk's ulp-nonoverlapping); it is the invariant that  *)
-(* VecSum establishes (Thm 1) and that VSEB consumes (Thm 2) to yield a       *)
-(* P-nonoverlapping output.                                                   *)
-(* This is the "with interleaving zeros" form (paper Def. 3): the bound is    *)
-(* required only across a NONZERO predecessor [nth 0 l i <> 0], so a zero     *)
-(* error term (e.g. an exact [2Sum]) imposes no constraint on its successor.  *)
-(* Without this guard the statement is false: at a zero predecessor the RHS   *)
-(* would be [/2 * uls 0 = 2^(emin-1)], unreachable by a normal-sized term.    *)
-Definition Fnonoverlap (l : seq R) : Prop :=
-  forall i, (i.+1 < size l)%N -> nth 0 l i <> 0 ->
-    Rabs (nth 0 l i.+1) <= / 2 * uls (nth 0 l i).
-
-(* A prefix of a P-nonoverlapping sequence is P-nonoverlapping.  Since        *)
-(* [vsebK k = take k \o vseb], this is what turns "VSEB is P-nonoverlapping"  *)
-(* into "VSEB(k) is P-nonoverlapping".                                        *)
-(* Proof: [take k] leaves the [nth]s at indices < k unchanged and only        *)
-(* shortens the list, so every instance of the [Pnonoverlap] condition on     *)
-(* [take k l] is an instance already available on [l].                        *)
-Lemma Pnonoverlap_take k l : Pnonoverlap l -> Pnonoverlap (take k l).
-Proof.
-elim: l k => //= a [| b l] IH [|[|k]] //=.
-move=> ablP [|i] /= iLs; first by apply: (ablP 0%N).
-apply: (IH k.+1 _ i) => // z zLs.
-by apply: (ablP z.+1).
-Qed.
-
-(* ===========================================================================*)
-(*  Theorem 1 (VecSum), faithful to paper3 Section 2.1                        *)
-(*                                                                            *)
-(*  The current [vecSum_Fnonoverlap] below uses the simplified inputs         *)
-(*  [sorted_mag]+[pairwise_ulp]; this block states Theorem 1 with the paper's *)
-(*  actual [k_i] exponent hypotheses, and the proof steps it goes through.    *)
-(* ===========================================================================*)
-
-(* Paper representation: [x = M * 2^(k-p+1)] with [|M| < 2^p], [M] an integer *)
-(* and the exponent [k] chosen (not necessarily canonical).  We also require  *)
-(* [emin <= k - p + 1] so that [x] genuinely lands on the FLT grid -- without *)
-(* it [x = 2^(emin-1)] (M = 1, k = emin+p-2) satisfies the equation but is not*)
-(* a float.  The paper's x_i are floats, so this is the intended reading.     *)
 Definition repr (k : Z) (x : R) : Prop :=
   (emin <= k - p + 1)%Z /\
   exists2 M : Z, (Z.abs M < 2 ^ p)%Z & x = IZR M * pow (k - p + 1)%Z.
@@ -1312,144 +1019,6 @@ Qed.
 
 (* A float is at most [(2 - 2u) ufp] of itself (max-mantissa bound).  Holds   *)
 (* also at 0 and in the subnormal range, so no no-underflow hypothesis.       *)
-Lemma abs_le_ufp_norm x : format x -> Rabs x <= (2 - 2 * u) * ufp x.
-Proof.
-move=> Fx.
-have Hu0 : 0 < u by rewrite uE; apply: bpow_gt_0.
-have Hu1 : u <= 1 by rewrite uE -(pow0E beta); apply: bpow_le; lia.
-case: (Req_dec x 0) => [xz|xn0].
-  by rewrite xz Rabs_R0; have := ufp_gt_0 0; nra.
-have Hmx : (emin < mag beta x)%Z.
-  by apply: lt_bpow; apply: Rle_lt_trans (alpha_lB Fx xn0) _;
-     exact: bpow_mag_gt.
-have Hsucc : succ beta fexp (Rabs x) <= bpow beta (mag beta x).
-  apply: succ_le_lt => //; first exact: generic_format_abs.
-    by apply: generic_format_bpow; rewrite /fexp /FLT_exp; lia.
-  by apply: bpow_mag_gt.
-move: Hsucc; rewrite succ_eq_pos; last exact: Rabs_pos.
-rewrite ulp_neq_0; last by move: (Rabs_pos_lt _ xn0); lra.
-move=> Hs.
-have Hcexp : bpow beta (mag beta x - p) <= bpow beta (cexp (Rabs x)).
-  by apply: bpow_le; rewrite /cexp /FLT_exp mag_abs; lia.
-have -> : (2 - 2 * u) * ufp x =
-  bpow beta (mag beta x) - bpow beta (mag beta x - p).
-  rewrite /ufp uE.
-  have -> : (2 - 2 * bpow beta (-p)) = bpow beta 1 - bpow beta (1 - p).
-    by rewrite (bpow_plus beta 1 (-p)) bpow_1 /=; lra.
-  by rewrite Rmult_minus_distr_r -!bpow_plus; congr (bpow _ _ - bpow _ _); lia.
-lra.
-Qed.
-
-(* A nonzero P-nonoverlap successor forces the predecessor from underflow:    *)
-(* [|y| < ulp x] with [y] a nonzero float gives [emin <= mag x - p] (otherwise*)
-(* [ulp x = 2^emin], and [|y| < 2^emin] would force [y = 0]).                 *)
-Lemma nu_of_lt_ulp x y : format y -> y <> 0 -> Rabs y < ulp x ->
-  (emin <= mag beta x - p)%Z.
-Proof.
-move=> Fy yn0 Hlt.
-have Hemin : bpow beta emin <= Rabs y := alpha_lB Fy yn0.
-have xn0 : x <> 0 by move=> xz; move: Hlt; rewrite xz ulp_FLT_0; lra.
-move: Hlt; rewrite ulp_neq_0 // /cexp /FLT_exp => Hlt.
-have Hb : bpow beta emin < bpow beta (Z.max (mag beta x - p) emin) by lra.
-by move: (lt_bpow _ _ _ Hb); lia.
-Qed.
-
-(* A P-nonoverlap list whose head is 0 sums to 0: a zero limb forces its      *)
-(* nonzero-float successors below [2^emin], hence to 0.                       *)
-Lemma small_head_zero l : Pnonoverlap l -> {in l, forall z, format z} ->
-  nth 0 l 0 = 0 -> sumR l = 0.
-Proof.
-elim: l => [//|a l IH] Pl Fl /= a0.
-have Hl0 : sumR l = 0.
-  case: l IH Pl Fl => [//|b l'] IH Pl Fl.
-  apply: IH; first exact: Pnonoverlap_cons Pl.
-    by move=> t tin; apply: Fl; rewrite inE tin orbT.
-  have Hb : Rabs b < ulp a by apply: (Pl 0%N).
-  case: (Req_dec b 0) => [b0|bn0]; first by rewrite /= b0.
-  have Fb : format b by apply: Fl; rewrite !inE eqxx orbT.
-  have Hb2 : bpow beta emin <= Rabs b := alpha_lB Fb bn0.
-  by exfalso; move: Hb; rewrite a0 ulp_FLT_0; lra.
-by rewrite a0 Hl0 Rplus_0_r.
-Qed.
-
-(* Key bound: for a P-nonoverlap list of floats, the whole sum is at most     *)
-(* twice the [ufp] of the leading term -- the geometric series                *)
-(* [(2-2u)(1 + u + u^2 + ...) = 2] collapses in the induction. No nonzero     *)
-(* / no-underflow hyp: zero limbs are absorbed by [small_head_zero], and      *)
-(* every non-last limb is non-underflowing by [nu_of_lt_ulp].                 *)
-Lemma sumR_ufp_bound l : Pnonoverlap l -> {in l, forall z, format z} ->
-  Rabs (sumR l) <= 2 * ufp (nth 0 l 0).
-Proof.
-have Hu0 : 0 < u by rewrite uE; apply: bpow_gt_0.
-elim: l => [_ _|a l IH Pl Fl].
-  rewrite Rabs_R0.
-  by have := ufp_gt_0 (nth 0 (@nil R) 0); lra.
-have Fa : format a by apply: Fl; rewrite inE eqxx.
-have Hla : Rabs a <= (2 - 2 * u) * ufp a by apply: abs_le_ufp_norm.
-have Hua : 0 < ufp a := ufp_gt_0 a.
-case: l IH Pl Fl => [|b l] IH Pl Fl.
-  have -> : nth 0 [:: a] 0 = a by [].
-  have -> : sumR [:: a] = a by rewrite /= Rplus_0_r.
-  nra.
-have Hb : Rabs b < ulp a by apply: (Pl 0%N).
-have Fb : format b by apply: Fl; rewrite !inE eqxx orbT.
-have Hub : 0 < ufp b := ufp_gt_0 b.
-have -> : nth 0 (a :: b :: l) 0 = a by [].
-have -> : sumR (a :: b :: l) = a + sumR (b :: l) by [].
-have IHbl : Rabs (sumR (b :: l)) <= 2 * ufp b.
-  apply: IH; first exact: Pnonoverlap_cons Pl.
-  by move=> t tin; apply: Fl; rewrite inE tin orbT.
-case: (Req_dec b 0) => [b0|bn0].
-  have Hs0 : sumR (b :: l) = 0.
-    apply: small_head_zero; first exact: Pnonoverlap_cons Pl.
-      by move=> t tin; apply: Fl; rewrite inE tin orbT.
-    by rewrite /= b0.
-  by rewrite Hs0 Rplus_0_r; nra.
-have Ua : (emin <= mag beta a - p)%Z := nu_of_lt_ulp Fb bn0 Hb.
-have Na : a <> 0.
-  by move=> az; move: Hb; rewrite az ulp_FLT_0 => Hb';
-     have := alpha_lB Fb bn0; lra.
-have Hstep : ufp b <= u * ufp a by apply: ufp_ulp_step.
-apply: Rle_trans (Rabs_triang _ _) _.
-nra.
-Qed.
-
-(* [sumR] is additive over concatenation, and P-nonoverlap is stable by drop. *)
-Lemma sumR_cat l1 l2 : sumR (l1 ++ l2) = sumR l1 + sumR l2.
-Proof. by elim: l1 => [|a l1 IH] /=; rewrite ?IH; ring. Qed.
-
-Lemma Pnonoverlap_drop k l : Pnonoverlap l -> Pnonoverlap (drop k l).
-Proof.
-move=> H i; rewrite size_drop ltn_subRL => Hi.
-by rewrite !nth_drop addnS; apply: H; rewrite -addnS.
-Qed.
-
-(* A zero limb propagates: its successor is below [2^emin], hence 0.          *)
-Lemma nth_step_zero l i : Pnonoverlap l -> {in l, forall z, format z} ->
-  nth 0 l i = 0 -> nth 0 l i.+1 = 0.
-Proof.
-move=> Pl Fl Hi.
-case: (ltnP i.+1 (size l)) => [Hlt|Hle]; last by rewrite nth_default.
-have Hb : Rabs (nth 0 l i.+1) < ulp (nth 0 l i) by apply: Pl.
-move: Hb; rewrite Hi ulp_FLT_0 => Hb.
-case: (Req_dec (nth 0 l i.+1) 0) => [->//|Hn0].
-have Hf : format (nth 0 l i.+1) by apply: Fl; apply: mem_nth.
-by have := alpha_lB Hf Hn0; lra.
-Qed.
-
-Lemma sumR_head_drop1 l : sumR l = nth 0 l 0 + sumR (drop 1 l).
-Proof. by case: l => [|a l] /=; rewrite ?drop0; lra. Qed.
-
-(* ===========================================================================*)
-(*  Error bound: the "Ensure" clause of Algorithm 8 (p >= 6):                 *)
-(*    | r - (x + y) | <= (2 u^3 + 4.2 u^4) | x + y |.                         *)
-(*                                                                            *)
-(*  Sketch (paper, Theorem 3 specialised to k = 3):                           *)
-(*   - Merge, VecSum and VSEB are all exact, so the only error comes          *)
-(*     from keeping the first three terms of the expansion.                   *)
-(*   - The dropped tail of a P-nonoverlapping expansion is bounded by         *)
-(*     (2 u^3 + 4.2 u^4) of the total (Theorem 3, k = 3).                     *)
-(* ===========================================================================*)
 Lemma TWSum_error x y : isTW x -> isTW y ->
   Rabs (TWval (TWSum x y) - (TWval x + TWval y)) <=
      errc * Rabs (TWval x + TWval y).

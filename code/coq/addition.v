@@ -1508,12 +1508,82 @@ Admitted.
 (* step a Fast2Sum with no rounding, so consecutive emitted terms satisfy the *)
 (* STRICT [|y_{i+1}| < ulp(y_i)]; the [size e <= p + 1] hypothesis rules out  *)
 (* the carry that could turn [<] into [=].                                    *)
+(* Core of Thm 2, by induction on the tail [l] of [eps :: l] (paper's running *)
+(* remainder [eps] and high words [r_i]).  A step [2Sum(eps, e) = (r, et)]:   *)
+(* when [et = 0] the remainder [r] is carried on (no term emitted); when      *)
+(* [et <> 0] the high word [r] is emitted and [et] becomes the new remainder. *)
+(* Two paper facts drive P-nonoverlap of the emitted [r]'s:                   *)
+(*  - divisibility: [r_{i-1}], [eps_i] are multiples of [2^(k_i) = uls e_i];  *)
+(*  - a per-block bound giving [ulp(y_j) >= 2 |eps_{i0}|], so the next emitted*)
+(*    term [y_{j+1}] has [|y_{j+1}| < 2 |eps_{i0}| <= ulp(y_j)].              *)
+(* The [size l < p] hypothesis (paper's [p >= n - 1]) bounds the block length *)
+(* so the geometric sum [2 - 2^(i0-i-1)] stays [< 2] and no carry occurs.     *)
+Lemma vsebAux_Pnonoverlap eps l :
+  (Z.of_nat (size l).+1 <= p + 1)%Z ->
+  format eps -> {in l, forall z, format z} -> Fnonoverlap (eps :: l) ->
+  Pnonoverlap (vsebAux eps l).
+Proof.
+elim: l eps => [|e l' IH] eps Hsz epsF lF Fno.
+  (* [vsebAux eps [::] = [:: eps]]: a single term is P-nonoverlapping.        *)
+  by move=> i; rewrite /= ltnS ltn0.
+have Fe : format e by apply: lF; rewrite inE eqxx.
+case: l' IH lF Fno Hsz => [|e2 l''] IH lF Fno Hsz.
+  (* Last step (paper's final 2Sum): [vsebAux eps [:: e] = [:: y0; y1]] with  *)
+  (* [(y0, y1) = 2Sum(eps, e)]; P-nonoverlap is [|y1| < ulp y0], the Fast2Sum *)
+  (* bound (no carry, using [p >= n - 1]).                                    *)
+  rewrite vsebAux_1; case E1 : (TwoSum eps e) => [y0 y1].
+  move=> [|i] /= Hi; last by move: Hi; rewrite ltnS ltnS ltn0.
+  (* |y1| < ulp y0                                                            *)
+  admit.
+(* General step: [2Sum(eps, e) = (r, et)].                                    *)
+rewrite vsebAux_consS; case E1 : (TwoSum eps e) => [r et].
+have Hr : r = RND (eps + e) by have := TwoSum_hi eps e; rewrite E1.
+case: Req_EM_T => [et0|etn0].
+  (* [et = 0]: nothing emitted, remainder [r] carried on; recurse on          *)
+  (* [r :: e2 :: l''] once the invariant is re-established.                   *)
+  apply: IH.
+  - by move: Hsz; rewrite /=; lia.
+  - by rewrite Hr; apply: generic_format_round.
+  - by move=> z zI; apply: lF; rewrite inE zI orbT.
+  (* Fnonoverlap (r :: e2 :: l''): [r] merges [eps, e] exactly (et = 0), so it*)
+  (* keeps the separation from [e2, ...].                                     *)
+  admit.
+(* [et <> 0]: emit [r], recurse on the new remainder [et].                    *)
+have Hrec : Pnonoverlap (vsebAux et (e2 :: l'')).
+  apply: IH.
+  - by move: Hsz; rewrite /=; lia.
+  (* [et] is the nonzero 2Sum error, a float.                                 *)
+  - admit.
+  - by move=> z zI; apply: lF; rewrite inE zI orbT.
+  (* Fnonoverlap (et :: e2 :: l''): [et] is finer than the remaining terms.   *)
+  - admit.
+move=> [|i] /= Hi.
+  (* Head: emitted [r = y_j] vs next [y_{j+1}]; paper block bound gives:      *)
+  (* bound gives [ulp r >= 2 |et|] and [|y_{j+1}| < 2 |et|].                  *)
+  have Hulp : 2 * Rabs et <= ulp r by admit.
+  have Hnext : Rabs (nth 0 (vsebAux et (e2 :: l'')) 0) < 2 * Rabs et by admit.
+  by apply: (Rlt_le_trans _ _ _ Hnext Hulp).
+(* Tail: P-nonoverlap of the recursive output (index shift).                  *)
+by apply: (Hrec i); move: Hi; rewrite ltnS.
+
+(* Theorem 2 (paper): [vseb e] is P-nonoverlapping with the same sum, given   *)
+(* [e] F-nonoverlapping and [size e <= p + 1].  Sum: [vseb_sum] (VSEB is a    *)
+(* chain of exact 2Sums).  Separation: [vsebAux_Pnonoverlap].                 *)
+Admitted.
+
 Lemma vseb_Pnonoverlap e :
   (Z.of_nat (size e) <= p + 1)%Z ->
   {in e, forall z, format z} -> Fnonoverlap e ->
   Pnonoverlap (vseb e) /\ sumR (vseb e) = sumR e.
 Proof.
-Admitted.
+move=> Hsz eF eFno.
+split; last by apply: vseb_sum.
+case: e Hsz eF eFno => [|e0 l'] Hsz eF eFno; first by move=> i; rewrite /= ltn0.
+rewrite /vseb.
+apply: vsebAux_Pnonoverlap => //.
+- by apply: eF; rewrite inE eqxx.
+by move=> z zI; apply: eF; rewrite inE zI orbT.
+Qed.
 
 (* ===========================================================================*)
 (*  Algorithm 8: TWSum -- the sum of two triple-word numbers.                 *)

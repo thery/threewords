@@ -910,6 +910,27 @@ case: Req_bool_spec => [->//|x_neq0]; first by lra.
 rewrite ulp_neq_0 //;apply: bpow_le; lia.
 Qed.
 
+(* [uls] is always positive (a power of two, or [ulp 0] at zero).             *)
+Lemma uls_gt_0 x : 0 < uls x.
+Proof.
+by rewrite /uls; case: Req_bool_spec => _; [exact: ulp_gt_0 | exact: bpow_gt_0].
+Qed.
+
+(* The rightmost nonzero bit is at most the magnitude: [uls x <= |x|] for a   *)
+(* nonzero float.  [x = M' * uls x] with [M'] a nonzero integer, so           *)
+(* [|x| = |M'| * uls x >= uls x].                                             *)
+Lemma uls_le_abs x : format x -> x <> 0 -> uls x <= Rabs x.
+Proof.
+move=> xF xn0; have Hu := uls_gt_0 x.
+have Hx := ulsE xF.
+set M := (Ztrunc (mant x) / 2 ^ Z.of_nat (trZ (Ztrunc (mant x))))%Z in Hx.
+have M0 : M <> 0%Z by move=> H0; apply: xn0; rewrite Hx H0 /= Rmult_0_l.
+have H1 : 1 <= Rabs (IZR M) by rewrite -abs_IZR; apply: IZR_le; lia.
+have -> : Rabs x = Rabs (IZR M) * uls x.
+  by rewrite {1}Hx Rabs_mult (Rabs_pos_eq _ (Rlt_le _ _ Hu)).
+nra.
+Qed.
+
 (* ===========================================================================*)
 (*  [is_imul] bridge: reusable "multiples of a power grid" facts, feeding the *)
 (*  paper's "multiples of 2u" argument (Theorem 1) via Flocq's [is_imul].     *)

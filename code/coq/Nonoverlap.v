@@ -23,12 +23,18 @@ Section Nonoverlap.
 
 Variable p : Z.
 Variable emin : Z.
+Hypothesis Hp2 : (1 < p)%Z.
 
 Let beta := radix2.
 
 Open Scope R_scope.
 
+Local Instance p_gt_0 : Prec_gt_0 p.
+Proof. now apply Z.lt_trans with (2 := Hp2). Qed.
+
+Local Notation pow e := (bpow beta e).
 Local Notation fexp := (FLT_exp emin p).
+Local Notation format := (generic_format beta fexp).
 Local Notation ulp := (ulp beta fexp).
 
 (* Sum of a sequence, used to state exactness of the building blocks.         *)
@@ -98,6 +104,61 @@ Lemma pairwise_ulp_cons1_inv a l :
 Proof.
 case: l => // b [|c l] //= bclP /(_ isT) cLua.
 by apply: pairwise_ulp_cons_inv.
+Qed.
+
+
+(* A format number strictly below the smallest positive float is 0.           *)
+(* Depends on (all from Flocq.Core, already imported via [Core]):             *)
+(*   - [ulp_FLT_0]    : ulp 0 = bpow emin   (Flocq.Core.FLT)                  *)
+(*   - [ulp_ge_ulp_0] : Exp_not_FTZ fexp -> ulp 0 <= ulp y   (Flocq.Core.Ulp) *)
+(*   - [ulp_le_abs]   : y <> 0 -> format y -> ulp y <= Rabs y (Flocq.Core.Ulp)*)
+(*   the [Exp_not_FTZ (FLT_exp emin p)] instance comes from                   *)
+(*   [FLT_exp_monotone] + [monotone_exp_not_FTZ].                             *)
+Lemma format_lt_ulp_0 y : format y -> Rabs y < ulp 0 -> y = 0.
+Proof.
+move=> yF yLu.
+suff : ~ (0 < Rabs y) by split_Rabs; lra.
+move=> ay_gt0.
+have ayF : format (Rabs y) by apply: generic_format_abs.
+have pLw : pow emin <= Rabs y by apply: alpha_LB ayF _.
+rewrite ulp_FLT_0 in yLu; lra.
+Qed.
+
+(* P-nonoverlap separation implies magnitude order, zeros included.           *)
+(* Depends on:                                                                *)
+(*   - [ulp_le_abs] : x <> 0 -> format x -> ulp x <= Rabs x  (Flocq.Core.Ulp) *)
+(*     for the x <> 0 case (then Rabs y < ulp x <= Rabs x);                   *)
+(*   - [ulp_FLT_0] + [format_lt_ulp_0] above for the x = 0 case (then y = 0). *)
+Lemma format_lt_ulp_le x y :
+  format x -> format y -> Rabs y < ulp x -> Rabs y <= Rabs x.
+Proof.
+move=> xF yF yLux.
+have [x_eq0|x_neq0 ]:= Req_dec x 0; last first.
+  apply: Rle_trans (Rlt_le _ _ yLux) _.
+  by apply: ulp_le_abs.
+have -> : y = 0 by apply: format_lt_ulp_0 => //; rewrite -x_eq0.
+split_Rabs; lra.
+Qed.
+
+(* P-nonoverlap implies pairwise-ulp separation on a single (format) list,    *)
+(* zeros included: |x_{i+2}| < ulp x_{i+1} <= ulp x_i, the last step via      *)
+(* [ulp_le_abs] (and [format_lt_ulp_0] when x_{i+1} = 0).                     *)
+Lemma Pnonoverlap_imp_pairwise_ul l :
+  {in l,  forall z : R, format z} -> Pnonoverlap l -> pairwise_ulp l.
+Proof.
+elim: l => //= a [|b [|c l]] // IH abclF abclP.
+apply: pairwise_ulp_cons_inv.
+  have /= bLua := abclP 0%N isT.
+  apply: Rle_lt_trans bLua.
+  have /= := abclP 1%N isT.
+  have [->/format_lt_ulp_0->//|y_neq0 cLub] := Req_dec b 0; try lra.
+    by apply: abclF; rewrite !inE eqxx !orbT.
+  apply: Rle_trans (Rlt_le _ _ cLub) _.
+  apply: ulp_le_abs => //.
+  by apply: abclF; rewrite !inE eqxx !orbT.
+apply: IH.
+  by move=> z zIl; apply: abclF; rewrite inE zIl orbT.
+by move=> i iLs; apply: (abclP i.+1).
 Qed.
 
 End Nonoverlap.

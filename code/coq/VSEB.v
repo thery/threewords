@@ -346,14 +346,108 @@ apply: IH.
 by rewrite re; apply: Rle_trans Hb; rewrite /=; split_Rabs; lra.
 Qed.
 
+(* Reusable radix-2 power facts: [/2 = pow (-1)] and [(/2)^n = pow (-n)].     *)
+Lemma pow_N1 : / 2 = pow (-1).
+Proof. by rewrite /=; lra. Qed.
+
+Lemma pow_halfN (n : nat) : (/ 2) ^ n = pow (- Z.of_nat n).
+Proof.
+elim: n => [|n IH]; first by [].
+rewrite -tech_pow_Rmult IH pow_N1 -bpow_plus Nat2Z.inj_succ.
+by congr bpow; lia.
+Qed.
+
 (* Reusable block bound (paper Thm 2): the first term emitted by VSEB from a  *)
 (* nonzero remainder [eps] over an F-nonoverlap tail has magnitude [< 2|eps|].*)
 Lemma vsebAux_head_lt eps l :
-  (Z.of_nat (size l).+1 <= p + 1)%Z ->
+  (Z.of_nat (size l).+2 <= p + 1)%Z ->
   format eps -> {in l, forall z, format z} -> Fnonoverlap (eps :: l) ->
   eps <> 0 -> Rabs (nth 0 (vsebAux eps l) 0) < 2 * Rabs eps.
 Proof.
-Admitted.
+move=> Hsz epsF lF Fno epsn0.
+have Hu0 : 0 < uls eps by apply: uls_gt_0.
+have Hae : uls eps <= Rabs eps by apply: uls_le_abs.
+have He0 : 0 < Rabs eps by apply: Rabs_pos_lt.
+have Hd0 : 0 < (/ 2) ^ (size l) by apply: pow_lt; lra.
+have Hsum : sumRabs l <= uls eps * (1 - (/ 2) ^ (size l)).
+  by apply: Fnonoverlap_aux_sumRabs.
+have HsumLt : sumRabs l < uls eps by nra.
+have Hg : uls eps = pow (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps)))).
+  by rewrite /uls; case: Req_bool_spec => // eps0; case: (epsn0 eps0).
+set g := (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps))))%Z.
+have Hgemin : (emin <= g)%Z.
+  by rewrite /g; have := Zle_0_nat (trZ (Ztrunc (mant eps)));
+     rewrite /cexp /FLT_exp; lia.
+have Hhalf : uls eps * (/ 2) ^ (size l) = pow (g - Z.of_nat (size l)).
+  by rewrite pow_halfN Hg -bpow_plus; congr bpow; lia.
+(* [|eps|]'s integer mantissa is bounded ([< 2^p]), giving the block bound.   *)
+have HmB : (Z.abs (Ztrunc (mant eps)) < beta ^ p)%Z.
+  apply: lt_IZR; rewrite abs_IZR -scaled_mantissa_generic // IZR_Zpower;
+    last lia.
+  apply: Rlt_le_trans (_ : pow (mag beta eps - cexp eps) <= _)%R.
+    exact: scaled_mantissa_lt_bpow.
+  by apply: bpow_le; rewrite /cexp /FLT_exp; lia.
+have Heps : Rabs eps = IZR (Z.abs (Ztrunc (mant eps))) * pow (cexp eps).
+  by rewrite {1}epsF /F2R /= Rabs_mult -abs_IZR Rabs_pow.
+have Hcu : pow (cexp eps) <= uls eps.
+  by rewrite Hg; apply: bpow_le; rewrite /g;
+     have := Zle_0_nat (trZ (Ztrunc (mant eps))); lia.
+suff [B [FB HVB HBlt]] :
+    exists B, [/\ format B, Rabs eps + sumRabs l <= B & B < 2 * Rabs eps].
+  by apply: Rle_lt_trans (vsebAux_head_leB epsF lF FB HVB) HBlt.
+have [HM|HM] := Rle_lt_or_eq_dec _ _ Hae.
+- (* [uls eps < Rabs eps] (M > 1): [B = |eps| + uls eps] is format, in range. *)
+  exists (Rabs eps + uls eps).
+  have Huim : is_imul (uls eps) (pow g) by rewrite Hg; exists 1%Z;
+    rewrite Rmult_1_l.
+  have Heim : is_imul (Rabs eps) (pow g).
+    have Him : is_imul eps (pow g) by rewrite -Hg; exact: uls_imul epsF.
+    case: (Rle_lt_dec 0 eps) => He.
+      by rewrite Rabs_pos_eq.
+    by rewrite Rabs_left //; apply: is_imul_opp.
+  split.
+  + apply: (imul_format Hp2 (e := g) (b := Rabs eps + uls eps)) => //.
+    * by apply: is_imul_add.
+    * by rewrite Rabs_pos_eq; lra.
+    rewrite bpow_plus.
+    have Hub : Rabs eps <= (pow p - 1) * uls eps.
+      rewrite Heps.
+      apply: Rle_trans (_ : (pow p - 1) * pow (cexp eps) <= _).
+        apply: Rmult_le_compat_r; first by apply: bpow_ge_0.
+        have -> : pow p - 1 = IZR (beta ^ p - 1).
+          by rewrite minus_IZR IZR_Zpower //; lia.
+        by apply: IZR_le; lia.
+      apply: Rmult_le_compat_l; last exact: Hcu.
+      by rewrite -(pow0E beta); have := bpow_le beta 0 p ltac:(lia); lra.
+    have -> : pow g = uls eps by rewrite Hg.
+    nra.
+  + by lra.
+  + by lra.
+- (* [uls eps = Rabs eps] (M = 1): [2|eps| = pow (g+1)]; B = pred (2|eps|).   *)
+  have HgF : pow g = uls eps by rewrite Hg.
+  have H3 : pow (g + 1) = 2 * pow g by rewrite bpow_plus bpow_1 /=; lra.
+  have H2 : 2 * Rabs eps = pow (g + 1) by rewrite H3 -HM Hg.
+  exists (pred beta fexp (2 * Rabs eps)); split.
+  + by apply: generic_format_pred; rewrite H2; apply: generic_format_bpow;
+       rewrite /FLT_exp; lia.
+  + rewrite H2 pred_bpow.
+    have Hlow : pow (fexp (g + 1)) <= Rabs eps - sumRabs l.
+      rewrite -HM /fexp /FLT_exp.
+      have [Hc|Hc] := Z.max_spec (g + 1 - p) emin.
+        rewrite (proj2 Hc).
+        have Hs : sumRabs l <= uls eps - pow emin.
+          rewrite -HgF; apply: (sumRabs_lt_le lF) => //;
+            rewrite HgF; exact: HsumLt.
+        lra.
+      rewrite (proj2 Hc).
+      have Hle : pow (g + 1 - p) <= pow (g - Z.of_nat (size l)).
+        by apply: bpow_le; lia.
+      have Hs2 : sumRabs l <= uls eps - pow (g - Z.of_nat (size l)).
+        by move: Hsum; rewrite Rmult_minus_distr_l Rmult_1_r Hhalf; lra.
+      lra.
+    by rewrite -H2; lra.
+  + by apply: pred_lt_id; rewrite H2; have := bpow_gt_0 beta (g + 1); lra.
+Qed.
 
 (* Core of Thm 2, by induction on the tail [l] of [eps :: l] (paper's running *)
 (* remainder [eps] and high words [r_i]).  A step [2Sum(eps, e) = (r, et)]:   *)

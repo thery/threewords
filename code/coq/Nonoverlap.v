@@ -331,6 +331,45 @@ Qed.
 (* contribute at most [uls prev] in total, decaying geometrically.  Each      *)
 (* nonzero head [x] has [|x| <= 1/2 uls prev] and [uls x <= |x|], so          *)
 (* [|x| + (tail bound relative to uls x)] telescopes to [uls prev(1 - 2^-s)]. *)
+(* Every FLT float is an integer multiple of the smallest quantum [pow emin]  *)
+(* ([cexp z >= emin]).                                                        *)
+Lemma is_imul_pow_emin z : format z -> is_imul z (pow emin).
+Proof.
+move=> zF; apply: (is_imul_pow_le (format_imul_cexp zF)).
+by rewrite /cexp /FLT_exp; lia.
+Qed.
+
+(* Hence a sum of absolute values is a multiple of [pow emin].                *)
+Lemma sumRabs_imul l :
+  {in l, forall z, format z} -> is_imul (sumRabs l) (pow emin).
+Proof.
+elim: l => /= [_|a l IH lF]; first by exists 0%Z; rewrite Rmult_0_l.
+apply: is_imul_add; last by apply: IH => z zl; apply: lF; rewrite inE zl orbT.
+have Fa : format a by apply: lF; rewrite inE eqxx.
+have [az|az] := Rle_dec 0 a.
+  by rewrite Rabs_pos_eq //; apply: is_imul_pow_emin.
+by rewrite Rabs_left; [apply/is_imul_opp/is_imul_pow_emin|lra].
+Qed.
+
+(* A nonnegative multiple of [pow emin] that is [< pow N] is [<= pow N - pow  *)
+(* emin] (the largest such multiple): the near-underflow block bound.         *)
+Lemma sumRabs_lt_le N l :
+  {in l, forall z, format z} -> (emin <= N)%Z -> sumRabs l < pow N ->
+  sumRabs l <= pow N - pow emin.
+Proof.
+move=> lF HN Hlt; have [k Hk] := sumRabs_imul lF; rewrite Hk in Hlt *.
+have He : 0 < pow emin by apply: bpow_gt_0.
+have HNe : pow N = IZR (2 ^ (N - emin)) * pow emin.
+  have -> : (2 = radix2 :> Z)%Z by [].
+  by rewrite IZR_Zpower; [rewrite -bpow_plus; congr bpow; lia | lia].
+have Hklt : IZR k < IZR (2 ^ (N - emin)).
+  by apply: (Rmult_lt_reg_r (pow emin)); [exact: He | rewrite -HNe].
+have Hkle : (k <= 2 ^ (N - emin) - 1)%Z by have := lt_IZR _ _ Hklt; lia.
+rewrite HNe; apply: Rle_trans (_ : IZR (2 ^ (N - emin) - 1) * pow emin <= _).
+  by apply: Rmult_le_compat_r; [lra | apply: IZR_le].
+by rewrite minus_IZR; lra.
+Qed.
+
 Lemma Fnonoverlap_aux_sumRabs prev l :
   Fnonoverlap_aux prev l -> {in l, forall z, format z} ->
   sumRabs l <= uls prev * (1 - (/ 2) ^ (size l)).

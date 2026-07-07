@@ -210,7 +210,41 @@ Lemma Fnonoverlap_TwoSum_err eps e l :
   format eps -> format e -> Fnonoverlap [:: eps, e & l] ->
   dwl (TwoSum eps e) <> 0 -> Fnonoverlap (dwl (TwoSum eps e) :: l).
 Proof.
-Admitted.
+move=> Feps Fe Fno etn0.
+have Hc : dwh (TwoSum eps e) + dwl (TwoSum eps e) = eps + e.
+  by exact: TwoSum_correct_loc Feps Fe.
+have Het : RND (eps + e) + dwl (TwoSum eps e) = eps + e.
+  by move: Hc; rewrite TwoSum_hi.
+(* A zero operand rounds exactly, leaving [dwl = 0]; so both are nonzero.     *)
+have epsn0 : eps <> 0.
+  move=> eps0; apply: etn0.
+  have HR : RND (eps + e) = e by rewrite eps0 Rplus_0_l; apply: round_generic.
+  by lra.
+have en0 : e <> 0.
+  move=> e0; apply: etn0.
+  have HR : RND (eps + e) = eps by rewrite e0 Rplus_0_r; apply: round_generic.
+  by lra.
+(* [|e| <= 1/2 uls eps] and [uls e <= |e|] give [uls e <= uls eps], so the    *)
+(* error inherits at least [e]'s grid: [uls e <= uls (dwl (TwoSum eps e))].   *)
+have He2 : Rabs e <= / 2 * uls eps by apply: (Fno 0%N).
+have Hueps : uls e <= uls eps.
+  have Hule : uls e <= Rabs e by apply: uls_le_abs.
+  have Hu0 : 0 < uls eps by apply: uls_gt_0.
+  by lra.
+have Huet : uls e <= uls (dwl (TwoSum eps e)).
+  by apply: (TwoSum_err_uls_ge Feps Fe epsn0 en0 Hueps).
+(* Freeze the emitted error as [et] so [/=] cannot re-expand it into [RND ...]*)
+(* (which would break the [uls]-atom match with [Huet]).                      *)
+set et := dwl (TwoSum eps e) in etn0 Huet *.
+move=> [|i] /= Hi Hn0.
+- (* Head: [|nth l 0| <= 1/2 uls e <= 1/2 uls et].                            *)
+  have Hll : Rabs (nth 0 l 0) <= / 2 * uls e.
+    by apply: (Fno 1%N); [exact: Hi | exact: en0].
+  apply: Rle_trans Hll _.
+  by have := Huet; lra.
+(* Tail: unchanged from the middle of the input sequence.                     *)
+by apply: (Fno i.+2); [exact: Hi | exact: Hn0].
+Qed.
 
 (* Reusable step lemma (the [et = 0] branch): when [2Sum eps e] is exact      *)
 (* ([dwl = 0], so [dwh = eps + e] merges them), prepending the merged high    *)

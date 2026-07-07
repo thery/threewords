@@ -86,6 +86,10 @@ Definition trZ (z : Z) := if z is Zpos p1 then (trP p1) else
 Lemma trZ0 : trZ 0 = 0%N.
 Proof. by []. Qed.
 
+(* [trN z] : the 2-adic valuation as an integer, [Z.of_nat (trZ z)] -- the    *)
+(* form in which it enters exponents ([cexp x + trN (mantissa)]).             *)
+Definition trN (z : Z) := Z.of_nat (trZ z).
+
 Lemma two_power_nat_pos n : (Zpos (two_power_pos n) = two_power_nat n)%Z.
 Proof. by elim: n. Qed.
 

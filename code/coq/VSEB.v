@@ -293,18 +293,18 @@ have Hue : uls e <= uls r.
     have Hu0 : 0 < uls eps by apply: uls_gt_0.
     have Hle : uls e <= Rabs e by apply: uls_le_abs.
     lra.
-  have gE : uls e = pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e)))).
+  have gE : uls e = pow (cexp e + trN (Ztrunc (mant e))).
     by rewrite /uls; case: Req_bool_spec.
-  have gepsE : uls eps = pow (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps)))).
+  have gepsE : uls eps = pow (cexp eps + trN (Ztrunc (mant eps))).
     by rewrite /uls; case: Req_bool_spec.
-  have HleZ : (cexp e + Z.of_nat (trZ (Ztrunc (mant e))) <=
-               cexp eps + Z.of_nat (trZ (Ztrunc (mant eps))))%Z.
+  have HleZ : (cexp e + trN (Ztrunc (mant e)) <=
+               cexp eps + trN (Ztrunc (mant eps)))%Z.
     by apply: (le_bpow beta); rewrite -gE -gepsE.
-  have Hime : is_imul e (pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e))))).
+  have Hime : is_imul e (pow (cexp e + trN (Ztrunc (mant e)))).
     by rewrite -gE; exact: uls_imul.
-  have Himeps : is_imul eps (pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e))))).
+  have Himeps : is_imul eps (pow (cexp e + trN (Ztrunc (mant e)))).
     by apply: (is_imul_pow_le _ HleZ); rewrite -gepsE; exact: uls_imul.
-  have Himr : is_imul r (pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e))))).
+  have Himr : is_imul r (pow (cexp e + trN (Ztrunc (mant e)))).
     by rewrite Hr; apply: is_imul_add.
   apply: Rle_trans (is_imul_uls_ge Frr rn0 Himr).
   by rewrite gE; apply: Rle_refl.

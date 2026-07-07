@@ -327,6 +327,49 @@ rewrite ye0 Rabs_R0; have Hu : 0 < uls x by apply: uls_gt_0.
 lra.
 Qed.
 
+(* Converse-of-[imm] bridge: build the recursive [Fnonoverlap_aux prev l]     *)
+(* from index-form separation bounds.  [H1] bounds every nonzero element by   *)
+(* [1/2 uls prev] (needed only through the leading run of zeros, before the   *)
+(* running [prev] first moves); [H2] is the all-pairs separation among the    *)
+(* elements of [l].  Reusable: turns a "no overlapping pair" statement into   *)
+(* the recursive predicate.                                                   *)
+Lemma Fnonoverlap_aux_allpairs prev l :
+  (forall j, (j < size l)%N -> nth 0 l j <> 0 ->
+     Rabs (nth 0 l j) <= / 2 * uls prev) ->
+  (forall i j, (i < j)%N -> (j < size l)%N -> nth 0 l i <> 0 ->
+     Rabs (nth 0 l j) <= / 2 * uls (nth 0 l i)) ->
+  Fnonoverlap_aux prev l.
+Proof.
+elim: l prev => [|x l IH] prev //= H1 H2; split.
+  by move=> xn0; apply: (H1 0%N).
+have [xe0|xne0] := Req_dec x 0.
+  have E : (if Req_EM_T x 0 then prev else x) = prev.
+    by case: (Req_EM_T x 0) => [_|H]//; case: (H xe0).
+  rewrite E; apply: IH.
+    by move=> j jL jn0; apply: (H1 j.+1).
+  by move=> i j iLj jL in0; apply: (H2 i.+1 j.+1).
+have E : (if Req_EM_T x 0 then prev else x) = x.
+  by case: (Req_EM_T x 0) => [xe0|_]//; case: (xne0 xe0).
+rewrite E; apply: IH.
+  by move=> j jL jn0; apply: (H2 0%N j.+1).
+by move=> i j iLj jL in0; apply: (H2 i.+1 j.+1).
+Qed.
+
+(* All-pairs separation with a nonzero head gives [Fnonoverlap l]: the head   *)
+(* [nth 0 l 0] is the initial [prev], so [H1] of [Fnonoverlap_aux_allpairs]   *)
+(* is the [i = 0] instance of the all-pairs bound.                            *)
+Lemma Fnonoverlap_allpairs l :
+  nth 0 l 0 <> 0 ->
+  (forall i j, (i < j)%N -> (j < size l)%N -> nth 0 l i <> 0 ->
+     Rabs (nth 0 l j) <= / 2 * uls (nth 0 l i)) ->
+  Fnonoverlap l.
+Proof.
+case: l => [|x l'] hn0 H2 //=.
+apply: Fnonoverlap_aux_allpairs.
+  by move=> j jL jn0; apply: (H2 0%N j.+1).
+by move=> i j iLj jL in0; apply: (H2 i.+1 j.+1).
+Qed.
+
 (* VSEB block sum bound (Theorem 2): the terms after the remainder [prev]     *)
 (* contribute at most [uls prev] in total, decaying geometrically.  Each      *)
 (* nonzero head [x] has [|x| <= 1/2 uls prev] and [uls x <= |x|], so          *)

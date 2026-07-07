@@ -349,10 +349,60 @@ Qed.
 (* Reusable block bound (paper Thm 2): the first term emitted by VSEB from a  *)
 (* nonzero remainder [eps] over an F-nonoverlap tail has magnitude [< 2|eps|].*)
 Lemma vsebAux_head_lt eps l :
-  (Z.of_nat (size l).+1 <= p + 1)%Z ->
+  (Z.of_nat (size l).+2 <= p + 1)%Z ->
   format eps -> {in l, forall z, format z} -> Fnonoverlap (eps :: l) ->
   eps <> 0 -> Rabs (nth 0 (vsebAux eps l) 0) < 2 * Rabs eps.
 Proof.
+move=> Hsz epsF lF Fno epsn0.
+have Hu0 : 0 < uls eps by apply: uls_gt_0.
+have Hae : uls eps <= Rabs eps by apply: uls_le_abs.
+have He0 : 0 < Rabs eps by apply: Rabs_pos_lt.
+have Hd0 : 0 < (/ 2) ^ (size l) by apply: pow_lt; lra.
+have Hsum : sumRabs l <= uls eps * (1 - (/ 2) ^ (size l)).
+  by apply: Fnonoverlap_aux_sumRabs.
+have HsumLt : sumRabs l < uls eps by nra.
+have Hg : uls eps = pow (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps)))).
+  by rewrite /uls; case: Req_bool_spec => // eps0; case: (epsn0 eps0).
+set g := (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps))))%Z.
+have Hgemin : (emin <= g)%Z.
+  by rewrite /g; have := Zle_0_nat (trZ (Ztrunc (mant eps)));
+     rewrite /cexp /FLT_exp; lia.
+have Hinv2 : / 2 = pow (-1) by rewrite /=; lra.
+have Hpow : forall n : nat, (/ 2) ^ n = pow (- Z.of_nat n).
+  elim => [|n IH]; first by [].
+  rewrite -tech_pow_Rmult IH Hinv2 -bpow_plus Nat2Z.inj_succ.
+  by congr bpow; lia.
+have Hhalf : uls eps * (/ 2) ^ (size l) = pow (g - Z.of_nat (size l)).
+  by rewrite Hpow Hg -bpow_plus; congr bpow; lia.
+suff [B [FB HVB HBlt]] :
+    exists B, [/\ format B, Rabs eps + sumRabs l <= B & B < 2 * Rabs eps].
+  by apply: Rle_lt_trans (vsebAux_head_leB epsF lF FB HVB) HBlt.
+have [HM|HM] := Rle_lt_or_eq_dec _ _ Hae; last first.
+  (* [uls eps = Rabs eps] (M = 1): [2|eps| = pow (g+1)]; B = pred (2|eps|).    *)
+  have H2 : 2 * Rabs eps = pow (g + 1).
+    by rewrite -HM Hg bpow_plus bpow_1 /=; lra.
+  exists (pred beta fexp (2 * Rabs eps)); split.
+  - by apply: generic_format_pred; rewrite H2; apply: generic_format_bpow;
+       rewrite /FLT_exp; lia.
+  - rewrite H2 pred_bpow.
+    have Hlow : pow (fexp (g + 1)) <= Rabs eps - sumRabs l.
+      rewrite -HM /fexp /FLT_exp.
+      have [Hc|Hc] := Z.max_spec (g + 1 - p) emin.
+        rewrite (proj2 Hc).
+        have : sumRabs l <= pow g - pow emin.
+          by apply: sumRabs_lt_le => //; rewrite -Hg.
+        by rewrite -Hg; lra.
+      rewrite (proj2 Hc).
+      have Hle : pow (g + 1 - p) <= pow (g - Z.of_nat (size l)).
+        by apply: bpow_le; lia.
+      have : sumRabs l <= uls eps - pow (g - Z.of_nat (size l)).
+        by move: Hsum; rewrite Rmult_minus_distr_l Rmult_1_r Hhalf; lra.
+      by rewrite Hg; lra.
+    have H3 : pow (g + 1) = 2 * pow g by rewrite bpow_plus bpow_1 /=; lra.
+    by rewrite -HM Hg H3 in Hlow *; lra.
+  - by apply: pred_lt_id; rewrite H2; have := bpow_gt_0 beta (g + 1); lra.
+(* [uls eps < Rabs eps] (M > 1): B = Rabs eps + uls eps.                       *)
+admit.
 Admitted.
 
 (* Core of Thm 2, by induction on the tail [l] of [eps :: l] (paper's running *)

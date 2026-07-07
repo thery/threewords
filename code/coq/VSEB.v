@@ -206,6 +206,31 @@ Qed.
 (* least as coarse as [e] ([uls e <= uls et], by [TwoSum_err_uls_ge]), so     *)
 (* prepending [et] to the tail [l] keeps F-nonoverlap.  This re-establishes   *)
 (* the VSEB invariant when a term is emitted.                                 *)
+(* Zero absorption -- the formal content of the paper's "WLOG the list has no *)
+(* zeros".  A zero next term is an exact [2Sum] ([dwh = eps], [dwl = 0]), so  *)
+(* [vsebAux] carries the remainder on and emits nothing: it silently drops the*)
+(* zero.  Hence the VSEB analysis may assume a zero-free list.                *)
+Lemma dwh_TwoSum_r0 eps : format eps -> dwh (TwoSum eps 0) = eps.
+Proof. by move=> Feps; rewrite TwoSum_hi Rplus_0_r round_generic. Qed.
+
+Lemma dwl_TwoSum_r0 eps : format eps -> dwl (TwoSum eps 0) = 0.
+Proof.
+move=> Feps.
+have F0 : format 0 by apply: generic_format_0.
+have Hc : dwh (TwoSum eps 0) + dwl (TwoSum eps 0) = eps + 0.
+  by exact: TwoSum_correct_loc Feps F0.
+by move: Hc; rewrite dwh_TwoSum_r0 //; lra.
+Qed.
+
+Lemma vsebAux_cons0 eps e l :
+  format eps -> vsebAux eps (0 :: e :: l) = vsebAux eps (e :: l).
+Proof.
+move=> Feps; rewrite vsebAux_consS; case E : (TwoSum eps 0) => [r et].
+have -> : et = 0 by have := dwl_TwoSum_r0 Feps; rewrite E.
+have -> : r = eps by have := dwh_TwoSum_r0 Feps; rewrite E.
+by case: (Req_EM_T 0 0) => [_|H] //; case: (H erefl).
+Qed.
+
 Lemma Fnonoverlap_TwoSum_err eps e l :
   format eps -> format e -> Fnonoverlap [:: eps, e & l] ->
   dwl (TwoSum eps e) <> 0 -> Fnonoverlap (dwl (TwoSum eps e) :: l).

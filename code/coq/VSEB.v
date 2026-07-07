@@ -84,6 +84,7 @@ Local Notation nu_of_lt_ulp := (nu_of_lt_ulp Hp2).
 Local Notation small_head_zero := (@small_head_zero p emin Hp2).
 Local Notation sumR_ufp_bound := (@sumR_ufp_bound p emin Hp2).
 Local Notation nth_step_zero := (@nth_step_zero p emin Hp2).
+Local Notation Fnonoverlap_imm := (Fnonoverlap_imm Hp2).
 
 (* ===========================================================================*)
 (*  Algorithm 5: VecSumErrBranch (VSEB)                                       *)
@@ -251,24 +252,16 @@ have en0 : e <> 0.
   by lra.
 (* [|e| <= 1/2 uls eps] and [uls e <= |e|] give [uls e <= uls eps], so the    *)
 (* error inherits at least [e]'s grid: [uls e <= uls (dwl (TwoSum eps e))].   *)
-have He2 : Rabs e <= / 2 * uls eps by apply: (Fno 0%N).
+have He2 : Rabs e <= / 2 * uls eps by exact: Fnonoverlap_head2 Fno en0.
 have Hueps : uls e <= uls eps.
   have Hule : uls e <= Rabs e by apply: uls_le_abs.
   have Hu0 : 0 < uls eps by apply: uls_gt_0.
   by lra.
 have Huet : uls e <= uls (dwl (TwoSum eps e)).
   by apply: (TwoSum_err_uls_ge Feps Fe epsn0 en0 Hueps).
-(* Freeze the emitted error as [et] so [/=] cannot re-expand it into [RND ...]*)
-(* (which would break the [uls]-atom match with [Huet]).                      *)
-set et := dwl (TwoSum eps e) in etn0 Huet *.
-move=> [|i] /= Hi Hn0.
-- (* Head: [|nth l 0| <= 1/2 uls e <= 1/2 uls et].                            *)
-  have Hll : Rabs (nth 0 l 0) <= / 2 * uls e.
-    by apply: (Fno 1%N); [exact: Hi | exact: en0].
-  apply: Rle_trans Hll _.
-  by have := Huet; lra.
-(* Tail: unchanged from the middle of the input sequence.                     *)
-by apply: (Fno i.+2); [exact: Hi | exact: Hn0].
+(* The tail [l] carries over from the input (drop [eps, e]), with the running *)
+(* term [e] weakened to the coarser error ([uls e <= uls (dwl ..)]).          *)
+by apply: (Fnonoverlap_aux_prev Huet (Fnonoverlap_tail Fno en0)).
 Qed.
 
 (* Reusable step lemma (the [et = 0] branch): when [2Sum eps e] is exact      *)
@@ -280,45 +273,43 @@ Qed.
 (* [|nth l 0| <= 1/2 uls e] and [uls e <= uls (eps + e)]: [eps + e] is a      *)
 (* nonzero float lying on [e]'s grid ([uls e]), so [is_imul_uls_ge] lifts it. *)
 Lemma Fnonoverlap_TwoSum_merge eps e l :
-  format eps -> format e -> e <> 0 -> Fnonoverlap [:: eps, e & l] ->
+  format eps -> format e -> e <> 0 -> dwh (TwoSum eps e) <> 0 ->
+  Fnonoverlap [:: eps, e & l] ->
   dwl (TwoSum eps e) = 0 -> Fnonoverlap (dwh (TwoSum eps e) :: l).
 Proof.
-move=> Feps Fe en0 Fno etz.
+move=> Feps Fe en0 rn0 Fno etz.
 have Hc : dwh (TwoSum eps e) + dwl (TwoSum eps e) = eps + e.
   by exact: TwoSum_correct_loc Feps Fe.
 have Hr : dwh (TwoSum eps e) = eps + e by move: Hc; rewrite etz; lra.
 have Frr : format (dwh (TwoSum eps e)).
   by rewrite TwoSum_hi; apply: generic_format_round.
-set r := dwh (TwoSum eps e) in Hr Frr *.
-move=> [|i] /= Hi Hn0.
-- have Hll : Rabs (nth 0 l 0) <= / 2 * uls e.
-    by apply: (Fno 1%N); [exact: Hi | exact: en0].
-  have Hue : uls e <= uls r.
-    case: (Req_dec eps 0) => [eps0|epsn0].
-      by rewrite Hr eps0 Rplus_0_l; apply: Rle_refl.
-    have He0 : Rabs e <= / 2 * uls eps by apply: (Fno 0%N).
-    have Hueps : uls e <= uls eps.
-      have Hu0 : 0 < uls eps by apply: uls_gt_0.
-      have Hle : uls e <= Rabs e by apply: uls_le_abs.
-      lra.
-    have gE : uls e = pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e)))).
-      by rewrite /uls; case: Req_bool_spec.
-    have gepsE : uls eps = pow (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps)))).
-      by rewrite /uls; case: Req_bool_spec.
-    have HleZ : (cexp e + Z.of_nat (trZ (Ztrunc (mant e))) <=
-                 cexp eps + Z.of_nat (trZ (Ztrunc (mant eps))))%Z.
-      by apply: (le_bpow beta); rewrite -gE -gepsE.
-    have Hime : is_imul e (pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e))))).
-      by rewrite -gE; exact: uls_imul.
-    have Himeps : is_imul eps (pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e))))).
-      by apply: (is_imul_pow_le _ HleZ); rewrite -gepsE; exact: uls_imul.
-    have Himr : is_imul r (pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e))))).
-      by rewrite Hr; apply: is_imul_add.
-    apply: Rle_trans (is_imul_uls_ge Frr Hn0 Himr).
-    by rewrite gE; apply: Rle_refl.
-  apply: Rle_trans Hll _.
-  by have := Hue; lra.
-by apply: (Fno i.+2); [exact: Hi | exact: Hn0].
+set r := dwh (TwoSum eps e) in Hr Frr rn0 *.
+(* [uls e <= uls r]: [r = eps + e] is a nonzero float on [e]'s grid [uls e].  *)
+have Hue : uls e <= uls r.
+  case: (Req_dec eps 0) => [eps0|epsn0].
+    by rewrite Hr eps0 Rplus_0_l; apply: Rle_refl.
+  have He0 : Rabs e <= / 2 * uls eps by exact: Fnonoverlap_head2 Fno en0.
+  have Hueps : uls e <= uls eps.
+    have Hu0 : 0 < uls eps by apply: uls_gt_0.
+    have Hle : uls e <= Rabs e by apply: uls_le_abs.
+    lra.
+  have gE : uls e = pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e)))).
+    by rewrite /uls; case: Req_bool_spec.
+  have gepsE : uls eps = pow (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps)))).
+    by rewrite /uls; case: Req_bool_spec.
+  have HleZ : (cexp e + Z.of_nat (trZ (Ztrunc (mant e))) <=
+               cexp eps + Z.of_nat (trZ (Ztrunc (mant eps))))%Z.
+    by apply: (le_bpow beta); rewrite -gE -gepsE.
+  have Hime : is_imul e (pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e))))).
+    by rewrite -gE; exact: uls_imul.
+  have Himeps : is_imul eps (pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e))))).
+    by apply: (is_imul_pow_le _ HleZ); rewrite -gepsE; exact: uls_imul.
+  have Himr : is_imul r (pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e))))).
+    by rewrite Hr; apply: is_imul_add.
+  apply: Rle_trans (is_imul_uls_ge Frr rn0 Himr).
+  by rewrite gE; apply: Rle_refl.
+(* Tail carries over from the input, running term [e] weakened to [r].        *)
+by apply: (Fnonoverlap_aux_prev Hue (Fnonoverlap_tail Fno en0)).
 Qed.
 
 (* Reusable block bound (paper Thm 2, geometric argument): the first term     *)
@@ -373,13 +364,15 @@ case: Req_EM_T => [et0|etn0].
   - by move=> z zI; apply: lF; rewrite inE zI orbT.
   (* Fnonoverlap (r :: e2 :: l''): [r] merges [eps, e] exactly (et = 0).      *)
   case: (Req_dec e 0) => [e0|en0]; last first.
-    have H := Fnonoverlap_TwoSum_merge epsF Fe en0 Fno; rewrite E1 /= in H.
-    by apply: H.
-  (* [e = 0] interior zero: the merged high word is [eps] and the goal reduces*)
-  (* to [Fnonoverlap (eps :: e2 :: l'')].  The current interleaving-zeros     *)
-  (* [Fnonoverlap] does NOT relate [e2] to [eps] across the dropped zero, so  *)
-  (* this step needs the zero-free (consecutive-nonzeros) reformulation of    *)
-  (* [Fnonoverlap]; [vsebAux_cons0] justifies the WLOG.  Remaining gap.       *)
+    case: (Req_dec r 0) => [r0|rn0]; last first.
+      have Hdwh : dwh (TwoSum eps e) <> 0 by rewrite E1; exact: rn0.
+      have H := Fnonoverlap_TwoSum_merge epsF Fe en0 Hdwh Fno.
+      by rewrite E1 /= in H; apply: H.
+    (* [r = eps + e = 0] cancellation: the zero remainder is absorbed by the  *)
+    (* recursion (a [vsebAux] zero-remainder step).  Remaining zero-case gap. *)
+    admit.
+  (* [e = 0] interior zero: dropped by [vsebAux_cons0]; reduces to            *)
+  (* [Fnonoverlap (eps :: e2 :: l'')] via the recursive skip.  Remaining gap. *)
   admit.
 (* [et <> 0]: emit [r], recurse on the new remainder [et].                    *)
 have Fet : format et

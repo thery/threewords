@@ -513,40 +513,12 @@ have Herr : forall j, (j.+1 < size l)%N ->
     by apply: IZR_lt.
   - exact: Hrun j jLs.
   - exact: Hemin.
-(* F-nonoverlapping (paper, by contradiction).                                *)
-move=> i iLs Hn0.
-suff : ~ (/ 2 * uls (nth 0 (vecSum l) i) < Rabs (nth 0 (vecSum l) i.+1)) by lra.
-move=> Hover.
-have Hi : (i.+1 < size l)%N by move: iLs; rewrite size_vecSum; case: (size l).
-have He := Herr i Hi.
-(* The paper's key estimate for [e_i = nth 0 (vecSum l) i], SCALE-INVARIANT:  *)
-(*     uls(e_i) >= 4 u 2^(k_i).                                               *)
-(* This is the multiples-of-2u argument of Theorem 1: after the paper's WLOG  *)
-(* scaling [uls(e_i) = u], the [s_j] and [x_0, ..., x_i] are all multiples of *)
-(* 2u, the offending [e_i] (not a multiple of 2u) forces [2^(k_i) <= 1/(4u)]. *)
-(* NB: the earlier intermediate [2^(k_i) <= 1/4] is NOT scale-invariant, hence*)
-(* unprovable alone -- [Hover] is invariant under scaling [l] by a power      *)
-(* of two (every [k_j] shifts and [vecSum] commutes with the scaling) while   *)
-(* [2^(k_i)] is not; only the ratio [uls(e_i) / 2^(k_i)] is pinned down.      *)
-have Hilt : (i < size (vecSum l))%N := ltn_trans (ltnSn i) iLs.
-have Hkey : 4 * u * pow (k i) <= uls (nth 0 (vecSum l) i).
-  (* [4 u 2^(k_i)] is the clean power [2^(k_i+2-p)]; then [is_imul_uls_ge]    *)
-  (* turns the [uls] lower bound into "[e_i] is a multiple of that grid".     *)
-  have -> : 4 * u * pow (k i) = pow (k i + 2 - p).
-    rewrite uE.
-    have -> : (4 : R) = pow 2 by rewrite /= /Z.pow_pos /=; lra.
-    by rewrite -!bpow_plus; congr bpow; lia.
-  apply: is_imul_uls_ge.
-  - by apply: (format_vecSum Hfmt); apply: mem_nth.
-  - exact: Hn0.
-  (* Core (paper's multiples-of-2u argument): the i-th VecSum output lies on  *)
-  (* the coarse grid [2^(k_i+2-p) = 4 u 2^(k_i)].  Its rightmost nonzero bit  *)
-  (* is no finer than [2 G_i]: the fine bits of the running sum are absorbed  *)
-  (* into the high word, and the exponent gaps [k_{j-1} >= k_j + 1] make every*)
-  (* [x_j], [s_j] (j <= i) a multiple of it.  This is the remaining hard step.*)
-  by admit.
-(* [Hover]: |e_{i+1}| > uls(e_i)/2 >= 2u 2^(k_i) >= |e_{i+1}| (Herr): absurd. *)
-by lra.
+(* F-nonoverlapping.  With the recursive (zero-free) [Fnonoverlap], producing *)
+(* it from the index-form bounds [Herr] plus the multiples-of-2u key estimate *)
+(* [uls(e_i) >= 4 u 2^(k_i) = 2^(k_i+2-p)] (via [is_imul_uls_ge]) is the      *)
+(* remaining hard step -- the divisibility core, unrelated to the zero        *)
+(* handling this reformulation addresses.  Left admitted.                     *)
+admit.
 Admitted.
 
 (* The key separation step of Theorem 1.  When [2Sum a s] produces a NONZERO  *)
@@ -578,8 +550,8 @@ have an0 : a <> 0.
   have Hb : RND (a + s) = s by rewrite a0 Rplus_0_l; apply: round_generic.
   by lra.
 have Hle : Rabs (nth 0 es 0) <= / 2 * uls s.
-  apply: (Fses 0%N); last exact: sn0.
-  by rewrite /= ltnS.
+  have H : (1 < size (s :: es))%N by rewrite /= ltnS.
+  exact: (Fnonoverlap_imm Hp2 Fses H sn0).
 have Hulsei : uls s <= uls ei1.
   have -> : ei1 = dwl (TwoSum a s) by rewrite E.
   by apply: (TwoSum_err_uls_ge Fa Fs an0 sn0 Hulsle); rewrite E.
@@ -605,38 +577,11 @@ Lemma vecSum_Fnonoverlap l :
   Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
 Proof.
 move=> lF lM lP; split; last by apply: vecSum_sum.
-rewrite /vecSum.
-elim: l lF lM lP => // a [|b l] // IH ablF ablM ablP.
-have -> : vecSumAux [:: a,  b  & l] =
-          let: (es, s) := vecSumAux (b :: l) in
-          let: DWR si ei1 := TwoSum a s in
-          (ei1 :: es, si) by [].
-case E : (vecSumAux (b :: l)) => [es s].
-case E1 : (TwoSum a s) => [si ei1].
-have sesF :  Fnonoverlap (s :: es).
-  have := IH; rewrite E; apply.
-  - by move=> z zIl; apply: ablF; rewrite inE zIl orbT.
-  - by case: (sorted_mag_cons ablM).
-  by case: (l) ablP => // c l1 /pairwise_ulp_cons[].
-have sF : format s.
-  have := @format_vecSumAux (b :: l).
-  by rewrite E; case => // z zIl; apply: ablF; rewrite inE zIl orbT.
-have aF : format a by apply: ablF; rewrite !inE eqxx.
-move=> [|[|i]] /= iLs Hn0.
-- have :  magnitudeDWR (TwoSum a s).
-    by apply: magnitude_TwoSum.
-  rewrite E1 => /=; rewrite Rmult_comm /Rdiv //.
-  move=> Hm; have H : ulp si <= uls si by apply: ulp_le_ulps.
-  by lra.
-- have Hsz : (0 < size es)%N by move: iLs; case: (size es).
-  (* [uls s <= uls a]: the running high word [s] of the tail sits on a grid   *)
-  (* at least as fine as the coarse head [a].  This is the paper's [k_i]      *)
-  (* exponent argument; not derivable from the simplified [sorted_mag] /      *)
-  (* [pairwise_ulp] inputs alone, so it is the sole remaining gap here.       *)
-  have Huls : uls s <= uls a by admit.
-  have H := Fnonoverlap_head aF sF Huls sesF; rewrite E1 in H.
-  exact: (H Hsz Hn0).
-by apply: (sesF i.+1).
+(* Producing the recursive (zero-free) [Fnonoverlap (vecSum l)] from the      *)
+(* running-sum machinery ([Fnonoverlap_head] + the [uls s <= uls a] exponent  *)
+(* step) is the divisibility core -- unchanged in difficulty by this          *)
+(* reformulation and left admitted (as before, via the [uls s <= uls a] gap). *)
+admit.
 Admitted.
 
 End SecVecSum.

@@ -368,12 +368,25 @@ case: Req_EM_T => [et0|etn0].
       have Hdwh : dwh (TwoSum eps e) <> 0 by rewrite E1; exact: rn0.
       have H := Fnonoverlap_TwoSum_merge epsF Fe en0 Hdwh Fno.
       by rewrite E1 /= in H; apply: H.
-    (* [r = eps + e = 0] cancellation: the zero remainder is absorbed by the  *)
-    (* recursion (a [vsebAux] zero-remainder step).  Remaining zero-case gap. *)
-    admit.
-  (* [e = 0] interior zero: dropped by [vsebAux_cons0]; reduces to            *)
-  (* [Fnonoverlap (eps :: e2 :: l'')] via the recursive skip.  Remaining gap. *)
-  admit.
+    (* [r = eps + e = 0] is impossible: it needs [e = -eps], so [|e| = |eps|],*)
+    (* but F-nonoverlap forces [|e| <= 1/2 uls eps <= 1/2 |eps| < |eps|].     *)
+    have Hsum : r + et = eps + e.
+      have Hcc : dwh (TwoSum eps e) + dwl (TwoSum eps e) = eps + e.
+        by exact: TwoSum_correct_loc epsF Fe.
+      by move: Hcc; rewrite E1 /=.
+    have epsn0 : eps <> 0.
+      by move=> eps0; apply: en0; move: Hsum; rewrite r0 et0 eps0; lra.
+    have Ee : e = - eps by move: Hsum; rewrite r0 et0; lra.
+    have Hb : Rabs e <= / 2 * uls eps by exact: Fnonoverlap_head2 Fno en0.
+    have Hae : Rabs e = Rabs eps by rewrite Ee Rabs_Ropp.
+    have Hule : uls eps <= Rabs eps by apply: uls_le_abs.
+    have Hu0 : 0 < Rabs eps by apply: Rabs_pos_lt.
+    by exfalso; lra.
+  (* [e = 0] interior zero: [r = eps], and the recursive [Fnonoverlap] skips  *)
+  (* the zero, so the invariant transfers directly ([Fnonoverlap_aux_cons0]). *)
+  have Hre : r = eps by rewrite Hr e0 Rplus_0_r; apply: round_generic.
+  rewrite Hre; apply/Fnonoverlap_aux_cons0.
+  by move: Fno; rewrite e0.
 (* [et <> 0]: emit [r], recurse on the new remainder [et].                    *)
 have Fet : format et
   by have H := format_TwoSum epsF Fe; rewrite E1 /= in H; case: H.
@@ -394,7 +407,7 @@ move=> [|i] /= Hi.
   by apply: (Rlt_le_trans _ _ _ Hnext Hulp).
 (* Tail: P-nonoverlap of the recursive output (index shift).                  *)
 by apply: (Hrec i); move: Hi; rewrite ltnS.
-Admitted.
+Qed.
 
 (* Theorem 2 (paper): [vseb e] is P-nonoverlapping with the same sum, given   *)
 (* [e] F-nonoverlapping and [size e <= p + 1].  Sum: [vseb_sum] (VSEB is a    *)

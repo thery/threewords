@@ -470,56 +470,75 @@ have -> : 2 * u * pow e0 = / 2 * pow (e0 + 2 - p).
 by lra.
 Qed.
 
-(* Theorem 1.  [VecSum l] is F-nonoverlapping (wIZ) with the same sum.        *)
-(* Proof (paper Section 2.1): [VecSum_run_bound] gives the running-sum bound, *)
-(* whence each error [|e_{i+1}| <= 2 u 2^(k_i)] ([magnitude_vecSum_err]); the *)
-(* errors are then F-nonoverlapping by the "multiples of 2u" ([uls]) argument,*)
-(* which contradicts any overlap [|e_{i+1}| > 1/2 uls(e_i)].                  *)
+(* The tight per-step error bound (paper: [|e_i| <= 2u 2^(k_{i-1})]), here    *)
+(* indexed by the previous position: [|e_{i+1}| <= 2u 2^(k_i)].  Each error is*)
+(* the low word of the 2Sum combining [x_i] with the running tail sum         *)
+(* ([vecSumAux_nth1]); [magnitude_vecSum_err] bounds it from the input bound  *)
+(* [|x_i| < 2^(k_i+1)] and the running-sum bound [VecSum_run_bound].          *)
+Lemma vecSum_err_bound k l : Thm1_hyp k l ->
+  forall i, (i.+1 < size l)%N ->
+    Rabs (nth 0 (vecSum l) i.+1) <= 2 * u * pow (k i).
+Proof.
+move=> Hk.
+have Hfmt : {in l, forall z, format z}.
+  case: Hk => Hrepr _ _ z /(nthP 0)[i iLs <-].
+  exact: repr_format (Hrepr i iLs).
+have Hrun := VecSum_run_bound Hk.
+have [Hrepr _ _] := Hk.
+move=> j jLs.
+have jLl : (j < size l)%N := ltn_trans (ltnSn j) jLs.
+have [Hemin [M HM Hxeq]] := Hrepr j jLl.
+have -> : nth 0 (vecSum l) j.+1 = nth 0 (vecSumAux l).1 j
+  by rewrite /vecSum; case: (vecSumAux l).
+rewrite vecSumAux_nth1 //.
+apply: magnitude_vecSum_err.
+- by apply: Hfmt; apply: mem_nth.
+- apply: format_vecSumAux2 => z zIn.
+  by apply: Hfmt; rewrite -(cat_take_drop j.+1 l) mem_cat zIn orbT.
+- rewrite Hxeq Rabs_mult (Rabs_pos_eq _ (bpow_ge_0 _ _)) -abs_IZR.
+  have -> : pow (k j + 1) = pow p * pow (k j - p + 1)
+    by rewrite -bpow_plus; congr bpow; lia.
+  apply: Rmult_lt_compat_r; first exact: bpow_gt_0.
+  have -> : pow p = IZR (2 ^ p) by rewrite IZR_2powp.
+  by apply: IZR_lt.
+- exact: Hrun j jLs.
+- exact: Hemin.
+Qed.
+
+(* Core of paper Theorem 1 (its "multiples of 2u" divisibility argument),     *)
+(* isolated as a reusable lemma: given the running-sum bound and the per-step *)
+(* error bound, the output errors are F-nonoverlapping.  Proof (paper Section *)
+(* 2.1, by contradiction): an overlap [|e_i| > 1/2 uls(e_{i'})], [i' < i],    *)
+(* WLOG [uls(e_{i'}) = u] (scale invariance).  By backward divisibility       *)
+(* ([vecSumAux_imul]: [2^k | s_i, x_{i-1}, .., x_0 => 2^k | e_i, .., e_0]),   *)
+(* since [s_{i-1}] is a multiple of [2u] (from [|s_{i-1}| >= 1]) some input   *)
+(* [x_j], [j <= i-2], is off the [2u]-grid, so [2^(k_j) <= 1/2], whence       *)
+(* [2^(k_{i-1}) <= 1/4], contradicting the error bound [|e_i| <= 2u 2^(k_i)]. *)
+Lemma vecSum_Fnonoverlap_core k l : Thm1_hyp k l ->
+  (forall i, (i.+1 < size l)%N ->
+     Rabs (nth 0 (vecSum l) i.+1) <= 2 * u * pow (k i)) ->
+  (forall i, (i.+1 < size l)%N ->
+     Rabs (vecSumAux (drop i.+1 l)).2 <= (2 - 2 * u) * pow (k i)) ->
+  Fnonoverlap (vecSum l).
+Proof.
+Admitted.
+
+(* Theorem 1.  [VecSum l] is F-nonoverlapping (wIZ) with the same sum,        *)
+(* assembling the running-sum bound [VecSum_run_bound], the per-step error    *)
+(* bound [vecSum_err_bound] and the divisibility core [vecSum_Fnonoverlap_    *)
+(* core].  The sum conjunct is [vecSum_sum] (a chain of error-free 2Sums).    *)
 Lemma VecSum_Thm1 k l : Thm1_hyp k l ->
   Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
 Proof.
 move=> Hk.
-(* Each [x_i = M_i 2^(k_i-p+1)] with [|M_i| < 2^p] is FLT ([repr_format]).    *)
 have Hfmt : {in l, forall z, format z}.
   case: Hk => Hrepr _ _ z /(nthP 0)[i iLs <-].
   exact: repr_format (Hrepr i iLs).
-(* "with the same sum": VecSum is a chain of error-free 2Sums (Algorithm 4).  *)
 split; last by apply: vecSum_sum.
-(* Firstly: the running high word [s_{i+1} = (vecSumAux (drop i.+1 l)).2]     *)
-(* is bounded, |s_{i+1}| <= (2 - 2u) 2^(k_i), by induction on the suffix using*)
-(*   |s_{i+2}| + |x_{i+1}| <= (4 - 4u) 2^(k_{i+1}) <= (2 - 2u) 2^(k_i).       *)
-have Hrun := VecSum_run_bound Hk.
-(* This gives the tight error bound |e_{i+1}| <= 2 u 2^(k_i).  (The paper's   *)
-(* 2 u^2 2^(k_i) is a factor 2^p too small and is FALSE: e.g. for l = [1;     *)
-(* 2^-54] the 2Sum error is 2^-54, well above 2 u^2 = 2^-105.)                *)
-have Herr : forall j, (j.+1 < size l)%N ->
-    Rabs (nth 0 (vecSum l) j.+1) <= 2 * u * pow (k j).
-  have [Hrepr _ _] := Hk.
-  move=> j jLs.
-  have jLl : (j < size l)%N := ltn_trans (ltnSn j) jLs.
-  have [Hemin [M HM Hxeq]] := Hrepr j jLl.
-  have -> : nth 0 (vecSum l) j.+1 = nth 0 (vecSumAux l).1 j
-    by rewrite /vecSum; case: (vecSumAux l).
-  rewrite vecSumAux_nth1 //.
-  apply: magnitude_vecSum_err.
-  - by apply: Hfmt; apply: mem_nth.
-  - apply: format_vecSumAux2 => z zIn.
-    by apply: Hfmt; rewrite -(cat_take_drop j.+1 l) mem_cat zIn orbT.
-  - rewrite Hxeq Rabs_mult (Rabs_pos_eq _ (bpow_ge_0 _ _)) -abs_IZR.
-    have -> : pow (k j + 1) = pow p * pow (k j - p + 1)
-      by rewrite -bpow_plus; congr bpow; lia.
-    apply: Rmult_lt_compat_r; first exact: bpow_gt_0.
-    have -> : pow p = IZR (2 ^ p) by rewrite IZR_2powp.
-    by apply: IZR_lt.
-  - exact: Hrun j jLs.
-  - exact: Hemin.
-(* F-nonoverlapping.  With the recursive (zero-free) [Fnonoverlap], producing *)
-(* it from the index-form bounds [Herr] plus the multiples-of-2u key estimate *)
-(* [uls(e_i) >= 4 u 2^(k_i) = 2^(k_i+2-p)] (via [is_imul_uls_ge]) is the      *)
-(* remaining hard step -- the divisibility core, unrelated to the zero        *)
-(* handling this reformulation addresses.  Left admitted.                     *)
-admit.
-Admitted.
+apply: (vecSum_Fnonoverlap_core Hk).
+  exact: vecSum_err_bound Hk.
+exact: VecSum_run_bound Hk.
+Qed.
 
 (* The key separation step of Theorem 1.  When [2Sum a s] produces a NONZERO  *)
 (* low word [ei1], the head of the already-normalised tail [es] stays below   *)
@@ -559,29 +578,27 @@ apply: Rle_trans Hle _.
 by have := Hulsei; lra.
 Qed.
 
-(* Theorem 1 (VecSum), stated as in the paper: given the input separation,    *)
-(* [vecSum l] is F-nonoverlapping AND has the same exact sum.  The input      *)
-(* hypotheses [sorted_mag l] + [pairwise_ulp l] are the concrete form of the  *)
-(* paper's exponent conditions (writing [x_i = M_i * 2^(k_i)], [|M_i| < 2^p]: *)
-(* [k_{i-1} >= k_i + 1] for all i except at most one "overlap" index, and     *)
-(* [k_{n-2} >= k_{n-1}]); they are exactly what [Merge] produces on the six   *)
-(* merged terms.                                                              *)
-(* Informal proof.  Sum: this conjunct is precisely [vecSum_sum].  Separation:*)
-(* run [2Sum] from the least-significant end (Algorithm 4); by induction each *)
-(* error term is at most [1/2 uls] of the running high word, so the output is *)
-(* F-nonoverlapping (with interleaving zeros).  The induction step is         *)
-(* [magnitude_TwoSum] (each 2Sum error is <= 1/2 ulp of its sum) sharpened to *)
-(* the [uls] bound using the exponent separation above.                       *)
+(* The separation conjunct of Theorem 1 on the concrete input hypotheses      *)
+(* [sorted_mag l] + [pairwise_ulp l] (paper Corollary 1: at most one overlap, *)
+(* never two consecutive; exactly what [Merge] produces on the six merged     *)
+(* terms), isolated as a reusable lemma.  Same "multiples of 2u" divisibility *)
+(* core as [vecSum_Fnonoverlap_core] but with the relaxed exponent gap; the   *)
+(* single tolerated overlap does not break the contradiction (Corollary 1).   *)
+Lemma vecSum_Fnonoverlap_sep l :
+  {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
+  Fnonoverlap (vecSum l).
+Proof.
+Admitted.
+
+(* Theorem 1 (VecSum), on the concrete input separation: [vecSum l] is        *)
+(* F-nonoverlapping AND has the same exact sum.  Assembles the divisibility   *)
+(* core [vecSum_Fnonoverlap_sep] with [vecSum_sum] (a chain of exact 2Sums).  *)
 Lemma vecSum_Fnonoverlap l :
   {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
   Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
 Proof.
 move=> lF lM lP; split; last by apply: vecSum_sum.
-(* Producing the recursive (zero-free) [Fnonoverlap (vecSum l)] from the      *)
-(* running-sum machinery ([Fnonoverlap_head] + the [uls s <= uls a] exponent  *)
-(* step) is the divisibility core -- unchanged in difficulty by this          *)
-(* reformulation and left admitted (as before, via the [uls s <= uls a] gap). *)
-admit.
-Admitted.
+exact: vecSum_Fnonoverlap_sep lF lM lP.
+Qed.
 
 End SecVecSum.

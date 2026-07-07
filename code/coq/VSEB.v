@@ -273,12 +273,53 @@ Qed.
 
 (* Reusable step lemma (the [et = 0] branch): when [2Sum eps e] is exact      *)
 (* ([dwl = 0], so [dwh = eps + e] merges them), prepending the merged high    *)
-(* word to the tail keeps F-nonoverlap.                                       *)
+(* word to the tail keeps F-nonoverlap.  Needs [e <> 0] (the paper's zero-free*)
+(* convention -- a zero [e] is dropped by [vsebAux_cons0] before this fires). *)
+(* The tail carries over from the input directly; the only new obligation is  *)
+(* the head bound [|nth l 0| <= 1/2 uls (eps + e)], which follows from        *)
+(* [|nth l 0| <= 1/2 uls e] and [uls e <= uls (eps + e)]: [eps + e] is a      *)
+(* nonzero float lying on [e]'s grid ([uls e]), so [is_imul_uls_ge] lifts it. *)
 Lemma Fnonoverlap_TwoSum_merge eps e l :
-  format eps -> format e -> Fnonoverlap [:: eps, e & l] ->
+  format eps -> format e -> e <> 0 -> Fnonoverlap [:: eps, e & l] ->
   dwl (TwoSum eps e) = 0 -> Fnonoverlap (dwh (TwoSum eps e) :: l).
 Proof.
-Admitted.
+move=> Feps Fe en0 Fno etz.
+have Hc : dwh (TwoSum eps e) + dwl (TwoSum eps e) = eps + e.
+  by exact: TwoSum_correct_loc Feps Fe.
+have Hr : dwh (TwoSum eps e) = eps + e by move: Hc; rewrite etz; lra.
+have Frr : format (dwh (TwoSum eps e)).
+  by rewrite TwoSum_hi; apply: generic_format_round.
+set r := dwh (TwoSum eps e) in Hr Frr *.
+move=> [|i] /= Hi Hn0.
+- have Hll : Rabs (nth 0 l 0) <= / 2 * uls e.
+    by apply: (Fno 1%N); [exact: Hi | exact: en0].
+  have Hue : uls e <= uls r.
+    case: (Req_dec eps 0) => [eps0|epsn0].
+      by rewrite Hr eps0 Rplus_0_l; apply: Rle_refl.
+    have He0 : Rabs e <= / 2 * uls eps by apply: (Fno 0%N).
+    have Hueps : uls e <= uls eps.
+      have Hu0 : 0 < uls eps by apply: uls_gt_0.
+      have Hle : uls e <= Rabs e by apply: uls_le_abs.
+      lra.
+    have gE : uls e = pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e)))).
+      by rewrite /uls; case: Req_bool_spec.
+    have gepsE : uls eps = pow (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps)))).
+      by rewrite /uls; case: Req_bool_spec.
+    have HleZ : (cexp e + Z.of_nat (trZ (Ztrunc (mant e))) <=
+                 cexp eps + Z.of_nat (trZ (Ztrunc (mant eps))))%Z.
+      by apply: (le_bpow beta); rewrite -gE -gepsE.
+    have Hime : is_imul e (pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e))))).
+      by rewrite -gE; exact: uls_imul.
+    have Himeps : is_imul eps (pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e))))).
+      by apply: (is_imul_pow_le _ HleZ); rewrite -gepsE; exact: uls_imul.
+    have Himr : is_imul r (pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e))))).
+      by rewrite Hr; apply: is_imul_add.
+    apply: Rle_trans (is_imul_uls_ge Frr Hn0 Himr).
+    by rewrite gE; apply: Rle_refl.
+  apply: Rle_trans Hll _.
+  by have := Hue; lra.
+by apply: (Fno i.+2); [exact: Hi | exact: Hn0].
+Qed.
 
 (* Reusable block bound (paper Thm 2, geometric argument): the first term     *)
 (* emitted by VSEB from a nonzero remainder [eps] over an F-nonoverlap tail   *)
@@ -331,8 +372,15 @@ case: Req_EM_T => [et0|etn0].
   - by rewrite Hr; apply: generic_format_round.
   - by move=> z zI; apply: lF; rewrite inE zI orbT.
   (* Fnonoverlap (r :: e2 :: l''): [r] merges [eps, e] exactly (et = 0).      *)
-  have H := Fnonoverlap_TwoSum_merge epsF Fe Fno; rewrite E1 /= in H.
-  by apply: H.
+  case: (Req_dec e 0) => [e0|en0]; last first.
+    have H := Fnonoverlap_TwoSum_merge epsF Fe en0 Fno; rewrite E1 /= in H.
+    by apply: H.
+  (* [e = 0] interior zero: the merged high word is [eps] and the goal reduces*)
+  (* to [Fnonoverlap (eps :: e2 :: l'')].  The current interleaving-zeros     *)
+  (* [Fnonoverlap] does NOT relate [e2] to [eps] across the dropped zero, so  *)
+  (* this step needs the zero-free (consecutive-nonzeros) reformulation of    *)
+  (* [Fnonoverlap]; [vsebAux_cons0] justifies the WLOG.  Remaining gap.       *)
+  admit.
 (* [et <> 0]: emit [r], recurse on the new remainder [et].                    *)
 have Fet : format et
   by have H := format_TwoSum epsF Fe; rewrite E1 /= in H; case: H.
@@ -353,7 +401,7 @@ move=> [|i] /= Hi.
   by apply: (Rlt_le_trans _ _ _ Hnext Hulp).
 (* Tail: P-nonoverlap of the recursive output (index shift).                  *)
 by apply: (Hrec i); move: Hi; rewrite ltnS.
-Qed.
+Admitted.
 
 (* Theorem 2 (paper): [vseb e] is P-nonoverlapping with the same sum, given   *)
 (* [e] F-nonoverlapping and [size e <= p + 1].  Sum: [vseb_sum] (VSEB is a    *)

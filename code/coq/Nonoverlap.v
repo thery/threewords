@@ -214,14 +214,105 @@ Qed.
 (* restrictive than Shewchuk's ulp-nonoverlapping); it is the invariant that  *)
 (* VecSum establishes (Thm 1) and that VSEB consumes (Thm 2) to yield a       *)
 (* P-nonoverlapping output.                                                   *)
-(* This is the "with interleaving zeros" form (paper Def. 3): the bound is    *)
-(* required only across a NONZERO predecessor [nth 0 l i <> 0], so a zero     *)
-(* error term (e.g. an exact [2Sum]) imposes no constraint on its successor.  *)
-(* Without this guard the statement is false: at a zero predecessor the RHS   *)
-(* would be [/2 * uls 0 = 2^(emin-1)], unreachable by a normal-sized term.    *)
+(* Zero-free reading (paper Def. 3, "WLOG no zeros"): each NONZERO term is at *)
+(* most half the [uls] of the PREVIOUS nonzero term.  Formalised by carrying  *)
+(* the last nonzero as [prev] and skipping zeros -- a zero imposes no         *)
+(* constraint yet cannot shield a large successor, since the bound is against *)
+(* the last nonzero, not the immediate predecessor.  (The old immediate-      *)
+(* predecessor guard was too weak: it accepted [1; 0; 1.5].)                  *)
+Fixpoint Fnonoverlap_aux (prev : R) (l : seq R) : Prop :=
+  if l is x :: l' then
+    (x <> 0 -> Rabs x <= / 2 * uls prev) /\
+    Fnonoverlap_aux (if Req_EM_T x 0 then prev else x) l'
+  else True.
+
 Definition Fnonoverlap (l : seq R) : Prop :=
+  if l is x :: l' then Fnonoverlap_aux x l' else True.
+
+(* A zero next element is skipped (the vacuous conjunct drops, [prev] stays). *)
+Lemma Fnonoverlap_aux_cons0 prev l :
+  Fnonoverlap_aux prev (0 :: l) <-> Fnonoverlap_aux prev l.
+Proof.
+have E0 : (if Req_EM_T (0 : R) 0 then prev else 0) = prev.
+  by case: (Req_EM_T 0 0) => [_|H] //; case: (H erefl).
+rewrite /= E0; split; first by move=> [_ H].
+move=> H; split; last exact: H.
+by move=> H0; case: (H0 erefl).
+Qed.
+
+(* Prepend a nonzero [x] bounded by [1/2 uls prev].                           *)
+Lemma Fnonoverlap_aux_consN prev x l :
+  x <> 0 -> Rabs x <= / 2 * uls prev -> Fnonoverlap_aux x l ->
+  Fnonoverlap_aux prev (x :: l).
+Proof.
+move=> xn0 xB Hl.
+have Ex : (if Req_EM_T x 0 then prev else x) = x.
+  by case: (Req_EM_T x 0) => [xe0|_] //; case: (xn0 xe0).
+rewrite /= Ex; split; last exact: Hl.
+by move=> _; exact: xB.
+Qed.
+
+(* [prev] enters only through [uls prev], monotonically: coarsening [prev]    *)
+(* ([uls prev <= uls prev']) preserves [Fnonoverlap_aux].  Used by the VSEB   *)
+(* step lemmas, where the running term is replaced by a coarser one.          *)
+Lemma Fnonoverlap_aux_prev prev prev' l :
+  uls prev <= uls prev' -> Fnonoverlap_aux prev l -> Fnonoverlap_aux prev' l.
+Proof.
+elim: l prev prev' => [|x l IH] prev prev' Hle //= [Hx Hrec]; split.
+  by move=> xn0; apply: Rle_trans (Hx xn0) _; lra.
+have [xe0|xne0] := Req_dec x 0.
+  have E : forall v : R, (if Req_EM_T x 0 then v else x) = v.
+    by move=> v; case: (Req_EM_T x 0) => [_|H] //; case: (H xe0).
+  by rewrite !E in Hrec *; apply: IH Hrec.
+have E : forall v : R, (if Req_EM_T x 0 then v else x) = x.
+  by move=> v; case: (Req_EM_T x 0) => [xe0|_] //; case: (xne0 xe0).
+by rewrite !E in Hrec *; apply: (IH x x) Hrec; apply: Rle_refl.
+Qed.
+
+(* Recover the immediate-successor bound (old guard form) from the recursive  *)
+(* definition: for a nonzero [nth i], the next term is [<= 1/2 uls (nth i)].  *)
+Lemma Fnonoverlap_aux_imm prev l i :
+  Fnonoverlap_aux prev l -> (i.+1 < size l)%N -> nth 0 l i <> 0 ->
+  Rabs (nth 0 l i.+1) <= / 2 * uls (nth 0 l i).
+Proof.
+elim: l prev i => [|x l IH] prev i //= [Hx Htl].
+case: i => [|i]; last by move=> Hi Hn0; apply: (IH _ i Htl).
+case: l IH Htl => [|y l'] IH //= Htl _ xn0.
+have E : (if Req_EM_T x 0 then prev else x) = x.
+  by case: (Req_EM_T x 0) => [xe0|_] //; case: (xn0 xe0).
+rewrite E /= in Htl; case: Htl => Hy _.
+have [ye0|yne0] := Req_dec y 0; last by apply: Hy.
+rewrite ye0 Rabs_R0; have : 0 < uls x by apply: uls_gt_0.
+lra.
+Qed.
+
+(* Head bound: the second element is at most [1/2 uls] of the first.          *)
+Lemma Fnonoverlap_head2 a b l :
+  Fnonoverlap (a :: b :: l) -> b <> 0 -> Rabs b <= / 2 * uls a.
+Proof. by move=> [H _]. Qed.
+
+(* Drop the [eps, e] prefix: the tail keeps [Fnonoverlap_aux] with [prev = e] *)
+(* (when [e <> 0]).                                                           *)
+Lemma Fnonoverlap_tail a b l :
+  Fnonoverlap (a :: b :: l) -> b <> 0 -> Fnonoverlap_aux b l.
+Proof.
+move=> Fab bn0; have E : (if Req_EM_T b 0 then a else b) = b.
+  by case: (Req_EM_T b 0) => [be0|_] //; case: (bn0 be0).
+by move: Fab; rewrite /= E => -[_].
+Qed.
+
+Lemma Fnonoverlap_imm l : Fnonoverlap l ->
   forall i, (i.+1 < size l)%N -> nth 0 l i <> 0 ->
     Rabs (nth 0 l i.+1) <= / 2 * uls (nth 0 l i).
+Proof.
+case: l => // x l Hl [|i] /=; last first.
+  by move=> Hi Hn0; apply: (Fnonoverlap_aux_imm Hl Hi Hn0).
+case: l Hl => [|y l'] //= Hl _ _.
+case: Hl => Hy _.
+have [ye0|yne0] := Req_dec y 0; last by apply: Hy.
+rewrite ye0 Rabs_R0; have Hu : 0 < uls x by apply: uls_gt_0.
+lra.
+Qed.
 
 (* A prefix of a P-nonoverlapping sequence is P-nonoverlapping.  Since        *)
 (* [vsebK k = take k \o vseb], this is what turns "VSEB is P-nonoverlapping"  *)

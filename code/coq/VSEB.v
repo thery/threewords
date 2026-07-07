@@ -312,10 +312,42 @@ have Hue : uls e <= uls r.
 by apply: (Fnonoverlap_aux_prev Hue (Fnonoverlap_tail Fno en0)).
 Qed.
 
-(* Reusable block bound (paper Thm 2, geometric argument): the first term     *)
-(* emitted by VSEB from a nonzero remainder [eps] over an F-nonoverlap tail   *)
-(* has magnitude [< 2 |eps|].  [|r_i| <= |eps|(1 + u + u^2 + ...) < 2|eps|];  *)
-(* the [size l < p] hypothesis keeps the geometric sum below [2].             *)
+(* Strengthened block bound: for ANY float [B] with [|eps| + sum|tail| <= B], *)
+(* the emitted head satisfies [|head| <= B].  The exact merges ([et = 0], so  *)
+(* [r = eps + e]) recurse; the rounded emits/terminal use                     *)
+(* [abs_round_le_generic] -- a float [B] bounding the exact value bounds its  *)
+(* rounding too.  This is the engine behind the paper's block estimate.       *)
+Lemma vsebAux_head_leB B eps l :
+  format eps -> {in l, forall z, format z} -> format B ->
+  Rabs eps + sumRabs l <= B ->
+  Rabs (nth 0 (vsebAux eps l) 0) <= B.
+Proof.
+elim: l eps => [|e l IH] eps epsF lF FB Hb; first by move: Hb; rewrite /=; lra.
+have eF : format e by apply: lF; rewrite inE eqxx.
+have Hepse : Rabs (eps + e) <= B.
+  by apply: Rle_trans Hb; rewrite /=; have := sumRabs_ge0 l; split_Rabs; lra.
+have Hr : dwh (TwoSum eps e) = RND (eps + e) by rewrite TwoSum_hi.
+case: l IH lF Hb => [|e2 l'] IH lF Hb.
+  rewrite vsebAux_1; case E1 : (TwoSum eps e) => [y0 y1] /=.
+  have Hy0 : y0 = RND (eps + e) by move: Hr; rewrite E1.
+  by rewrite Hy0; apply: abs_round_le_generic.
+rewrite vsebAux_consS; case E1 : (TwoSum eps e) => [r et].
+have Hrr : r = RND (eps + e) by move: Hr; rewrite E1.
+case: Req_EM_T => [et0|etn0]; last first.
+  by rewrite /= Hrr; apply: abs_round_le_generic.
+have re : r = eps + e.
+  have Cc : dwh (TwoSum eps e) + dwl (TwoSum eps e) = eps + e
+    by exact: TwoSum_correct_loc epsF eF.
+  by move: Cc; rewrite E1 /= et0 Rplus_0_r.
+apply: IH.
+- by rewrite Hrr; apply: generic_format_round.
+- by move=> z zi; apply: lF; rewrite inE zi orbT.
+- exact: FB.
+by rewrite re; apply: Rle_trans Hb; rewrite /=; split_Rabs; lra.
+Qed.
+
+(* Reusable block bound (paper Thm 2): the first term emitted by VSEB from a  *)
+(* nonzero remainder [eps] over an F-nonoverlap tail has magnitude [< 2|eps|].*)
 Lemma vsebAux_head_lt eps l :
   (Z.of_nat (size l).+1 <= p + 1)%Z ->
   format eps -> {in l, forall z, format z} -> Fnonoverlap (eps :: l) ->

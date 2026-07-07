@@ -53,6 +53,19 @@ Qed.
 (* Sum of a sequence, used to state exactness of the building blocks.         *)
 Fixpoint sumR (l : seq R) : R := if l is a :: l' then a + sumR l' else 0.
 
+(* Sum of absolute values, for the VSEB block bound (Theorem 2).              *)
+Fixpoint sumRabs (l : seq R) : R :=
+  if l is a :: l' then Rabs a + sumRabs l' else 0.
+
+Lemma sumRabs_ge0 l : 0 <= sumRabs l.
+Proof. elim: l => /= [|a l IH]; first lra. by have := Rabs_pos a; lra. Qed.
+
+Lemma abs_sumR_le l : Rabs (sumR l) <= sumRabs l.
+Proof.
+elim: l => /= [|a l IH]; first by rewrite Rabs_R0; lra.
+by apply: Rle_trans (Rabs_triang _ _) _; lra.
+Qed.
+
 (* P-nonoverlapping (Priest, Definition 1): |x_{i+1}| < ulp (x_i).            *)
 Definition Pnonoverlap (l : seq R) : Prop :=
   forall i, (i.+1 < size l)%N -> Rabs (nth 0 l i.+1) < ulp (nth 0 l i).
@@ -312,6 +325,39 @@ case: Hl => Hy _.
 have [ye0|yne0] := Req_dec y 0; last by apply: Hy.
 rewrite ye0 Rabs_R0; have Hu : 0 < uls x by apply: uls_gt_0.
 lra.
+Qed.
+
+(* VSEB block sum bound (Theorem 2): the terms after the remainder [prev]     *)
+(* contribute at most [uls prev] in total, decaying geometrically.  Each      *)
+(* nonzero head [x] has [|x| <= 1/2 uls prev] and [uls x <= |x|], so          *)
+(* [|x| + (tail bound relative to uls x)] telescopes to [uls prev(1 - 2^-s)]. *)
+Lemma Fnonoverlap_aux_sumRabs prev l :
+  Fnonoverlap_aux prev l -> {in l, forall z, format z} ->
+  sumRabs l <= uls prev * (1 - (/ 2) ^ (size l)).
+Proof.
+elim: l prev => [|x l IH] prev; first by move=> _ _ /=; lra.
+move=> Hf xlF.
+have xF : format x by apply: xlF; rewrite inE eqxx.
+have lF : {in l, forall z, format z}.
+  by move=> z zl; apply: xlF; rewrite inE zl orbT.
+have Hup : 0 < uls prev by apply: uls_gt_0.
+have Hd0 : 0 < (/ 2) ^ (size l) by apply: pow_lt; lra.
+have Hd1 : (/ 2) ^ (size l) <= 1.
+  by rewrite -(pow1 (size l)); apply: pow_incr; lra.
+have [xe0|xne0] := Req_dec x 0.
+  rewrite /= xe0 Rabs_R0 Rplus_0_l.
+  have Hrec : Fnonoverlap_aux prev l.
+    by move: Hf; rewrite xe0 => /Fnonoverlap_aux_cons0.
+  by apply: Rle_trans (IH prev Hrec lF) _; nra.
+rewrite /=.
+have Hx : Rabs x <= / 2 * uls prev by move: Hf => [/(_ xne0)].
+have Ex : (if Req_EM_T x 0 then prev else x) = x.
+  by case: (Req_EM_T x 0) => [xe0|_] //; case: (xne0 xe0).
+have Hrec : Fnonoverlap_aux x l by move: Hf => [_]; rewrite Ex.
+have Hux : uls x <= Rabs x by apply: uls_le_abs.
+apply: Rle_trans (_ : Rabs x + uls x * (1 - (/ 2) ^ (size l)) <= _).
+  by have := IH x Hrec lF; lra.
+by nra.
 Qed.
 
 (* A prefix of a P-nonoverlapping sequence is P-nonoverlapping.  Since        *)

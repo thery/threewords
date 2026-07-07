@@ -8,7 +8,7 @@
 From Stdlib Require Import ZArith Reals Psatz.
 From mathcomp Require Import all_ssreflect all_algebra.
 From Flocq Require Import Core Relative Sterbenz Operations Mult_error.
-Require Import Nmore Rmore Fmore Rstruct MULTmore prelim.
+Require Import Nmore Rmore Fmore Rstruct MULTmore prelim TwoSum.
 From Flocq Require Import Pff.Pff2Flocq.
 Require Import Uls.
 Require Import TwoSum.
@@ -66,6 +66,9 @@ Local Notation magnitudeDWR := (magnitudeDWR p emin).
 Local Notation format_TwoSum := (format_TwoSum Hp2 choice).
 Local Notation TwoSum_correct_loc :=
   (TwoSum_correct_loc Hp2 emin_le_0 choice_sym).
+Local Notation dwh_TwoSum_r0 := (@dwh_TwoSum_r0 p emin choice).
+Local Notation dwl_TwoSum_r0 := 
+  (dwl_TwoSum_r0 Hp2 emin_le_0 choice_sym).
 Local Notation magnitude_TwoSum :=
   (magnitude_TwoSum Hp2 emin_le_0 choice_sym).
 Local Notation TwoSum_err_imul := (TwoSum_err_imul Hp2 emin_le_0 choice_sym).
@@ -85,6 +88,10 @@ Local Notation small_head_zero := (@small_head_zero p emin Hp2).
 Local Notation sumR_ufp_bound := (@sumR_ufp_bound p emin Hp2).
 Local Notation nth_step_zero := (@nth_step_zero p emin Hp2).
 Local Notation Fnonoverlap_imm := (Fnonoverlap_imm Hp2).
+Local Notation Fnonoverlap_TwoSum_merge := 
+  (Fnonoverlap_TwoSum_merge Hp2 emin_le_0 choice_sym).
+Local Notation Fnonoverlap_TwoSum_err :=
+  (Fnonoverlap_TwoSum_err Hp2 emin_le_0 choice_sym). 
 
 (* ===========================================================================*)
 (*  Algorithm 5: VecSumErrBranch (VSEB)                                       *)
@@ -207,22 +214,10 @@ Qed.
 (* least as coarse as [e] ([uls e <= uls et], by [TwoSum_err_uls_ge]), so     *)
 (* prepending [et] to the tail [l] keeps F-nonoverlap.  This re-establishes   *)
 (* the VSEB invariant when a term is emitted.                                 *)
-(* Zero absorption -- the formal content of the paper's "WLOG the list has no *)
-(* zeros".  A zero next term is an exact [2Sum] ([dwh = eps], [dwl = 0]), so  *)
+(* Zero absorption - the formal content of the paper's "WLOG the list has no" *)
+(* "zeros". A zero next term is an exact [2Sum] ([dwh = eps], [dwl = 0]), so  *)
 (* [vsebAux] carries the remainder on and emits nothing: it silently drops the*)
 (* zero.  Hence the VSEB analysis may assume a zero-free list.                *)
-Lemma dwh_TwoSum_r0 eps : format eps -> dwh (TwoSum eps 0) = eps.
-Proof. by move=> Feps; rewrite TwoSum_hi Rplus_0_r round_generic. Qed.
-
-Lemma dwl_TwoSum_r0 eps : format eps -> dwl (TwoSum eps 0) = 0.
-Proof.
-move=> Feps.
-have F0 : format 0 by apply: generic_format_0.
-have Hc : dwh (TwoSum eps 0) + dwl (TwoSum eps 0) = eps + 0.
-  by exact: TwoSum_correct_loc Feps F0.
-by move: Hc; rewrite dwh_TwoSum_r0 //; lra.
-Qed.
-
 Lemma vsebAux_cons0 eps e l :
   format eps -> vsebAux eps (0 :: e :: l) = vsebAux eps (e :: l).
 Proof.
@@ -230,86 +225,6 @@ move=> Feps; rewrite vsebAux_consS; case E : (TwoSum eps 0) => [r et].
 have -> : et = 0 by have := dwl_TwoSum_r0 Feps; rewrite E.
 have -> : r = eps by have := dwh_TwoSum_r0 Feps; rewrite E.
 by case: (Req_EM_T 0 0) => [_|H] //; case: (H erefl).
-Qed.
-
-Lemma Fnonoverlap_TwoSum_err eps e l :
-  format eps -> format e -> Fnonoverlap [:: eps, e & l] ->
-  dwl (TwoSum eps e) <> 0 -> Fnonoverlap (dwl (TwoSum eps e) :: l).
-Proof.
-move=> Feps Fe Fno etn0.
-have Hc : dwh (TwoSum eps e) + dwl (TwoSum eps e) = eps + e.
-  by exact: TwoSum_correct_loc Feps Fe.
-have Het : RND (eps + e) + dwl (TwoSum eps e) = eps + e.
-  by move: Hc; rewrite TwoSum_hi.
-(* A zero operand rounds exactly, leaving [dwl = 0]; so both are nonzero.     *)
-have epsn0 : eps <> 0.
-  move=> eps0; apply: etn0.
-  have HR : RND (eps + e) = e by rewrite eps0 Rplus_0_l; apply: round_generic.
-  by lra.
-have en0 : e <> 0.
-  move=> e0; apply: etn0.
-  have HR : RND (eps + e) = eps by rewrite e0 Rplus_0_r; apply: round_generic.
-  by lra.
-(* [|e| <= 1/2 uls eps] and [uls e <= |e|] give [uls e <= uls eps], so the    *)
-(* error inherits at least [e]'s grid: [uls e <= uls (dwl (TwoSum eps e))].   *)
-have He2 : Rabs e <= / 2 * uls eps by exact: Fnonoverlap_head2 Fno en0.
-have Hueps : uls e <= uls eps.
-  have Hule : uls e <= Rabs e by apply: uls_le_abs.
-  have Hu0 : 0 < uls eps by apply: uls_gt_0.
-  by lra.
-have Huet : uls e <= uls (dwl (TwoSum eps e)).
-  by apply: (TwoSum_err_uls_ge Feps Fe epsn0 en0 Hueps).
-(* The tail [l] carries over from the input (drop [eps, e]), with the running *)
-(* term [e] weakened to the coarser error ([uls e <= uls (dwl ..)]).          *)
-by apply: (Fnonoverlap_aux_prev Huet (Fnonoverlap_tail Fno en0)).
-Qed.
-
-(* Reusable step lemma (the [et = 0] branch): when [2Sum eps e] is exact      *)
-(* ([dwl = 0], so [dwh = eps + e] merges them), prepending the merged high    *)
-(* word to the tail keeps F-nonoverlap.  Needs [e <> 0] (the paper's zero-free*)
-(* convention -- a zero [e] is dropped by [vsebAux_cons0] before this fires). *)
-(* The tail carries over from the input directly; the only new obligation is  *)
-(* the head bound [|nth l 0| <= 1/2 uls (eps + e)], which follows from        *)
-(* [|nth l 0| <= 1/2 uls e] and [uls e <= uls (eps + e)]: [eps + e] is a      *)
-(* nonzero float lying on [e]'s grid ([uls e]), so [is_imul_uls_ge] lifts it. *)
-Lemma Fnonoverlap_TwoSum_merge eps e l :
-  format eps -> format e -> e <> 0 -> dwh (TwoSum eps e) <> 0 ->
-  Fnonoverlap [:: eps, e & l] ->
-  dwl (TwoSum eps e) = 0 -> Fnonoverlap (dwh (TwoSum eps e) :: l).
-Proof.
-move=> Feps Fe en0 rn0 Fno etz.
-have Hc : dwh (TwoSum eps e) + dwl (TwoSum eps e) = eps + e.
-  by exact: TwoSum_correct_loc Feps Fe.
-have Hr : dwh (TwoSum eps e) = eps + e by move: Hc; rewrite etz; lra.
-have Frr : format (dwh (TwoSum eps e)).
-  by rewrite TwoSum_hi; apply: generic_format_round.
-set r := dwh (TwoSum eps e) in Hr Frr rn0 *.
-(* [uls e <= uls r]: [r = eps + e] is a nonzero float on [e]'s grid [uls e].  *)
-have Hue : uls e <= uls r.
-  case: (Req_dec eps 0) => [eps0|epsn0].
-    by rewrite Hr eps0 Rplus_0_l; apply: Rle_refl.
-  have He0 : Rabs e <= / 2 * uls eps by exact: Fnonoverlap_head2 Fno en0.
-  have Hueps : uls e <= uls eps.
-    have Hu0 : 0 < uls eps by apply: uls_gt_0.
-    have Hle : uls e <= Rabs e by apply: uls_le_abs.
-    lra.
-  have gE : uls e = pow (cexp e + trN (Ztrunc (mant e))).
-    by rewrite /uls; case: Req_bool_spec.
-  have gepsE : uls eps = pow (cexp eps + trN (Ztrunc (mant eps))).
-    by rewrite /uls; case: Req_bool_spec.
-  have HleZ : (cexp e + trN (Ztrunc (mant e)) <=
-               cexp eps + trN (Ztrunc (mant eps)))%Z.
-    by apply: (le_bpow beta); rewrite -gE -gepsE.
-  have Hime : is_imul e (pow (cexp e + trN (Ztrunc (mant e)))).
-    by rewrite -gE; exact: uls_imul.
-  have Himeps : is_imul eps (pow (cexp e + trN (Ztrunc (mant e)))).
-    by apply: (is_imul_pow_le _ HleZ); rewrite -gepsE; exact: uls_imul.
-  have Himr : is_imul r (pow (cexp e + trN (Ztrunc (mant e)))).
-    by rewrite Hr; apply: is_imul_add.
-  apply: Rle_trans (is_imul_uls_ge Frr rn0 Himr).
-  by rewrite gE; apply: Rle_refl.
-(* Tail carries over from the input, running term [e] weakened to [r].        *)
-by apply: (Fnonoverlap_aux_prev Hue (Fnonoverlap_tail Fno en0)).
 Qed.
 
 (* Strengthened block bound: for ANY float [B] with [|eps| + sum|tail| <= B], *)

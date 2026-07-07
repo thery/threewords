@@ -208,8 +208,8 @@ rewrite E1 /= in Hc.
 lra.
 Qed.
 
-(* Divisibility propagation -- the induction step of paper Thm 1 ("if         *)
-(* 2^k | s_i, x_{i-1}, ..., x_0 then 2^k | e_i, ..., e_0").  If every input   *)
+(* Divisibility propagation -- the induction step of paper Thm 1 ("if"        *)
+(* "2^k | s_i, x_{i-1}, ..., x_0 then 2^k | e_i, ..., e_0"). If every input   *)
 (* lies on the grid [pow e], so does the running high word and every error:   *)
 (* [2Sum] preserves it, the rounded sum via [is_imul_pow_round] and the exact *)
 (* error via [is_imul_minus].  [format] is only used for the error identity.  *)

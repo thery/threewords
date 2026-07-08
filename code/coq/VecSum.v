@@ -505,15 +505,32 @@ apply: magnitude_vecSum_err.
 - exact: Hemin.
 Qed.
 
-(* Core of paper Theorem 1 (its "multiples of 2u" divisibility argument),     *)
-(* isolated as a reusable lemma: given the running-sum bound and the per-step *)
-(* error bound, the output errors are F-nonoverlapping.  Proof (paper Section *)
-(* 2.1, by contradiction): an overlap [|e_i| > 1/2 uls(e_{i'})], [i' < i],    *)
-(* WLOG [uls(e_{i'}) = u] (scale invariance).  By backward divisibility       *)
-(* ([vecSumAux_imul]: [2^k | s_i, x_{i-1}, .., x_0 => 2^k | e_i, .., e_0]),   *)
-(* since [s_{i-1}] is a multiple of [2u] (from [|s_{i-1}| >= 1]) some input   *)
-(* [x_j], [j <= i-2], is off the [2u]-grid, so [2^(k_j) <= 1/2], whence       *)
-(* [2^(k_{i-1}) <= 1/4], contradicting the error bound [|e_i| <= 2u 2^(k_i)]. *)
+(* The paper's separation estimate, in pure index form (the whole content of  *)
+(* Theorem 1 once the [Fnonoverlap] recursion is peeled off by                *)
+(* [Fnonoverlap_allpairs]): for the VecSum output [e_0 = s_0, e_1, ...], every*)
+(* term is at most [1/2 uls] of every earlier nonzero term.  Proof (paper     *)
+(* Section 2.1, by contradiction): an overlap [|e_i| > 1/2 uls(e_{i'})],      *)
+(* [i' < i], WLOG [uls(e_{i'}) = u] (scale invariance).  By backward          *)
+(* divisibility ([vecSumAux_imul]: [2^k | s_i, x_{i-1}, .., x_0 =>            *)
+(* 2^k | e_i, .., e_0]), since [s_{i-1}] is a multiple of [2u] (from          *)
+(* [|s_{i-1}| >= 1]) some input [x_j], [j <= i-2], is off the [2u]-grid, so   *)
+(* [2^(k_j) <= 1/2], whence [2^(k_{i-1}) <= 1/4], contradicting the error     *)
+(* bound [|e_i| <= 2u 2^(k_i)].                                               *)
+Lemma vecSum_sep k l : Thm1_hyp k l ->
+  (forall i, (i.+1 < size l)%N ->
+     Rabs (nth 0 (vecSum l) i.+1) <= 2 * u * pow (k i)) ->
+  (forall i, (i.+1 < size l)%N ->
+     Rabs (vecSumAux (drop i.+1 l)).2 <= (2 - 2 * u) * pow (k i)) ->
+  forall i j, (i < j)%N -> (j < size (vecSum l))%N ->
+    nth 0 (vecSum l) i <> 0 ->
+    Rabs (nth 0 (vecSum l) j) <= / 2 * uls (nth 0 (vecSum l) i).
+Proof.
+Admitted.
+
+(* Core of paper Theorem 1: the VecSum output is F-nonoverlapping, given the  *)
+(* running-sum and per-step error bounds.  With the paper-faithful (wIZ)      *)
+(* [Fnonoverlap], this is exactly the all-pairs separation [vecSum_sep] fed   *)
+(* through [Fnonoverlap_allpairs].                                            *)
 Lemma vecSum_Fnonoverlap_core k l : Thm1_hyp k l ->
   (forall i, (i.+1 < size l)%N ->
      Rabs (nth 0 (vecSum l) i.+1) <= 2 * u * pow (k i)) ->
@@ -521,7 +538,9 @@ Lemma vecSum_Fnonoverlap_core k l : Thm1_hyp k l ->
      Rabs (vecSumAux (drop i.+1 l)).2 <= (2 - 2 * u) * pow (k i)) ->
   Fnonoverlap (vecSum l).
 Proof.
-Admitted.
+move=> Hk Herr Hrun; apply: Fnonoverlap_allpairs.
+exact: vecSum_sep Hk Herr Hrun.
+Qed.
 
 (* Theorem 1.  [VecSum l] is F-nonoverlapping (wIZ) with the same sum,        *)
 (* assembling the running-sum bound [VecSum_run_bound], the per-step error    *)

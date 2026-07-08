@@ -239,8 +239,16 @@ Fixpoint Fnonoverlap_aux (prev : R) (l : seq R) : Prop :=
     Fnonoverlap_aux (if Req_EM_T x 0 then prev else x) l'
   else True.
 
+(* Paper Definition 3 (nonoverlapping "wIZ", with interleaving zeros): delete *)
+(* the zeros, then require plain F-nonoverlap (Definition 2) on the survivors.*)
+(* The first survivor has no predecessor, hence no constraint -- this is what *)
+(* [Fnonoverlap_aux] on the zero-free list encodes (it never takes its        *)
+(* zero-skipping branch).  Filtering (rather than anchoring [prev] at a       *)
+(* possibly-zero head) is what makes leading zeros harmless, matching the     *)
+(* paper: VecSum can emit [0; 0; e] by cancelling two equal-magnitude leading *)
+(* terms, and the paper drops those zeros before checking nonoverlap.         *)
 Definition Fnonoverlap (l : seq R) : Prop :=
-  if l is x :: l' then Fnonoverlap_aux x l' else True.
+  if [seq x <- l | x != 0 :> R] is x :: l' then Fnonoverlap_aux x l' else True.
 
 (* A zero next element is skipped (the vacuous conjunct drops, [prev] stays). *)
 Lemma Fnonoverlap_aux_cons0 prev l :
@@ -299,32 +307,103 @@ rewrite ye0 Rabs_R0; have : 0 < uls x by apply: uls_gt_0.
 lra.
 Qed.
 
-(* Head bound: the second element is at most [1/2 uls] of the first.          *)
-Lemma Fnonoverlap_head2 a b l :
-  Fnonoverlap (a :: b :: l) -> b <> 0 -> Rabs b <= / 2 * uls a.
-Proof. by move=> [H _]. Qed.
+(* [Fnonoverlap_aux] never depends on the zeros in its list: it skips them.   *)
+(* Hence checking it on the zero-filtered list is the same as on the list --  *)
+(* the bridge between the recursive [Fnonoverlap_aux] and the filtering       *)
+(* [Fnonoverlap].                                                             *)
+Lemma Fnonoverlap_aux_filter prev l :
+  Fnonoverlap_aux prev [seq x <- l | x != 0 :> R] <-> Fnonoverlap_aux prev l.
+Proof.
+elim: l prev => [|x l IH] prev //=.
+have [xe0|xne0] := Req_dec x 0.
+  rewrite xe0 eqxx /=.
+  have E : (if Req_EM_T (0 : R) 0 then prev else 0) = prev by case: Req_EM_T.
+  rewrite E; split.
+    by move=> /IH H; split; [move=> H0; case: (H0 erefl) | exact: H].
+  by move=> [_ /IH].
+have xnb : (x != 0 :> R) by apply/eqP.
+rewrite xnb /=.
+have E : (if Req_EM_T x 0 then prev else x) = x by case: Req_EM_T.
+rewrite !E; split; move=> [Hx Hrec]; split; try exact: Hx; by apply/IH.
+Qed.
 
-(* Drop the [eps, e] prefix: the tail keeps [Fnonoverlap_aux] with [prev = e] *)
-(* (when [e <> 0]).                                                           *)
+(* Dropping a head keeps [Fnonoverlap] (filtering only shrinks the list).     *)
+Lemma Fnonoverlap_cons x l : Fnonoverlap (x :: l) -> Fnonoverlap l.
+Proof.
+rewrite /Fnonoverlap /=; case: (x =P 0) => [->|/eqP xnb]; first by rewrite /=.
+rewrite /=; case E : [seq y <- l | y != 0] => [|y l'] //=.
+have yn0 : (y != 0 :> R).
+  by move: (mem_head y l'); rewrite -E mem_filter => /andP[].
+have -> : (if Req_EM_T y 0 then x else y) = y.
+  by case: Req_EM_T => [y0|//]; rewrite y0 eqxx in yn0.
+by move=> [_].
+Qed.
+
+(* Constructor: a nonzero head [x] with an [Fnonoverlap_aux x l] tail builds  *)
+(* [Fnonoverlap (x :: l)] (the nonzero head survives filtering and becomes the*)
+(* first, unconstrained, term).                                               *)
+Lemma Fnonoverlap_consN x l :
+  x <> 0 -> Fnonoverlap_aux x l -> Fnonoverlap (x :: l).
+Proof.
+move=> xn0 H; rewrite /Fnonoverlap /=.
+have -> : (x != 0 :> R) by apply/eqP.
+by rewrite /=; apply/Fnonoverlap_aux_filter.
+Qed.
+
+(* Eliminator (inverse of [Fnonoverlap_consN]): a nonzero head [x] gives an   *)
+(* [Fnonoverlap_aux x l] tail.                                                *)
+Lemma Fnonoverlap_consE x l :
+  x <> 0 -> Fnonoverlap (x :: l) -> Fnonoverlap_aux x l.
+Proof.
+move=> xn0; rewrite /Fnonoverlap /=.
+have -> : (x != 0 :> R) by apply/eqP.
+by rewrite /= => /Fnonoverlap_aux_filter.
+Qed.
+
+(* An interior zero after the head is invisible to [Fnonoverlap] (it is       *)
+(* filtered out): [Fnonoverlap (x :: 0 :: l) <-> Fnonoverlap (x :: l)].       *)
+Lemma Fnonoverlap_drop0 x l :
+  Fnonoverlap (x :: 0 :: l) <-> Fnonoverlap (x :: l).
+Proof.
+rewrite /Fnonoverlap /=.
+by have -> : ((0 : R) != 0) = false by rewrite eqxx.
+Qed.
+
+(* Head bound: the second element is at most [1/2 uls] of the first, provided *)
+(* the first is nonzero (a zero head is dropped by [Fnonoverlap]).            *)
+Lemma Fnonoverlap_head2 a b l :
+  Fnonoverlap (a :: b :: l) -> a <> 0 -> b <> 0 -> Rabs b <= / 2 * uls a.
+Proof.
+move=> H an0 bn0; move: H; rewrite /Fnonoverlap /=.
+have -> : (a != 0 :> R) by apply/eqP.
+have -> : (b != 0 :> R) by apply/eqP.
+by move=> /= [H _]; exact: H bn0.
+Qed.
+
+(* Drop the [a, b] prefix: the tail keeps [Fnonoverlap_aux] with [prev = b]   *)
+(* (when [b <> 0]); [a] may be zero (it is filtered out) with no consequence. *)
 Lemma Fnonoverlap_tail a b l :
   Fnonoverlap (a :: b :: l) -> b <> 0 -> Fnonoverlap_aux b l.
 Proof.
-move=> Fab bn0; have E : (if Req_EM_T b 0 then a else b) = b.
-  by case: (Req_EM_T b 0) => [be0|_] //; case: (bn0 be0).
-by move: Fab; rewrite /= E => -[_].
+move=> H bn0; apply/Fnonoverlap_aux_filter.
+have bnb : (b != 0 :> R) by apply/eqP.
+have Eb : (if Req_EM_T b 0 then a else b) = b by case: Req_EM_T.
+move: H; rewrite /Fnonoverlap /=; case: (a =P 0) => [->|/eqP _].
+  by rewrite /= bnb /=.
+by rewrite /= bnb /= Eb => -[_].
 Qed.
 
 Lemma Fnonoverlap_imm l : Fnonoverlap l ->
   forall i, (i.+1 < size l)%N -> nth 0 l i <> 0 ->
     Rabs (nth 0 l i.+1) <= / 2 * uls (nth 0 l i).
 Proof.
-case: l => // x l Hl [|i] /=; last first.
-  by move=> Hi Hn0; apply: (Fnonoverlap_aux_imm Hl Hi Hn0).
-case: l Hl => [|y l'] //= Hl _ _.
-case: Hl => Hy _.
-have [ye0|yne0] := Req_dec y 0; last by apply: Hy.
-rewrite ye0 Rabs_R0; have Hu : 0 < uls x by apply: uls_gt_0.
-lra.
+elim: l => [|x l IH] Fl [|i] //=.
+  case: l Fl IH => [|d l'] //= Fl _ _ xn0.
+  have [de0|dnb] := Req_dec d 0.
+    rewrite de0 Rabs_R0; suff : 0 < uls x by lra.
+    exact: uls_gt_0.
+  exact: Fnonoverlap_head2 Fl xn0 dnb.
+by move=> Hi xn0; apply: (IH (Fnonoverlap_cons Fl) i).
 Qed.
 
 (* Converse-of-[imm] bridge: build the recursive [Fnonoverlap_aux prev l]     *)
@@ -355,19 +434,25 @@ rewrite E; apply: IH.
 by move=> i j iLj jL in0; apply: (H2 i.+1 j.+1).
 Qed.
 
-(* All-pairs separation with a nonzero head gives [Fnonoverlap l]: the head   *)
-(* [nth 0 l 0] is the initial [prev], so [H1] of [Fnonoverlap_aux_allpairs]   *)
-(* is the [i = 0] instance of the all-pairs bound.                            *)
+(* All-pairs separation gives [Fnonoverlap l] (paper Def 3): no head          *)
+(* condition is needed, since the filtering [Fnonoverlap] drops any leading   *)
+(* zeros; the surviving head is unconstrained and each later nonzero is       *)
+(* bounded against every earlier nonzero.  The nonzero head [x] of a [cons]   *)
+(* supplies the [i = 0] instance feeding [Fnonoverlap_aux_allpairs].          *)
 Lemma Fnonoverlap_allpairs l :
-  nth 0 l 0 <> 0 ->
   (forall i j, (i < j)%N -> (j < size l)%N -> nth 0 l i <> 0 ->
      Rabs (nth 0 l j) <= / 2 * uls (nth 0 l i)) ->
   Fnonoverlap l.
 Proof.
-case: l => [|x l'] hn0 H2 //=.
-apply: Fnonoverlap_aux_allpairs.
-  by move=> j jL jn0; apply: (H2 0%N j.+1).
-by move=> i j iLj jL in0; apply: (H2 i.+1 j.+1).
+elim: l => [_|x l IH H] //.
+have Hl : Fnonoverlap l.
+  by apply: IH => i j iLj jLs ni0; apply: (H i.+1 j.+1); rewrite ?ltnS.
+rewrite /Fnonoverlap /=; case: (x =P 0) => [->|/eqP xnb].
+  by move: Hl; rewrite /Fnonoverlap.
+apply/Fnonoverlap_aux_filter; apply: Fnonoverlap_aux_allpairs.
+  move=> j jL jn0; apply: (H 0%N j.+1); rewrite ?ltnS //.
+  by apply/eqP.
+by move=> i j iLj jL in0; apply: (H i.+1 j.+1); rewrite ?ltnS.
 Qed.
 
 (* VSEB block sum bound (Theorem 2): the terms after the remainder [prev]     *)

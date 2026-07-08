@@ -285,6 +285,7 @@ have Hae : uls eps <= Rabs eps by apply: uls_le_abs.
 have He0 : 0 < Rabs eps by apply: Rabs_pos_lt.
 have Hd0 : 0 < (/ 2) ^ (size l) by apply: pow_lt; lra.
 have Hsum : sumRabs l <= uls eps * (1 - (/ 2) ^ (size l)).
+  have H := Fnonoverlap_consE epsn0 Fno.
   by apply: Fnonoverlap_aux_sumRabs.
 have HsumLt : sumRabs l < uls eps by nra.
 have Hg : uls eps = pow (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps)))).
@@ -418,7 +419,7 @@ case: Req_EM_T => [et0|etn0].
     have epsn0 : eps <> 0.
       by move=> eps0; apply: en0; move: Hsum; rewrite r0 et0 eps0; lra.
     have Ee : e = - eps by move: Hsum; rewrite r0 et0; lra.
-    have Hb : Rabs e <= / 2 * uls eps by exact: Fnonoverlap_head2 Fno en0.
+    have Hb : Rabs e <= / 2 * uls eps by exact: Fnonoverlap_head2 Fno epsn0 en0.
     have Hae : Rabs e = Rabs eps by rewrite Ee Rabs_Ropp.
     have Hule : uls eps <= Rabs eps by apply: uls_le_abs.
     have Hu0 : 0 < Rabs eps by apply: Rabs_pos_lt.
@@ -426,8 +427,7 @@ case: Req_EM_T => [et0|etn0].
   (* [e = 0] interior zero: [r = eps], and the recursive [Fnonoverlap] skips  *)
   (* the zero, so the invariant transfers directly ([Fnonoverlap_aux_cons0]). *)
   have Hre : r = eps by rewrite Hr e0 Rplus_0_r; apply: round_generic.
-  rewrite Hre; apply/Fnonoverlap_aux_cons0.
-  by move: Fno; rewrite e0.
+  rewrite Hre; apply/Fnonoverlap_drop0; rewrite e0 in Fno; exact: Fno.
 (* [et <> 0]: emit [r], recurse on the new remainder [et].                    *)
 have Fet : format et
   by have H := format_TwoSum epsF Fe; rewrite E1 /= in H; case: H.

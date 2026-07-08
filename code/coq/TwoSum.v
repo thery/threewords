@@ -215,7 +215,7 @@ have en0 : e <> 0.
   by lra.
 (* [|e| <= 1/2 uls eps] and [uls e <= |e|] give [uls e <= uls eps], so the    *)
 (* error inherits at least [e]'s grid: [uls e <= uls (dwl (TwoSum eps e))].   *)
-have He2 : Rabs e <= / 2 * uls eps by exact: Fnonoverlap_head2 Fno en0.
+have He2 : Rabs e <= / 2 * uls eps by exact: Fnonoverlap_head2 Fno epsn0 en0.
 have Hueps : uls e <= uls eps.
   have Hule : uls e <= Rabs e by apply: uls_le_abs.
   have Hu0 : 0 < uls eps by apply: uls_gt_0.
@@ -224,6 +224,7 @@ have Huet : uls e <= uls (dwl (TwoSum eps e)).
   by apply: (TwoSum_err_uls_ge Feps Fe epsn0 en0 Hueps).
 (* The tail [l] carries over from the input (drop [eps, e]), with the running *)
 (* term [e] weakened to the coarser error ([uls e <= uls (dwl ..)]).          *)
+apply: Fnonoverlap_consN; first exact: etn0.
 by apply: (Fnonoverlap_aux_prev Huet (Fnonoverlap_tail Fno en0)).
 Qed.
 
@@ -251,7 +252,7 @@ set r := dwh (TwoSum eps e) in Hr Frr rn0 *.
 have Hue : uls e <= uls r.
   case: (Req_dec eps 0) => [eps0|epsn0].
     by rewrite Hr eps0 Rplus_0_l; apply: Rle_refl.
-  have He0 : Rabs e <= / 2 * uls eps by exact: Fnonoverlap_head2 Fno en0.
+  have He0 : Rabs e <= / 2 * uls eps by exact: Fnonoverlap_head2 Fno epsn0 en0.
   have Hueps : uls e <= uls eps.
     have Hu0 : 0 < uls eps by apply: uls_gt_0.
     have Hle : uls e <= Rabs e by apply: uls_le_abs.
@@ -272,6 +273,7 @@ have Hue : uls e <= uls r.
   apply: Rle_trans (is_imul_uls_ge Frr rn0 Himr).
   by rewrite gE; apply: Rle_refl.
 (* Tail carries over from the input, running term [e] weakened to [r].        *)
+apply: Fnonoverlap_consN; first exact: rn0.
 by apply: (Fnonoverlap_aux_prev Hue (Fnonoverlap_tail Fno en0)).
 Qed.
 

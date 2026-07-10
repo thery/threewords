@@ -505,6 +505,24 @@ apply: magnitude_vecSum_err.
 - exact: Hemin.
 Qed.
 
+(* Prefix/suffix split of the VecSum walk (paper: "e_i, ..., e_0 and s_0      *)
+(* depend only on x_{i-1}, ..., x_0 and s_i").  Running [vecSumAux] on the    *)
+(* first [m] inputs with the tail's running sum [(vecSumAux (drop m l)).2]    *)
+(* appended reproduces the first [m] output errors and the final high word.   *)
+(* This is what lets [vecSumAux_imul] be applied to the prefix in the         *)
+(* divisibility step of [vecSum_sep].                                         *)
+Lemma vecSumAux_split m l : (m < size l)%N ->
+  vecSumAux (take m l ++ [:: (vecSumAux (drop m l)).2]) =
+  (take m (vecSumAux l).1, (vecSumAux l).2).
+Proof.
+elim: m l => [|m IH] [|a l] //= Hs; first by rewrite take0.
+rewrite (IH l Hs).
+case E : (take m l ++ [:: (vecSumAux (drop m l)).2]) => [|c Q'].
+  by move: E => /(congr1 size); rewrite size_cat /= addn1.
+case: l Hs {IH E} => [//|b l'] _.
+by case: (vecSumAux (b :: l')) => es ss; case: (TwoSum a ss) => si ei /=.
+Qed.
+
 (* The paper's separation estimate, in pure index form (the whole content of  *)
 (* Theorem 1 once the [Fnonoverlap] recursion is peeled off by                *)
 (* [Fnonoverlap_allpairs]): for the VecSum output [e_0 = s_0, e_1, ...], every*)
@@ -525,7 +543,119 @@ Lemma vecSum_sep k l : Thm1_hyp k l ->
     nth 0 (vecSum l) i <> 0 ->
     Rabs (nth 0 (vecSum l) j) <= / 2 * uls (nth 0 (vecSum l) i).
 Proof.
-Admitted.
+move=> Hk Herr Hrun i j ltij Hj Hni.
+have j0 : (0 < j)%N by apply: leq_ltn_trans (leq0n i) ltij.
+have Hgt1 : (1 < size (vecSum l))%N by apply: leq_ltn_trans j0 Hj.
+have Hsl : (1 < size l)%N.
+  by move: Hgt1; rewrite size_vecSum; case: (size l) => [|[|n]].
+have Hsz : size (vecSum l) = size l.
+  by rewrite size_vecSum; case: (size l) Hsl => [|[|n]].
+rewrite Hsz in Hj.
+case: Hk => Hrepr Hgap Hlast.
+have gap : forall r, (r.+2 < size l)%N -> (k r.+1 < k r)%Z.
+  by move=> r Hr; have := Hgap r Hr; lia.
+have kdec : forall a b, (a < b)%N -> (b.+1 < size l)%N -> (k b < k a)%Z.
+  move=> a b; elim: b a => [//|b IHb] a.
+  rewrite ltnS leq_eqVlt => /orP[/eqP->|aLb] Hb1; first by apply: gap.
+  by apply: Z.lt_trans (gap b Hb1) (IHb a aLb (ltn_trans (ltnSn _) Hb1)).
+have HvcS : forall m, nth 0 (vecSum l) m.+1 = nth 0 (vecSumAux l).1 m.
+  by move=> m; rewrite /vecSum; case: (vecSumAux l) => es s.
+move: ltij Hj Hni; case: j j0 => [//|t] _ ltit Ht Hni.
+have Ht' : (t < size l)%N by apply: ltn_trans (ltnSn t) Ht.
+have Hej : nth 0 (vecSum l) t.+1 =
+    dwl (TwoSum (nth 0 l t) (vecSumAux (drop t.+1 l)).2).
+  by rewrite HvcS vecSumAux_nth1.
+set x := nth 0 l t; set s := (vecSumAux (drop t.+1 l)).2.
+set e := dwl (TwoSum x s); set r := dwh (TwoSum x s).
+have Fx : format x by apply: repr_format (Hrepr t Ht').
+have Hfmt : {in l, forall z, format z}.
+  by move=> z /(nthP 0)[a aLs <-]; apply: repr_format (Hrepr a aLs).
+have Fs : format s.
+  apply: format_vecSumAux2 => z zI.
+  by apply: Hfmt; rewrite -(cat_take_drop t.+1 l) mem_cat zI orbT.
+have Fr : format r by rewrite /r TwoSum_hi; apply: generic_format_round.
+have Fe : format e by have [_ Hl] := format_TwoSum Fx Fs; exact: Hl.
+have Hmag : Rabs e <= / 2 * ulp r.
+  have := magnitude_TwoSum Fx Fs.
+  by rewrite /magnitudeDWR /e /r; case: (TwoSum x s) => h low /=; lra.
+rewrite Hej -/x -/s -/e.
+set xi := nth 0 (vecSum l) i.
+have Fxi : format xi.
+  apply: (format_vecSum Hfmt); apply: mem_nth.
+  by rewrite Hsz; apply: ltn_trans ltit Ht.
+have gE : uls xi = pow (cexp xi + Z.of_nat (trZ (Ztrunc (mant xi)))).
+  by rewrite /uls; case: Req_bool_spec => // xi0; case: (Hni xi0).
+set g := (cexp xi + Z.of_nat (trZ (Ztrunc (mant xi))))%Z.
+case: (Rle_lt_dec (Rabs e) (/ 2 * uls xi)) => [//|Hgt]; exfalso.
+have Hur : uls xi < ulp r by lra.
+have Hemin : pow emin <= uls xi.
+  by apply: (is_imul_uls_ge Fxi Hni (is_imul_pow_emin Fxi)).
+have rn0 : r <> 0 by move=> r0; move: Hur; rewrite r0 ulp_FLT_0; lra.
+have Hur2 : ulp r = pow (cexp r) by rewrite ulp_neq_0.
+have Hcexp : (g + 1 <= cexp r)%Z.
+  suff : (g < cexp r)%Z by lia.
+  by apply: (lt_bpow radix2); rewrite -gE -Hur2.
+have Hr2 : is_imul r (pow (g + 1)).
+  by apply: is_imul_pow_le (format_imul_cexp Fr) Hcexp.
+have Hni2 : ~ is_imul xi (pow (g + 1)).
+  move=> Hc; have H := is_imul_uls_ge Fxi Hni Hc.
+  rewrite gE bpow_plus bpow_1 /= in H.
+  by rewrite -/g in H; move: (bpow_gt_0 radix2 g); lra.
+have Hdt : drop t l = x :: drop t.+1 l by rewrite (drop_nth 0 Ht').
+have Hrr : (vecSumAux (drop t l)).2 = r.
+  have Hnn : (0 < size (drop t.+1 l))%N by rewrite size_drop subn_gt0.
+  rewrite Hdt /r /s.
+  case Ed : (drop t.+1 l) Hnn => [//|b rest] _.
+  rewrite vecSumAux_cons.
+  by case: (vecSumAux (b :: rest)) => es ss; case: (TwoSum x ss).
+have Hex : exists2 w, (w < t)%N & ~ is_imul (nth 0 l w) (pow (g + 1)).
+  apply: Classical_Prop.NNPP => Hnex.
+  have Hall : forall w, (w < t)%N -> is_imul (nth 0 l w) (pow (g + 1)).
+    by move=> w wLt; apply: Classical_Prop.NNPP => Hns; apply: Hnex; exists w.
+  have HPimul : {in take t l ++ [:: r], forall z, is_imul z (pow (g + 1))}.
+    move=> z; rewrite mem_cat inE => /orP[|/eqP->]; last exact: Hr2.
+    move=> /(nthP 0)[idx]; rewrite size_take_min ltn_min => /andP[idxLt _] <-.
+    by rewrite nth_take //; apply: Hall.
+  have HPf : {in take t l ++ [:: r], forall z, format z}.
+    by move=> z; rewrite mem_cat inE => /orP[/mem_take/Hfmt //|/eqP->//].
+  have [H2 Hes] := vecSumAux_imul HPf HPimul.
+  have Hsp : vecSumAux (take t l ++ [:: r]) =
+      (take t (vecSumAux l).1, (vecSumAux l).2).
+    by rewrite -Hrr vecSumAux_split.
+  rewrite Hsp /= in H2 Hes.
+  apply: Hni2; move: Hni; rewrite /xi.
+  case: (i) ltit => [|i'] ltit' _.
+    by rewrite /vecSum; move: H2; case: (vecSumAux l) => es ss.
+  have i'Lt : (i' < t)%N by rewrite -ltnS.
+  have sl0 : (0 < size l)%N by apply: ltnW.
+  have i'Sz : (i' < size (vecSumAux l).1)%N.
+    rewrite size_vecSumAux; apply: leq_trans i'Lt _.
+    by rewrite -ltnS prednK.
+  rewrite HvcS -(nth_take 0 i'Lt); apply: Hes; apply: mem_nth.
+  by rewrite size_take_min ltn_min i'Lt i'Sz.
+have [w wLt Hw] := Hex.
+have Hkw : (k w <= g + p - 1)%Z.
+  have [_ [M HM HxM]] := Hrepr w (ltn_trans wLt Ht').
+  case: (Z_le_gt_dec (k w) (g + p - 1)) => // Hgtw.
+  case: Hw.
+  apply: is_imul_pow_le (_ : is_imul (nth 0 l w) (pow (k w - p + 1))) _;
+    last by lia.
+  by exists M; rewrite HxM.
+have Hkt : (g <= k t + 1 - p)%Z.
+  have Het : Rabs e <= 2 * u * pow (k t).
+    by move: (Herr t Ht); rewrite Hej -/x -/s -/e.
+  suff Hlt : pow (g - 1) < pow (k t + 1 - p).
+    by have := lt_bpow radix2 _ _ Hlt; lia.
+  have HA : pow (g - 1) = / 2 * pow g.
+    have hg : (g - 1 = g + -1)%Z by lia.
+    by rewrite hg bpow_plus /=; lra.
+  have HB : pow (k t + 1 - p) = 2 * u * pow (k t).
+    have hk : (k t + 1 - p = (1 + - p) + k t)%Z by lia.
+    by rewrite hk !bpow_plus bpow_1 uE /=; lra.
+  by rewrite HA HB -gE; lra.
+have := kdec w t wLt Ht.
+lia.
+Qed.
 
 (* Core of paper Theorem 1: the VecSum output is F-nonoverlapping, given the  *)
 (* running-sum and per-step error bounds.  With the paper-faithful (wIZ)      *)

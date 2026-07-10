@@ -727,17 +727,56 @@ apply: Rle_trans Hle _.
 by have := Hulsei; lra.
 Qed.
 
+(* Relaxed exponent hypothesis (paper Corollary 1): each [x_i] is [repr] at   *)
+(* [k_i], the [k_i] are non-increasing, and drop by at least 1 every two      *)
+(* steps -- i.e. at most one "overlap" (equal-magnitude consecutive pair),    *)
+(* never two in a row.  This is what [sorted_mag] + [pairwise_ulp] provide and*)
+(* what [Merge] guarantees on the six merged terms.                           *)
+Definition Thm1_hyp_wk (k : nat -> Z) (l : seq R) : Prop :=
+  [/\ (forall i, (i < size l)%N -> repr (k i) (nth 0 l i)),
+      (forall i, (i.+1 < size l)%N -> (k i.+1 <= k i)%Z) &
+      (forall i, (i.+2 < size l)%N -> (k i.+2 + 1 <= k i)%Z) ].
+
+(* PIECE 1 (to prove): build the relaxed exponent map from the concrete       *)
+(* hypotheses.  Sketch: take [k i := mag (nth 0 l i) - 1] on nonzero entries  *)
+(* (any value [>= emin + p - 1] on zeros).  [repr] is [mant]/[cexp] unfolded; *)
+(* [sorted_mag] ([mag] non-increasing) gives [k i.+1 <= k i]; [pairwise_ulp]  *)
+(* ([|x_{i+2}| < ulp x_i = 2^(k_i-p+1)]) gives [mag x_{i+2} <= k_i-p+1] hence *)
+(* [k i.+2 <= k_i - p < k_i].  Care with zeros ([mag] convention) and         *)
+(* subnormals ([cexp = emin <> mag - p]).                                     *)
+Lemma sorted_pairwise_k l :
+  {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
+  exists k, Thm1_hyp_wk k l.
+Proof.
+Admitted.
+
+(* PIECE 2 (to prove): the separation under the relaxed gap -- the core of    *)
+(* paper Corollary 1, the analogue of [vecSum_sep] for [Thm1_hyp_wk].  Sketch:*)
+(* rerun the [vecSum_sep] contradiction (run bound -> per-step error bound -> *)
+(* an input [x_w], [w < t], off the [2^(g+1)] grid, via [vecSumAux_split] +   *)
+(* [vecSumAux_imul]) with the constants doubled (equal-magnitude pairs) and   *)
+(* the final [k]-inequality adapted: [x_w] off the grid gives [k_w <= k_t]; if*)
+(* [w <= t-2] the 2-step strict drop [k_{i.+2}+1 <= k_i] gives [k_w > k_t]    *)
+(* (contradiction), and [w = t-1] is impossible since an equal-magnitude      *)
+(* predecessor on the same grid cannot be the off-grid input.                 *)
+Lemma vecSum_sep_wk k l : Thm1_hyp_wk k l ->
+  forall i j, (i < j)%N -> (j < size (vecSum l))%N ->
+    nth 0 (vecSum l) i <> 0 ->
+    Rabs (nth 0 (vecSum l) j) <= / 2 * uls (nth 0 (vecSum l) i).
+Proof.
+Admitted.
+
 (* The separation conjunct of Theorem 1 on the concrete input hypotheses      *)
-(* [sorted_mag l] + [pairwise_ulp l] (paper Corollary 1: at most one overlap, *)
-(* never two consecutive; exactly what [Merge] produces on the six merged     *)
-(* terms), isolated as a reusable lemma.  Same "multiples of 2u" divisibility *)
-(* core as [vecSum_Fnonoverlap_core] but with the relaxed exponent gap; the   *)
-(* single tolerated overlap does not break the contradiction (Corollary 1).   *)
+(* [sorted_mag l] + [pairwise_ulp l] (paper Corollary 1), assembled from the  *)
+(* two pieces above: build the relaxed [k], peel the recursive [Fnonoverlap]  *)
+(* off with [Fnonoverlap_allpairs], and apply the separation [vecSum_sep_wk]. *)
 Lemma vecSum_Fnonoverlap_sep l :
   {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
   Fnonoverlap (vecSum l).
 Proof.
-Admitted.
+move=> lF lM lP; have [k Hk] := sorted_pairwise_k lF lM lP.
+by apply: Fnonoverlap_allpairs; apply: (vecSum_sep_wk Hk).
+Qed.
 
 (* Theorem 1 (VecSum), on the concrete input separation: [vecSum l] is        *)
 (* F-nonoverlapping AND has the same exact sum.  Assembles the divisibility   *)

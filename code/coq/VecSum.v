@@ -731,24 +731,112 @@ Qed.
 (* [k_i], the [k_i] are non-increasing, and drop by at least 1 every two      *)
 (* steps -- i.e. at most one "overlap" (equal-magnitude consecutive pair),    *)
 (* never two in a row.  This is what [sorted_mag] + [pairwise_ulp] provide and*)
-(* what [Merge] guarantees on the six merged terms.                           *)
+(* what [Merge] guarantees on the six merged terms.  The two-step strict drop *)
+(* is only required at nonzero entries: in a [sorted_mag] list the zeros are  *)
+(* trailing, and near the underflow floor a strict drop through a zero cannot *)
+(* be met (e.g. [[2^emin; 0; 0]]), so the guard keeps the hypothesis true.    *)
 Definition Thm1_hyp_wk (k : nat -> Z) (l : seq R) : Prop :=
   [/\ (forall i, (i < size l)%N -> repr (k i) (nth 0 l i)),
       (forall i, (i.+1 < size l)%N -> (k i.+1 <= k i)%Z) &
-      (forall i, (i.+2 < size l)%N -> (k i.+2 + 1 <= k i)%Z) ].
+      (forall i, (i.+2 < size l)%N -> nth 0 l i.+2 <> 0 ->
+         (k i.+2 + 1 <= k i)%Z) ].
 
-(* PIECE 1 (to prove): build the relaxed exponent map from the concrete       *)
-(* hypotheses.  Sketch: take [k i := mag (nth 0 l i) - 1] on nonzero entries  *)
-(* (any value [>= emin + p - 1] on zeros).  [repr] is [mant]/[cexp] unfolded; *)
-(* [sorted_mag] ([mag] non-increasing) gives [k i.+1 <= k i]; [pairwise_ulp]  *)
-(* ([|x_{i+2}| < ulp x_i = 2^(k_i-p+1)]) gives [mag x_{i+2} <= k_i-p+1] hence *)
-(* [k i.+2 <= k_i - p < k_i].  Care with zeros ([mag] convention) and         *)
-(* subnormals ([cexp = emin <> mag - p]).                                     *)
+(* Reusable pieces for PIECE 1 (building the relaxed exponent map).           *)
+
+(* Converse of [repr_format] at the canonical exponent: a nonzero float is    *)
+(* [repr] at [cexp x + p - 1] (so [k - p + 1 = cexp x]), with mantissa        *)
+(* [Ztrunc (mant x)] (bounded by [2^p] and [>= emin] by the FLT format).      *)
+Lemma repr_canonical x : format x -> x <> 0 -> repr (cexp x + p - 1) x.
+Proof.
+move=> xF xn0; split.
+  by rewrite (_ : (cexp x + p - 1 - p + 1)%Z = cexp x); [apply: Z.le_max_r|lia].
+exists (Ztrunc (mant x)).
+  have Hm2 : (Z.abs (Ztrunc (mant x)) <= 2 ^ p - 1)%Z :=
+    Fast2Sum_robust_flt.FLT_mant_le Hp2 xF.
+  by lia.
+rewrite (_ : (cexp x + p - 1 - p + 1)%Z = cexp x); last by lia.
+have H := scaled_mantissa_mult_bpow beta fexp x.
+by rewrite -{1}H {1}(scaled_mantissa_generic beta fexp x xF).
+Qed.
+
+(* The canonical exponent [cexp x] is never below [emin] ([FLT_exp] uses max).*)
+Lemma cexp_ge_emin x : (emin <= cexp x)%Z.
+Proof. by apply: Z.le_max_r. Qed.
+
+(* In a magnitude-sorted list the zeros are trailing: the predecessor of a    *)
+(* nonzero entry is itself nonzero.                                           *)
+Lemma sorted_mag_pred_neq0 {l : seq R} {i : nat} :
+  sorted_mag l -> (i.+1 < size l)%N ->
+  nth 0 l i.+1 <> 0 -> nth 0 l i <> 0.
+Proof.
+move=> lM Hi Hn1 Hi0; apply: Hn1.
+have := lM i Hi; rewrite Hi0 Rabs_R0 => Hle.
+by apply/Rabs_eq_R0; have := Rabs_pos (nth 0 l i.+1); lra.
+Qed.
+
+(* If [y] is nonzero and strictly below [ulp x], then its canonical exponent  *)
+(* is strictly below [x]'s.  (When [cexp x = emin], [|y| < ulp x = 2^emin] is *)
+(* impossible for a nonzero float, by [alpha_lB].)                            *)
+Lemma cexp_lt_ulp {x y : R} : format y -> x <> 0 -> y <> 0 ->
+  Rabs y < ulp x -> (cexp y < cexp x)%Z.
+Proof.
+move=> Fy xn0 yn0 Hlt.
+have Hux : ulp x = pow (cexp x) by rewrite ulp_neq_0.
+have Hmag : (mag beta y <= cexp x)%Z by apply: mag_le_bpow => //; rewrite -Hux.
+have Hemin_lt : (emin < cexp x)%Z.
+  apply: (lt_bpow beta); apply: Rle_lt_trans (alpha_lB Fy yn0) _.
+  by rewrite -Hux.
+have Hc2 : cexp y = Z.max (mag beta y - p) emin by [].
+by rewrite Hc2; apply: Z.max_lub_lt; lia.
+Qed.
+
+(* PIECE 1: build the relaxed exponent map from the concrete hypotheses.  Take*)
+(* [k i := cexp (nth 0 l i) + p - 1] on nonzero entries (so [repr] holds via  *)
+(* [repr_canonical]) and [k i := emin + p - 1] on zeros.  [sorted_mag] gives  *)
+(* [cexp] non-increasing ([cexp_le]) hence [k i.+1 <= k i]; [pairwise_ulp]    *)
+(* gives [cexp (nth i.+2) < cexp (nth i)] ([cexp_lt_ulp]) hence the two-step  *)
+(* strict drop.  The two-step drop is only claimed at nonzero entries (zeros  *)
+(* are trailing, and near the underflow floor the strict drop cannot hold).   *)
 Lemma sorted_pairwise_k l :
   {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
   exists k, Thm1_hyp_wk k l.
 Proof.
-Admitted.
+move=> lF lM lP.
+pose k := fun (i : nat) =>
+   if Req_bool (nth (0 : R) l i) 0 then (emin + p - 1)%Z
+   else (cexp (nth (0 : R) l i) + p - 1)%Z.
+have Fnth : forall i, (i < size l)%N -> format (nth (0:R) l i).
+  by move=> i Hi; apply: lF; apply: mem_nth.
+have kE_z : forall i, nth (0:R) l i = 0 -> k i = (emin + p - 1)%Z.
+  by move=> i Hi; rewrite /k Hi; case: Req_bool_spec.
+have kE_nz : forall i, nth (0:R) l i <> 0 ->
+    k i = (cexp (nth (0:R) l i) + p - 1)%Z.
+  by move=> i Hi; rewrite /k; case: Req_bool_spec.
+exists k; split.
+- move=> i Hi.
+  case: (Req_dec (nth (0:R) l i) 0) => [Hz|Hnz]; last first.
+    by rewrite (kE_nz i Hnz); apply: repr_canonical => //; exact: Fnth.
+  rewrite (kE_z i Hz) Hz; split; first by lia.
+  exists 0%Z; last by rewrite Rmult_0_l.
+  by rewrite Z.abs_0; apply: Z.pow_pos_nonneg; lia.
+- move=> i Hi.
+  case: (Req_dec (nth (0:R) l i.+1) 0) => [Hz1|Hnz1].
+    rewrite (kE_z _ Hz1).
+    case: (Req_dec (nth (0:R) l i) 0) => [Hz0|Hnz0].
+      by rewrite (kE_z _ Hz0); lia.
+    by rewrite (kE_nz _ Hnz0); have := @cexp_ge_emin (nth (0:R) l i); lia.
+  have Hnz0 := sorted_mag_pred_neq0 lM Hi Hnz1.
+  rewrite (kE_nz _ Hnz1) (kE_nz _ Hnz0).
+  suff: (cexp (nth (0:R) l i.+1) <= cexp (nth (0:R) l i))%Z by lia.
+  by apply: Fast2Sum_robust_flt.cexp_le => //; exact: (lM i Hi).
+- move=> i Hi Hnz2.
+  have Hi1 : (i.+1 < size l)%N by apply: ltn_trans (ltnSn i.+1) Hi.
+  have Hnz1 := sorted_mag_pred_neq0 lM Hi Hnz2.
+  have Hnz0 := sorted_mag_pred_neq0 lM Hi1 Hnz1.
+  rewrite (kE_nz _ Hnz2) (kE_nz _ Hnz0).
+  suff: (cexp (nth (0:R) l i.+2) < cexp (nth (0:R) l i))%Z by lia.
+  by exact: (cexp_lt_ulp (Fnth i.+2 Hi) Hnz0 Hnz2 (lP i Hi)).
+Qed.
 
 (* PIECE 2 (to prove): the separation under the relaxed gap -- the core of    *)
 (* paper Corollary 1, the analogue of [vecSum_sep] for [Thm1_hyp_wk].  Sketch:*)

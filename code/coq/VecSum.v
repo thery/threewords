@@ -792,19 +792,27 @@ Qed.
 (* [inI] is the overlap set [I]; the conjuncts are, in order:                 *)
 (*  - [I] lies in [[1, n-2]];                                                 *)
 (*  - [I] has no two consecutive indices;                                     *)
-(*  - off [I]: the strict ufp gap  [2 ufp(x_{i+1}) <= ufp(x_i)];              *)
+(*  - off [I]: the strict ufp gap  [ufp(x_{i+1}) <= 1/2 ufp(x_i)];            *)
 (*  - on  [I]: the overlap bound   [ufp(x_{i+1}) <= 2^(p-2) uls(x_i)];        *)
-(*  - on  [I]: the 2-step non-increase  [ufp(x_{i+1}) <= ufp(x_{i-1})].       *)
+(*  - on  [I]: the 2-step quarter gap  [ufp(x_{i+1}) <= 1/4 ufp(x_{i-1})].    *)
+(* The paper assumes an UNLIMITED exponent range ("provided underflow and     *)
+(* overflow do not occur"): we transcribe that as (i) the interleaving zeros  *)
+(* removed -- the list is zero-free -- and (ii) every entry is normal         *)
+(* ([emin + p <= mag x_i], so [cexp x_i = mag x_i - p] and [ufp x_i =         *)
+(* 2^(cexp x_i + p - 1)]).  Without it Theorem 1's strict exponent gap is     *)
+(* unsatisfiable at the [emin] floor (subnormal interior overlaps).           *)
 Definition Cor1_hyp (l : seq R) : Prop :=
-  {in l, forall z, format z} /\
-  exists inI : nat -> bool,
+  [/\ {in l, forall z, format z},
+      (forall i, (i < size l)%N -> nth 0 l i <> 0),
+      (forall i, (i < size l)%N -> (emin + p <= mag beta (nth (0:R) l i))%Z) &
+   exists inI : nat -> bool,
     [/\ (forall i, inI i -> (0 < i)%N /\ (i.+1 < size l)%N),
         (forall i, inI i -> ~~ inI i.+1),
         (forall i, (i.+1 < size l)%N -> ~~ inI i ->
            2 * ufp (nth 0 l i.+1) <= ufp (nth 0 l i)),
         (forall i, inI i ->
            ufp (nth 0 l i.+1) <= pow (p - 2) * uls (nth 0 l i)) &
-        (forall i, inI i -> ufp (nth 0 l i.+1) <= ufp (nth 0 l i.-1)) ].
+        (forall i, inI i -> 4 * ufp (nth 0 l i.+1) <= ufp (nth 0 l i.-1)) ]].
 
 (* MAIN STEP (paper Corollary 1): the bumped exponent map exists and meets    *)
 (* the hypotheses [Thm1_hyp] of Theorem 1.  Proof to discharge, following the *)

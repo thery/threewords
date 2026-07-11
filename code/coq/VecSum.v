@@ -825,7 +825,107 @@ Definition Cor1_hyp (l : seq R) : Prop :=
 (*    hence [k_i <= k_{i-1} - 1].                                             *)
 Lemma Cor1_bump_Thm1_hyp l : Cor1_hyp l -> exists k, Thm1_hyp k l.
 Proof.
-Admitted.
+move=> [Hfmt Hnz Hnorm [inI [HI Hcons Hoff Hon1 Hon2]]].
+pose ex := fun i => (cexp (nth (0:R) l i) + p - 1)%Z.
+pose k := fun i => if inI i then Z.max (ex i) (ex i.+1 + 1) else ex i.
+have Fnth : forall i, (i < size l)%N -> format (nth (0:R) l i).
+  by move=> i Hi; apply: Hfmt; apply: mem_nth.
+have Hcx : forall i, (i < size l)%N ->
+    cexp (nth (0:R) l i) = (mag beta (nth (0:R) l i) - p)%Z.
+  move=> i Hi; rewrite /cexp /fexp /FLT_exp Z.max_l //.
+  by have := Hnorm i Hi; lia.
+have Hufp : forall i, (i < size l)%N -> ufp (nth (0:R) l i) = pow (ex i).
+  by move=> i Hi; rewrite /ufp /ex (Hcx i Hi); congr bpow; lia.
+exists k.
+(* The paper's ufp gaps, re-read as exponent gaps (entries are normal).       *)
+have Hoff' : forall i, (i.+1 < size l)%N -> ~~ inI i -> (ex i.+1 + 1 <= ex i)%Z.
+  move=> i Hi HnI; have iLs : (i < size l)%N by apply: ltnW.
+  apply: (le_bpow beta); rewrite bpow_plus bpow_1 /=.
+  by have := Hoff i Hi HnI; rewrite (Hufp _ Hi) (Hufp _ iLs); lra.
+have Hon2' : forall i, inI i -> (ex i.+1 + 2 <= ex i.-1)%Z.
+  move=> i HiI; have [i0 i1s] := HI i HiI.
+  have iLs : (i < size l)%N by apply: ltn_trans (ltnSn i) i1s.
+  have im1 : (i.-1 < size l)%N by apply: leq_ltn_trans (leq_pred i) iLs.
+  apply: (le_bpow beta).
+  have E4 : pow 2 = 4 by rewrite /= /Z.pow_pos /=; lra.
+  rewrite bpow_plus E4.
+  by have := Hon2 i HiI; rewrite (Hufp _ i1s) (Hufp _ im1); lra.
+(* The overlap bound gives the divisibility [2^(cexp x_{i+1}+1) | x_i].       *)
+have Hdiv : forall i, inI i ->
+    is_imul (nth (0:R) l i) (pow (cexp (nth (0:R) l i.+1) + 1)).
+  move=> i HiI; have [i0 i1s] := HI i HiI.
+  have iLs : (i < size l)%N by apply: ltn_trans (ltnSn i) i1s.
+  have Fxi := Fnth i iLs.
+  have xin0 : nth (0:R) l i <> 0 by apply: Hnz.
+  have gE : uls (nth (0:R) l i) =
+      pow (cexp (nth (0:R) l i)
+             + Z.of_nat (trZ (Ztrunc (mant (nth (0:R) l i))))).
+    by rewrite /uls; case: Req_bool_spec => // /xin0.
+  have Hle : pow (cexp (nth (0:R) l i.+1) + 1) <= uls (nth (0:R) l i).
+    have H1 := Hon1 i HiI; rewrite (Hufp _ i1s) in H1.
+    have exeq : ex i.+1 = (cexp (nth (0:R) l i.+1) + p - 1)%Z by rewrite /ex.
+    rewrite exeq in H1.
+    have Hsplit : pow (cexp (nth (0:R) l i.+1) + p - 1) =
+        pow (p - 2) * pow (cexp (nth (0:R) l i.+1) + 1).
+      by rewrite -bpow_plus; congr bpow; lia.
+    rewrite Hsplit in H1; have := bpow_gt_0 beta (p-2); nra.
+  apply: is_imul_pow_le.
+    by have H := uls_imul Fxi; rewrite gE in H; exact: H.
+  by apply: (le_bpow beta); rewrite -gE; exact: Hle.
+(* The strict interior gap [k_{i+1} + 1 <= k_i] (paper's four cases).         *)
+have Hgap : forall i, (i.+2 < size l)%N -> (k i.+1 + 1 <= k i)%Z.
+  move=> i Hi.
+  have i1s : (i.+1 < size l)%N by apply: ltn_trans (ltnSn i.+1) Hi.
+  rewrite /k.
+  case E : (inI i); case E1 : (inI i.+1).
+  - by move: (Hcons i E); rewrite E1.
+  - by apply: Z.le_max_r.
+  - have A := Hoff' i i1s (negbT E).
+    have B : (ex i.+2 + 2 <= ex i)%Z := Hon2' i.+1 E1.
+    suff H : (Z.max (ex i.+1) (ex i.+2 + 1) <= ex i - 1)%Z by lia.
+    by apply: Z.max_lub; lia.
+  - by have := Hoff' i i1s (negbT E); lia.
+(* The last pair is weak: index [i.+1] cannot be in [I].                      *)
+have Hlast : forall i, i.+2 = size l -> (k i.+1 <= k i)%Z.
+  move=> i Hi.
+  have i1s : (i.+1 < size l)%N by rewrite -Hi; apply: ltnSn.
+  have Hn1 : ~~ inI i.+1.
+    by apply/negP => Hc; have := (HI _ Hc).2; rewrite -Hi ltnn.
+  rewrite /k (negbTE Hn1).
+  case E : (inI i).
+  - by have := Z.le_max_r (ex i) (ex i.+1 + 1); lia.
+  - by have := Hoff' i i1s (negbT E); lia.
+split; [ | exact: Hgap | exact: Hlast].
+(* [repr (k i) x_i]: [x_i] is a multiple of [2^(k_i-p+1)] with mantissa <2^p. *)
+move=> i Hi.
+have Fxi := Fnth i Hi.
+have Hkge : (ex i <= k i)%Z.
+  by rewrite /k; case: (inI i); [apply: Z.le_max_l | apply: Z.le_refl].
+have Hisimul : is_imul (nth (0:R) l i) (pow (k i - p + 1)).
+  rewrite /k; case E : (inI i); last first.
+    have -> : (ex i - p + 1 = cexp (nth (0:R) l i))%Z by rewrite /ex; lia.
+    exact: format_imul_cexp Fxi.
+  case: (Z.max_spec (ex i) (ex i.+1 + 1)) => [[_ ->]|[_ ->]].
+    have -> : (ex i.+1 + 1 - p + 1 = cexp (nth (0:R) l i.+1) + 1)%Z
+      by rewrite /ex; lia.
+    exact: Hdiv i E.
+  have -> : (ex i - p + 1 = cexp (nth (0:R) l i))%Z by rewrite /ex; lia.
+  exact: format_imul_cexp Fxi.
+split.
+  by move: Hkge (@cexp_ge_emin (nth (0:R) l i)); rewrite /ex; lia.
+have [z Hz] := Hisimul.
+exists z; last exact: Hz.
+apply: lt_IZR; rewrite abs_IZR IZR_2powp.
+have Hb := bpow_mag_gt beta (nth (0:R) l i).
+have Hrw : Rabs (nth (0:R) l i) = Rabs (IZR z) * pow (k i - p + 1).
+  by rewrite {1}Hz Rabs_mult (Rabs_pos_eq _ (bpow_ge_0 _ _)).
+rewrite Hrw in Hb.
+have Hmle : pow (mag beta (nth (0:R) l i)) <= pow p * pow (k i - p + 1).
+  rewrite -bpow_plus; apply: bpow_le.
+  by move: Hkge (Hcx i Hi); rewrite /ex; lia.
+have Hpos := bpow_gt_0 beta (k i - p + 1).
+nra.
+Qed.
 
 (* Paper Corollary 1: [VecSum l] is F-nonoverlapping (wIZ) with the same sum. *)
 (* Assembled from the bump [Cor1_bump_Thm1_hyp] and Theorem 1 [VecSum_Thm1].  *)

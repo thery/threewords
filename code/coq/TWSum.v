@@ -96,6 +96,7 @@ Local Notation nth_step_zero := (@nth_step_zero p emin Hp2).
 
 (* Triple-word type and merge from [TWR.v]/[Merge.v]; fix [p]/[emin].         *)
 Local Notation isTW := (isTW p emin).
+Local Notation isTWnorm := (isTWnorm p emin).
 Local Notation isTW_sorted_mag := (isTW_sorted_mag Hp2).
 Local Notation Merge_pairwise_ulp := (Merge_pairwise_ulp Hp2).
 
@@ -110,9 +111,7 @@ Local Notation format_vseb := (format_vseb Hp2).
 Local Notation format_vsebK := (format_vsebK Hp2).
 Local Notation vecSum_sum := (vecSum_sum Hp2 emin_le_0 choice_sym).
 Local Notation vseb_sum := (vseb_sum Hp2 emin_le_0 choice_sym).
-Local Notation vecSum_Fnonoverlap :=
-  (vecSum_Fnonoverlap Hp2 emin_le_0 choice_sym).
-Local Notation Cor1_hyp := (Cor1_hyp p emin).
+Local Notation vecSum_Thm6 := (vecSum_Thm6 Hp2 emin_le_0 choice_sym).
 Local Notation vseb_Pnonoverlap :=
   (vseb_Pnonoverlap Hp2 emin_le_0 choice_sym).
 
@@ -152,19 +151,10 @@ Lemma size_vecSum_Merge x0 x1 x2 y0 y1 y2 :
      (size (vecSum (Merge [:: x0; x1; x2] [:: y0; y1; y2]))) <= p + 1)%Z.
 Proof. by rewrite size_vecSum size_Merge /=; lia. Qed.
 
-(* Paper Section 5: the merge of two P-nonoverlapping triple-word triples     *)
-(* satisfies the hypotheses of Corollary 1 -- the overlap set [I] and its     *)
-(* bounds come from the ulp-separation within each triple.  This supplies the *)
-(* [Cor1_hyp] premise of [vecSum_Fnonoverlap].  (To be discharged.)           *)
-Lemma Merge_Cor1_hyp l1 l2 :
-  {in l1, forall z, format z} -> {in l2, forall z, format z} ->
-  Pnonoverlap l1 -> Pnonoverlap l2 -> Cor1_hyp (Merge l1 l2).
+Lemma TWSum_isTW x y :
+  isTW x -> isTW y -> isTWnorm x -> isTWnorm y -> isTW (TWSum x y).
 Proof.
-Admitted.
-
-Lemma TWSum_isTW x y : isTW x -> isTW y -> isTW (TWSum x y).
-Proof.
-case: x => x0 x1 x2; case: y => y0 y1 y2 => Hx Hy.
+case: x => x0 x1 x2; case: y => y0 y1 y2 => Hx Hy Hnx Hny.
 pose z := Merge [:: x0; x1; x2] [:: y0; y1; y2].
 pose e := vecSum z.
 (* Merge keeps the six terms floating-point ...                               *)
@@ -205,13 +195,14 @@ have Hr_nonover : Pnonoverlap (vsebK 3 e).
   - exact: size_vecSum_Merge.
   - apply/format_vecSum/format_Merge => //; first by apply: (isTW_format Hx).
     by apply: (isTW_format Hy).
-  have HCz : Cor1_hyp z.
-    apply: Merge_Cor1_hyp.
-    - by case: Hx => x0F x1F x2F _ _ t; rewrite !inE => /or3P[] /eqP->.
-    - by case: Hy => y0F y1F y2F _ _ t; rewrite !inE => /or3P[] /eqP->.
-    - exact: isTW_Pnonoverlap Hx.
-    - exact: isTW_Pnonoverlap Hy.
-  by case: (vecSum_Fnonoverlap HCz).
+  rewrite /e; apply: vecSum_Thm6.
+  - by rewrite /z size_Merge.
+  - exact: Hz_format.
+  - exact: Hz_sorted.
+  - exact: Hz_ulp.
+  move=> t; rewrite /z mem_Merge => /orP[tIn|tIn] tn0.
+    exact: Hnx t tIn tn0.
+  exact: Hny t tIn tn0.
 (* and its terms are floating-point numbers.                                  *)
 have Hr_format : {in vsebK 3 e, forall t, format t}.
   by apply/format_vsebK/format_vecSum.
@@ -238,11 +229,11 @@ Qed.
 
 (* A float is at most [(2 - 2u) ufp] of itself (max-mantissa bound).  Holds   *)
 (* also at 0 and in the subnormal range, so no no-underflow hypothesis.       *)
-Lemma TWSum_error x y : isTW x -> isTW y ->
+Lemma TWSum_error x y : isTW x -> isTW y -> isTWnorm x -> isTWnorm y ->
   Rabs (TWval (TWSum x y) - (TWval x + TWval y)) <=
      errc * Rabs (TWval x + TWval y).
 Proof.
-case: x => x0 x1 x2; case: y => y0 y1 y2 => Hx Hy.
+case: x => x0 x1 x2; case: y => y0 y1 y2 => Hx Hy Hnx Hny.
 pose z := Merge [:: x0; x1; x2] [:: y0; y1; y2].
 pose e := vecSum z.
 (* Merge is a permutation: it preserves the exact sum.                        *)
@@ -275,13 +266,15 @@ have Htrunc :
     - by rewrite !inE => /or3P[] /eqP->; case: Hy.
     - by apply: isTW_Pnonoverlap Hx.
     by apply: isTW_Pnonoverlap Hy.
-  have HCz : Cor1_hyp z.
-    apply: Merge_Cor1_hyp.
-    - by case: Hx => x0F x1F x2F _ _ t; rewrite !inE => /or3P[] /eqP->.
-    - by case: Hy => y0F y1F y2F _ _ t; rewrite !inE => /or3P[] /eqP->.
-    - exact: isTW_Pnonoverlap Hx.
-    - exact: isTW_Pnonoverlap Hy.
-  have HFe : Fnonoverlap e by case: (vecSum_Fnonoverlap HCz).
+  have HFe : Fnonoverlap e.
+    rewrite /e; apply: vecSum_Thm6.
+    - by rewrite /z size_Merge.
+    - exact: Hzf.
+    - exact: Hzs.
+    - exact: Hzu.
+    move=> t; rewrite /z mem_Merge => /orP[tIn|tIn] tn0.
+      exact: Hnx t tIn tn0.
+    exact: Hny t tIn tn0.
   have Fe : {in e, forall t, format t} by apply: format_vecSum.
   have Py : Pnonoverlap (vseb e).
     by case: (vseb_Pnonoverlap _ Fe HFe) => //;

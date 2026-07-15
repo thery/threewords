@@ -940,4 +940,47 @@ Qed.
 Lemma vecSum_Fnonoverlap_sep l : Cor1_hyp l -> Fnonoverlap (vecSum l).
 Proof. by move=> Hc; case: (vecSum_Fnonoverlap Hc). Qed.
 
+(* ===========================================================================*)
+(*  Paper Theorem 6 (core).                                                   *)
+(* ===========================================================================*)
+(* For at most SIX floating-point inputs that are magnitude-sorted and        *)
+(* pairwise-ulp separated ([|x_{i+1}| <= |x_i|] and [|x_{i+2}| < ulp(x_i)]),  *)
+(* [VecSum] returns an F-nonoverlapping (wIZ) sequence.  This is exactly the  *)
+(* hypothesis set the merge of two triple-words supplies (Theorem 6 is the    *)
+(* result [TWSum] needs), and it is why the paper states it for [x_0..x_5].   *)
+(*                                                                            *)
+(* WHY THIS IS NOT [vecSum_Fnonoverlap] (Corollary 1) IN DISGUISE.  The       *)
+(* Corollary-1 route ([Cor1_hyp] => [Thm1_hyp] => Theorem 1) is UNSOUND for   *)
+(* these inputs.  Take two triple-words with near-equal odd leaders, e.g.     *)
+(*   x = TWR (1 + 3.2^-52) (2^-60) (2^-120),  y = TWR (1 + 2^-52) ... .       *)
+(* Their merge starts [z0 = 1 + 3.2^-52], [z1 = 1 + 2^-52]: same binade, both *)
+(* with odd mantissa.  At index [0] (which is never in the overlap set [I],   *)
+(* since [I <= [1,n-2]]):                                                     *)
+(*   - the off-[I] gap [2.ufp(z1) <= ufp(z0)] fails ([2 <= 1]);               *)
+(*   - the on-[I] bound [ufp(z1) <= 2^(p-2) uls(z0)] fails too, because       *)
+(*     [uls(z0) = 2^-52] (odd mantissa) gives [2^(p-2) uls(z0) = 1/2 < 1].    *)
+(* So NO [inI] satisfies [Cor1_hyp] for the merge, and in fact no exponent    *)
+(* map satisfies [Thm1_hyp] either ([k0 = k1 = 0] forced, but the strict gap  *)
+(* wants [k1 + 1 <= k0]).  The result is still true -- [2Sum] collapses the   *)
+(* two leaders exactly -- but only the paper's DIRECT proof of Theorem 6      *)
+(* reaches it, not Theorem 1.  (Theorem 1 / Corollary 1 above remain valid    *)
+(* standalone; they are simply not applicable to an arbitrary merge.)         *)
+(*                                                                            *)
+(* PAPER PROOF (Section 5.1, sketch; not detailed there): induction on the    *)
+(* running sums [s_i = (vecSumAux (drop i l)).2],                             *)
+(*   |s_i| <= 2 ufp(x_{i-1})  and  |s_i| <= 4 ufp(x_i),                       *)
+(* then a case study on whether an error [e_i] exceeds [1/2 uls(e_j)] for     *)
+(* some [j < i] (cases [i <= 3], [i >= 4], and [0 < e_i <= 1/2 uls(e_j)]).    *)
+(* The [<= 6] bound is necessary: the paper exhibits a 7-input counterexample.*)
+(* NO-UNDERFLOW: as everywhere here (paper: unlimited exponent range), every  *)
+(* nonzero input is assumed NORMAL ([emin + p <= mag]); the interleaving      *)
+(* zeros are the ones [Fnonoverlap] (wIZ) filters out.                        *)
+Lemma vecSum_Thm6 l :
+  (size l <= 6)%N ->
+  {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
+  (forall z, z \in l -> z <> 0 -> (emin + p <= mag beta z)%Z) ->
+  Fnonoverlap (vecSum l).
+Proof.
+Admitted.
+
 End SecVecSum.

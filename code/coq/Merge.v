@@ -85,6 +85,18 @@ case: Rle_bool => /=; first by rewrite IH1.
 by rewrite IH2 addnS.
 Qed.
 
+(* [Merge] is a permutation of its inputs, so its members are exactly their   *)
+(* union.  Used to thread element-wise side conditions (formatness, the       *)
+(* no-underflow normality) from the two triples to the merged sequence.       *)
+Lemma mem_Merge z l1 l2 : (z \in Merge l1 l2) = (z \in l1) || (z \in l2).
+Proof.
+elim: l1 l2 => [|a1 l1 IH1] l2 /=; first by case: l2.
+elim: l2 => [|a2 l2 IH2] /=; first by rewrite orbF.
+case: Rle_bool; rewrite !inE.
+  by rewrite IH1 !inE orbA.
+by rewrite IH2 !inE orbCA.
+Qed.
+
 (* ===========================================================================*)
 (*  Triple-word numbers                                                       *)
 (* ===========================================================================*)

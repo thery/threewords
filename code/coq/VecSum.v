@@ -727,21 +727,7 @@ apply: Rle_trans Hle _.
 by have := Hulsei; lra.
 Qed.
 
-(* Relaxed exponent hypothesis (paper Corollary 1): each [x_i] is [repr] at   *)
-(* [k_i], the [k_i] are non-increasing, and drop by at least 1 every two      *)
-(* steps -- i.e. at most one "overlap" (equal-magnitude consecutive pair),    *)
-(* never two in a row.  This is what [sorted_mag] + [pairwise_ulp] provide and*)
-(* what [Merge] guarantees on the six merged terms.  The two-step strict drop *)
-(* is only required at nonzero entries: in a [sorted_mag] list the zeros are  *)
-(* trailing, and near the underflow floor a strict drop through a zero cannot *)
-(* be met (e.g. [[2^emin; 0; 0]]), so the guard keeps the hypothesis true.    *)
-Definition Thm1_hyp_wk (k : nat -> Z) (l : seq R) : Prop :=
-  [/\ (forall i, (i < size l)%N -> repr (k i) (nth 0 l i)),
-      (forall i, (i.+1 < size l)%N -> (k i.+1 <= k i)%Z) &
-      (forall i, (i.+2 < size l)%N -> nth 0 l i.+2 <> 0 ->
-         (k i.+2 + 1 <= k i)%Z) ].
-
-(* Reusable pieces for PIECE 1 (building the relaxed exponent map).           *)
+(* Reusable pieces for building the exponent map of paper Corollary 1.        *)
 
 (* Converse of [repr_format] at the canonical exponent: a nonzero float is    *)
 (* [repr] at [cexp x + p - 1] (so [k - p + 1 = cexp x]), with mantissa        *)
@@ -790,91 +776,211 @@ have Hc2 : cexp y = Z.max (mag beta y - p) emin by [].
 by rewrite Hc2; apply: Z.max_lub_lt; lia.
 Qed.
 
-(* PIECE 1: build the relaxed exponent map from the concrete hypotheses.  Take*)
-(* [k i := cexp (nth 0 l i) + p - 1] on nonzero entries (so [repr] holds via  *)
-(* [repr_canonical]) and [k i := emin + p - 1] on zeros.  [sorted_mag] gives  *)
-(* [cexp] non-increasing ([cexp_le]) hence [k i.+1 <= k i]; [pairwise_ulp]    *)
-(* gives [cexp (nth i.+2) < cexp (nth i)] ([cexp_lt_ulp]) hence the two-step  *)
-(* strict drop.  The two-step drop is only claimed at nonzero entries (zeros  *)
-(* are trailing, and near the underflow floor the strict drop cannot hold).   *)
-Lemma sorted_pairwise_k l :
-  {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
-  exists k, Thm1_hyp_wk k l.
+(* =========================================================================  *)
+(*  Paper Corollary 1                                                         *)
+(*                                                                            *)
+(*  The paper reduces Corollary 1 to Theorem 1 ([VecSum_Thm1], proved above)  *)
+(*  by exhibiting a "bumped" exponent map.  Let [I] (here the boolean         *)
+(*  predicate [inI]) be the set of "overlap" indices; it has no two           *)
+(*  consecutive elements and lies in [[1, n-2]].  The construction is         *)
+(*    k_i = e_{x_i}                     for i not in I,                       *)
+(*    k_i = max (k_{i+1} + 1, e_{x_i})  for i in I,                           *)
+(*  where [e_{x_i} = cexp x_i + p - 1] is the canonical exponent.             *)
+(* =========================================================================  *)
+
+(* Hypotheses of paper Corollary 1 on the input list [l] (Section 2.1).       *)
+(* [inI] is the overlap set [I]; the conjuncts are, in order:                 *)
+(*  - [I] lies in [[1, n-2]];                                                 *)
+(*  - [I] has no two consecutive indices;                                     *)
+(*  - off [I]: the strict ufp gap  [ufp(x_{i+1}) <= 1/2 ufp(x_i)];            *)
+(*  - on  [I]: the overlap bound   [ufp(x_{i+1}) <= 2^(p-2) uls(x_i)];        *)
+(*  - on  [I]: the 2-step quarter gap  [ufp(x_{i+1}) <= 1/4 ufp(x_{i-1})].    *)
+(* The paper assumes an UNLIMITED exponent range ("provided underflow and     *)
+(* overflow do not occur"): we transcribe that as (i) the interleaving zeros  *)
+(* removed -- the list is zero-free -- and (ii) every entry is normal         *)
+(* ([emin + p <= mag x_i], so [cexp x_i = mag x_i - p] and [ufp x_i =         *)
+(* 2^(cexp x_i + p - 1)]).  Without it Theorem 1's strict exponent gap is     *)
+(* unsatisfiable at the [emin] floor (subnormal interior overlaps).           *)
+Definition Cor1_hyp (l : seq R) : Prop :=
+  [/\ {in l, forall z, format z},
+      (forall i, (i < size l)%N -> nth 0 l i <> 0),
+      (forall i, (i < size l)%N -> (emin + p <= mag beta (nth (0:R) l i))%Z) &
+   exists inI : nat -> bool,
+    [/\ (forall i, inI i -> (0 < i)%N /\ (i.+1 < size l)%N),
+        (forall i, inI i -> ~~ inI i.+1),
+        (forall i, (i.+1 < size l)%N -> ~~ inI i ->
+           2 * ufp (nth 0 l i.+1) <= ufp (nth 0 l i)),
+        (forall i, inI i ->
+           ufp (nth 0 l i.+1) <= pow (p - 2) * uls (nth 0 l i)) &
+        (forall i, inI i -> 4 * ufp (nth 0 l i.+1) <= ufp (nth 0 l i.-1)) ]].
+
+(* MAIN STEP (paper Corollary 1): the bumped exponent map exists and meets    *)
+(* the hypotheses [Thm1_hyp] of Theorem 1.  Proof to discharge, following the *)
+(* paper: build [k] as above (after removing interleaving zeros); then        *)
+(*  - repr:  [2^(k_{i+1}-p+2) | x_i] and [2^(e_{x_i}-p+1) | x_i] give         *)
+(*    [2^(k_i-p+1) | x_i], and [|x_i| <= 2.2^(e_{x_i})] gives [|x_i| <=       *)
+(*    2.2^(k_i)] -- i.e. [repr (k i) x_i] (uses [repr_canonical] off [I]);    *)
+(*  - gap:   for [i, i+1] off [I], [k_{i+1} <= k_i - 1]; for [i] in [I],      *)
+(*    [k_{i+1} <= k_i - 1] and [e_{x_i} <= k_{i-1}-1], [k_{i+1} <= k_{i-1}-2],*)
+(*    hence [k_i <= k_{i-1} - 1].                                             *)
+Lemma Cor1_bump_Thm1_hyp l : Cor1_hyp l -> exists k, Thm1_hyp k l.
 Proof.
-move=> lF lM lP.
-pose k := fun (i : nat) =>
-   if Req_bool (nth (0 : R) l i) 0 then (emin + p - 1)%Z
-   else (cexp (nth (0 : R) l i) + p - 1)%Z.
+move=> [Hfmt Hnz Hnorm [inI [HI Hcons Hoff Hon1 Hon2]]].
+pose ex := fun i => (cexp (nth (0:R) l i) + p - 1)%Z.
+pose k := fun i => if inI i then Z.max (ex i) (ex i.+1 + 1) else ex i.
 have Fnth : forall i, (i < size l)%N -> format (nth (0:R) l i).
-  by move=> i Hi; apply: lF; apply: mem_nth.
-have kE_z : forall i, nth (0:R) l i = 0 -> k i = (emin + p - 1)%Z.
-  by move=> i Hi; rewrite /k Hi; case: Req_bool_spec.
-have kE_nz : forall i, nth (0:R) l i <> 0 ->
-    k i = (cexp (nth (0:R) l i) + p - 1)%Z.
-  by move=> i Hi; rewrite /k; case: Req_bool_spec.
-exists k; split.
-- move=> i Hi.
-  case: (Req_dec (nth (0:R) l i) 0) => [Hz|Hnz]; last first.
-    by rewrite (kE_nz i Hnz); apply: repr_canonical => //; exact: Fnth.
-  rewrite (kE_z i Hz) Hz; split; first by lia.
-  exists 0%Z; last by rewrite Rmult_0_l.
-  by rewrite Z.abs_0; apply: Z.pow_pos_nonneg; lia.
-- move=> i Hi.
-  case: (Req_dec (nth (0:R) l i.+1) 0) => [Hz1|Hnz1].
-    rewrite (kE_z _ Hz1).
-    case: (Req_dec (nth (0:R) l i) 0) => [Hz0|Hnz0].
-      by rewrite (kE_z _ Hz0); lia.
-    by rewrite (kE_nz _ Hnz0); have := @cexp_ge_emin (nth (0:R) l i); lia.
-  have Hnz0 := sorted_mag_pred_neq0 lM Hi Hnz1.
-  rewrite (kE_nz _ Hnz1) (kE_nz _ Hnz0).
-  suff: (cexp (nth (0:R) l i.+1) <= cexp (nth (0:R) l i))%Z by lia.
-  by apply: Fast2Sum_robust_flt.cexp_le => //; exact: (lM i Hi).
-- move=> i Hi Hnz2.
-  have Hi1 : (i.+1 < size l)%N by apply: ltn_trans (ltnSn i.+1) Hi.
-  have Hnz1 := sorted_mag_pred_neq0 lM Hi Hnz2.
-  have Hnz0 := sorted_mag_pred_neq0 lM Hi1 Hnz1.
-  rewrite (kE_nz _ Hnz2) (kE_nz _ Hnz0).
-  suff: (cexp (nth (0:R) l i.+2) < cexp (nth (0:R) l i))%Z by lia.
-  by exact: (cexp_lt_ulp (Fnth i.+2 Hi) Hnz0 Hnz2 (lP i Hi)).
+  by move=> i Hi; apply: Hfmt; apply: mem_nth.
+have Hcx : forall i, (i < size l)%N ->
+    cexp (nth (0:R) l i) = (mag beta (nth (0:R) l i) - p)%Z.
+  move=> i Hi; rewrite /cexp /fexp /FLT_exp Z.max_l //.
+  by have := Hnorm i Hi; lia.
+have Hufp : forall i, (i < size l)%N -> ufp (nth (0:R) l i) = pow (ex i).
+  by move=> i Hi; rewrite /ufp /ex (Hcx i Hi); congr bpow; lia.
+exists k.
+(* The paper's ufp gaps, re-read as exponent gaps (entries are normal).       *)
+have Hoff' : forall i, (i.+1 < size l)%N -> ~~ inI i -> (ex i.+1 + 1 <= ex i)%Z.
+  move=> i Hi HnI; have iLs : (i < size l)%N by apply: ltnW.
+  apply: (le_bpow beta); rewrite bpow_plus bpow_1 /=.
+  by have := Hoff i Hi HnI; rewrite (Hufp _ Hi) (Hufp _ iLs); lra.
+have Hon2' : forall i, inI i -> (ex i.+1 + 2 <= ex i.-1)%Z.
+  move=> i HiI; have [i0 i1s] := HI i HiI.
+  have iLs : (i < size l)%N by apply: ltn_trans (ltnSn i) i1s.
+  have im1 : (i.-1 < size l)%N by apply: leq_ltn_trans (leq_pred i) iLs.
+  apply: (le_bpow beta).
+  have E4 : pow 2 = 4 by rewrite /= /Z.pow_pos /=; lra.
+  rewrite bpow_plus E4.
+  by have := Hon2 i HiI; rewrite (Hufp _ i1s) (Hufp _ im1); lra.
+(* The overlap bound gives the divisibility [2^(cexp x_{i+1}+1) | x_i].       *)
+have Hdiv : forall i, inI i ->
+    is_imul (nth (0:R) l i) (pow (cexp (nth (0:R) l i.+1) + 1)).
+  move=> i HiI; have [i0 i1s] := HI i HiI.
+  have iLs : (i < size l)%N by apply: ltn_trans (ltnSn i) i1s.
+  have Fxi := Fnth i iLs.
+  have xin0 : nth (0:R) l i <> 0 by apply: Hnz.
+  have gE : uls (nth (0:R) l i) =
+      pow (cexp (nth (0:R) l i)
+             + Z.of_nat (trZ (Ztrunc (mant (nth (0:R) l i))))).
+    by rewrite /uls; case: Req_bool_spec => // /xin0.
+  have Hle : pow (cexp (nth (0:R) l i.+1) + 1) <= uls (nth (0:R) l i).
+    have H1 := Hon1 i HiI; rewrite (Hufp _ i1s) in H1.
+    have exeq : ex i.+1 = (cexp (nth (0:R) l i.+1) + p - 1)%Z by rewrite /ex.
+    rewrite exeq in H1.
+    have Hsplit : pow (cexp (nth (0:R) l i.+1) + p - 1) =
+        pow (p - 2) * pow (cexp (nth (0:R) l i.+1) + 1).
+      by rewrite -bpow_plus; congr bpow; lia.
+    rewrite Hsplit in H1; have := bpow_gt_0 beta (p-2); nra.
+  apply: is_imul_pow_le.
+    by have H := uls_imul Fxi; rewrite gE in H; exact: H.
+  by apply: (le_bpow beta); rewrite -gE; exact: Hle.
+(* The strict interior gap [k_{i+1} + 1 <= k_i] (paper's four cases).         *)
+have Hgap : forall i, (i.+2 < size l)%N -> (k i.+1 + 1 <= k i)%Z.
+  move=> i Hi.
+  have i1s : (i.+1 < size l)%N by apply: ltn_trans (ltnSn i.+1) Hi.
+  rewrite /k.
+  case E : (inI i); case E1 : (inI i.+1).
+  - by move: (Hcons i E); rewrite E1.
+  - by apply: Z.le_max_r.
+  - have A := Hoff' i i1s (negbT E).
+    have B : (ex i.+2 + 2 <= ex i)%Z := Hon2' i.+1 E1.
+    suff H : (Z.max (ex i.+1) (ex i.+2 + 1) <= ex i - 1)%Z by lia.
+    by apply: Z.max_lub; lia.
+  - by have := Hoff' i i1s (negbT E); lia.
+(* The last pair is weak: index [i.+1] cannot be in [I].                      *)
+have Hlast : forall i, i.+2 = size l -> (k i.+1 <= k i)%Z.
+  move=> i Hi.
+  have i1s : (i.+1 < size l)%N by rewrite -Hi; apply: ltnSn.
+  have Hn1 : ~~ inI i.+1.
+    by apply/negP => Hc; have := (HI _ Hc).2; rewrite -Hi ltnn.
+  rewrite /k (negbTE Hn1).
+  case E : (inI i).
+  - by have := Z.le_max_r (ex i) (ex i.+1 + 1); lia.
+  - by have := Hoff' i i1s (negbT E); lia.
+split; [ | exact: Hgap | exact: Hlast].
+(* [repr (k i) x_i]: [x_i] is a multiple of [2^(k_i-p+1)] with mantissa <2^p. *)
+move=> i Hi.
+have Fxi := Fnth i Hi.
+have Hkge : (ex i <= k i)%Z.
+  by rewrite /k; case: (inI i); [apply: Z.le_max_l | apply: Z.le_refl].
+have Hisimul : is_imul (nth (0:R) l i) (pow (k i - p + 1)).
+  rewrite /k; case E : (inI i); last first.
+    have -> : (ex i - p + 1 = cexp (nth (0:R) l i))%Z by rewrite /ex; lia.
+    exact: format_imul_cexp Fxi.
+  case: (Z.max_spec (ex i) (ex i.+1 + 1)) => [[_ ->]|[_ ->]].
+    have -> : (ex i.+1 + 1 - p + 1 = cexp (nth (0:R) l i.+1) + 1)%Z
+      by rewrite /ex; lia.
+    exact: Hdiv i E.
+  have -> : (ex i - p + 1 = cexp (nth (0:R) l i))%Z by rewrite /ex; lia.
+  exact: format_imul_cexp Fxi.
+split.
+  by move: Hkge (@cexp_ge_emin (nth (0:R) l i)); rewrite /ex; lia.
+have [z Hz] := Hisimul.
+exists z; last exact: Hz.
+apply: lt_IZR; rewrite abs_IZR IZR_2powp.
+have Hb := bpow_mag_gt beta (nth (0:R) l i).
+have Hrw : Rabs (nth (0:R) l i) = Rabs (IZR z) * pow (k i - p + 1).
+  by rewrite {1}Hz Rabs_mult (Rabs_pos_eq _ (bpow_ge_0 _ _)).
+rewrite Hrw in Hb.
+have Hmle : pow (mag beta (nth (0:R) l i)) <= pow p * pow (k i - p + 1).
+  rewrite -bpow_plus; apply: bpow_le.
+  by move: Hkge (Hcx i Hi); rewrite /ex; lia.
+have Hpos := bpow_gt_0 beta (k i - p + 1).
+nra.
 Qed.
 
-(* PIECE 2 (to prove): the separation under the relaxed gap -- the core of    *)
-(* paper Corollary 1, the analogue of [vecSum_sep] for [Thm1_hyp_wk].  Sketch:*)
-(* rerun the [vecSum_sep] contradiction (run bound -> per-step error bound -> *)
-(* an input [x_w], [w < t], off the [2^(g+1)] grid, via [vecSumAux_split] +   *)
-(* [vecSumAux_imul]) with the constants doubled (equal-magnitude pairs) and   *)
-(* the final [k]-inequality adapted: [x_w] off the grid gives [k_w <= k_t]; if*)
-(* [w <= t-2] the 2-step strict drop [k_{i.+2}+1 <= k_i] gives [k_w > k_t]    *)
-(* (contradiction), and [w = t-1] is impossible since an equal-magnitude      *)
-(* predecessor on the same grid cannot be the off-grid input.                 *)
-Lemma vecSum_sep_wk k l : Thm1_hyp_wk k l ->
-  forall i j, (i < j)%N -> (j < size (vecSum l))%N ->
-    nth 0 (vecSum l) i <> 0 ->
-    Rabs (nth 0 (vecSum l) j) <= / 2 * uls (nth 0 (vecSum l) i).
+(* Paper Corollary 1: [VecSum l] is F-nonoverlapping (wIZ) with the same sum. *)
+(* Assembled from the bump [Cor1_bump_Thm1_hyp] and Theorem 1 [VecSum_Thm1].  *)
+Lemma vecSum_Fnonoverlap l :
+  Cor1_hyp l -> Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
 Proof.
-Admitted.
+move=> Hc; have [k Hk] := Cor1_bump_Thm1_hyp Hc.
+exact: VecSum_Thm1 Hk.
+Qed.
 
-(* The separation conjunct of Theorem 1 on the concrete input hypotheses      *)
-(* [sorted_mag l] + [pairwise_ulp l] (paper Corollary 1), assembled from the  *)
-(* two pieces above: build the relaxed [k], peel the recursive [Fnonoverlap]  *)
-(* off with [Fnonoverlap_allpairs], and apply the separation [vecSum_sep_wk]. *)
-Lemma vecSum_Fnonoverlap_sep l :
+(* The F-nonoverlap conjunct alone (used by the downstream [VSEB] chain).     *)
+Lemma vecSum_Fnonoverlap_sep l : Cor1_hyp l -> Fnonoverlap (vecSum l).
+Proof. by move=> Hc; case: (vecSum_Fnonoverlap Hc). Qed.
+
+(* ===========================================================================*)
+(*  Paper Theorem 6 (core).                                                   *)
+(* ===========================================================================*)
+(* For at most SIX floating-point inputs that are magnitude-sorted and        *)
+(* pairwise-ulp separated ([|x_{i+1}| <= |x_i|] and [|x_{i+2}| < ulp(x_i)]),  *)
+(* [VecSum] returns an F-nonoverlapping (wIZ) sequence.  This is exactly the  *)
+(* hypothesis set the merge of two triple-words supplies (Theorem 6 is the    *)
+(* result [TWSum] needs), and it is why the paper states it for [x_0..x_5].   *)
+(*                                                                            *)
+(* WHY THIS IS NOT [vecSum_Fnonoverlap] (Corollary 1) IN DISGUISE.  The       *)
+(* Corollary-1 route ([Cor1_hyp] => [Thm1_hyp] => Theorem 1) is UNSOUND for   *)
+(* these inputs.  Take two triple-words with near-equal odd leaders, e.g.     *)
+(*   x = TWR (1 + 3.2^-52) (2^-60) (2^-120),  y = TWR (1 + 2^-52) ... .       *)
+(* Their merge starts [z0 = 1 + 3.2^-52], [z1 = 1 + 2^-52]: same binade, both *)
+(* with odd mantissa.  At index [0] (which is never in the overlap set [I],   *)
+(* since [I <= [1,n-2]]):                                                     *)
+(*   - the off-[I] gap [2.ufp(z1) <= ufp(z0)] fails ([2 <= 1]);               *)
+(*   - the on-[I] bound [ufp(z1) <= 2^(p-2) uls(z0)] fails too, because       *)
+(*     [uls(z0) = 2^-52] (odd mantissa) gives [2^(p-2) uls(z0) = 1/2 < 1].    *)
+(* So NO [inI] satisfies [Cor1_hyp] for the merge, and in fact no exponent    *)
+(* map satisfies [Thm1_hyp] either ([k0 = k1 = 0] forced, but the strict gap  *)
+(* wants [k1 + 1 <= k0]).  The result is still true -- [2Sum] collapses the   *)
+(* two leaders exactly -- but only the paper's DIRECT proof of Theorem 6      *)
+(* reaches it, not Theorem 1.  (Theorem 1 / Corollary 1 above remain valid    *)
+(* standalone; they are simply not applicable to an arbitrary merge.)         *)
+(*                                                                            *)
+(* PAPER PROOF (Section 5.1, sketch; not detailed there): induction on the    *)
+(* running sums [s_i = (vecSumAux (drop i l)).2],                             *)
+(*   |s_i| <= 2 ufp(x_{i-1})  and  |s_i| <= 4 ufp(x_i),                       *)
+(* then a case study on whether an error [e_i] exceeds [1/2 uls(e_j)] for     *)
+(* some [j < i] (cases [i <= 3], [i >= 4], and [0 < e_i <= 1/2 uls(e_j)]).    *)
+(* The [<= 6] bound is necessary: the paper exhibits a 7-input counterexample.*)
+(* NO-UNDERFLOW: as everywhere here (paper: unlimited exponent range), every  *)
+(* nonzero input is assumed NORMAL ([emin + p <= mag]); the interleaving      *)
+(* zeros are the ones [Fnonoverlap] (wIZ) filters out.                        *)
+Lemma vecSum_Thm6 l :
+  (size l <= 6)%N ->
   {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
+  (forall z, z \in l -> z <> 0 -> (emin + p <= mag beta z)%Z) ->
   Fnonoverlap (vecSum l).
 Proof.
-move=> lF lM lP; have [k Hk] := sorted_pairwise_k lF lM lP.
-by apply: Fnonoverlap_allpairs; apply: (vecSum_sep_wk Hk).
-Qed.
-
-(* Theorem 1 (VecSum), on the concrete input separation: [vecSum l] is        *)
-(* F-nonoverlapping AND has the same exact sum.  Assembles the divisibility   *)
-(* core [vecSum_Fnonoverlap_sep] with [vecSum_sum] (a chain of exact 2Sums).  *)
-Lemma vecSum_Fnonoverlap l :
-  {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
-  Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
-Proof.
-move=> lF lM lP; split; last by apply: vecSum_sum.
-exact: vecSum_Fnonoverlap_sep lF lM lP.
-Qed.
+Admitted.
 
 End SecVecSum.

@@ -65,6 +65,15 @@ Definition isTW (x : twR) : Prop :=
 (* ===========================================================================*)
 Definition TW2l x := let: TWR x0 x1 x2 := x in [:: x0; x1; x2].
 
+(* No-underflow assumption (paper: unlimited exponent range, "provided that   *)
+(* underflow and overflow do not occur"): every NONZERO limb of a triple-word *)
+(* is a normal float ([emin + p <= mag]).  The VecSum F-nonoverlap result     *)
+(* (paper Theorem 6) is false at the [emin] floor, so [TWSum]'s correctness   *)
+(* results carry this on both inputs (zeros are allowed -- they are the       *)
+(* interleaving zeros the paper removes).                                     *)
+Definition isTWnorm (x : twR) : Prop :=
+  forall z, z \in TW2l x -> z <> 0 -> (emin + p <= mag beta z)%Z.
+
 (* The merge precondition for a single TW: its three limbs are magnitude-     *)
 (* sorted.  Two applications of [format_lt_ulp_le] to the [isTW] conjuncts.   *)
 Lemma isTW_sorted_mag x : isTW x -> sorted_mag (TW2l x).

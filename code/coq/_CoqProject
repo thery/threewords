@@ -6,6 +6,7 @@ Fmore.v
 Rstruct.v
 MULTmore.v
 Fast2Sum_robust_flt.v
+Fast2Sum_robust_flx.v
 prelim.v
 Uls.v
 TwoSum.v

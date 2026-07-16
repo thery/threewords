@@ -26,7 +26,6 @@ Section Uls.
 (* these lemmas are reusable at any FLT format.  Radix is binary ([trP]/[trZ] *)
 (* are 2-adic valuations).                                                    *)
 Variable p : Z.
-Variable emin : Z.
 Context { prec_gt_0 : Prec_gt_0 p }.
 
 Let beta := radix2.
@@ -39,19 +38,11 @@ Local Notation u := (u p beta).
 Local Notation u_gt_0 := (u_gt_0 p beta).
 
 Local Notation float := (float radix2).
-Local Notation fexp := (FLT_exp emin p).
+Local Notation fexp := (FLX_exp p).
 Local Notation format := (generic_format beta fexp).
 Local Notation cexp := (cexp beta fexp).
 Local Notation mant := (scaled_mantissa beta fexp).
 Local Notation ulp := (ulp beta fexp).
-
-(* [ulp] is strictly positive everywhere: at 0 it is [bpow emin] (FLT), and   *)
-(* elsewhere [bpow (cexp _)].                                                 *)
-Lemma ulp_gt_0 x : 0 < ulp x.
-Proof.
-have [->|xn0] := Req_dec x 0; first by rewrite ulp_FLT_0; apply: bpow_gt_0.
-by rewrite ulp_neq_0 //; apply: bpow_gt_0.
-Qed.
 
 (* [uls x] -- "unit in the last significant place": the weight of the         *)
 (* RIGHTMOST NONZERO bit of [x].  ([ulp x = 2^(cexp x)] is the weight of the  *)
@@ -105,10 +96,10 @@ Qed.
 
 (* uls, as above: [ulp 0] at zero, else [2^(cexp x + v2(mantissa))].          *)
 Definition uls (x : R) : R :=
-  if Req_bool x 0 then ulp 0 else
+  if Req_bool x 0 then 0 else
   let m := Ztrunc (mant x) in pow (cexp x + Z.of_nat (trZ m))%Z.
 
-Lemma uls0 : uls 0 = ulp 0.
+Lemma uls0 : uls 0 = 0.
 Proof. by rewrite /uls; case: Req_bool_spec. Qed.
 
 (* [x] factors as (its odd mantissa part) * [uls x] -- the defining property  *)
@@ -133,14 +124,20 @@ Qed.
 Lemma ulp_le_ulps x : ulp x <= uls x.
 Proof.
 rewrite /uls.
-case: Req_bool_spec => [->//|x_neq0]; first by lra.
+case: Req_bool_spec => [->//|x_neq0]; first by rewrite ulp_FLX_0; lra.
 rewrite ulp_neq_0 //;apply: bpow_le; lia.
 Qed.
 
 (* [uls] is always positive (a power of two, or [ulp 0] at zero).             *)
-Lemma uls_gt_0 x : 0 < uls x.
+Lemma uls_gt_0 x : x <> 0 -> 0 < uls x.
 Proof.
-by rewrite /uls; case: Req_bool_spec => _; [exact: ulp_gt_0 | exact: bpow_gt_0].
+by rewrite /uls; case: Req_bool_spec => // _ _; exact: bpow_gt_0.
+Qed.
+
+Lemma uls_ge_0 x : 0 <= uls x.
+Proof.
+rewrite /uls; case: Req_bool_spec => [|_]; first by lra.
+by exact: bpow_ge_0.
 Qed.
 
 (* The rightmost nonzero bit is at most the magnitude: [uls x <= |x|] for a   *)
@@ -148,7 +145,7 @@ Qed.
 (* [|x| = |M'| * uls x >= uls x].                                             *)
 Lemma uls_le_abs x : format x -> x <> 0 -> uls x <= Rabs x.
 Proof.
-move=> xF xn0; have Hu := uls_gt_0 x.
+move=> xF xn0; have Hu := uls_gt_0 xn0.
 have Hx := ulsE xF.
 set M := (Ztrunc (mant x) / 2 ^ Z.of_nat (trZ (Ztrunc (mant x))))%Z in Hx.
 have M0 : M <> 0%Z by move=> H0; apply: xn0; rewrite Hx H0 /= Rmult_0_l.

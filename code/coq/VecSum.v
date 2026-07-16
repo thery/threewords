@@ -21,6 +21,14 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+(* Round-to-nearest TIES-TO-EVEN: the tie-breaking [choice] returns the       *)
+(* parity that makes the kept mantissa even.  Strictly stronger than the      *)
+(* symmetry [choice_sym] the rest of the development assumes; paper Theorem 6 *)
+(* ([vecSum_Thm6]) genuinely needs it (the same-binade running-sum bound lands*)
+(* on an exact rounding midpoint).                                            *)
+Definition ties_to_even (choice : Z -> bool) :=
+  forall z : Z, choice z = ~~ Z.even z.
+
 Section SecVecSum.
 
 Variable p : Z.
@@ -966,16 +974,37 @@ Proof. by move=> Hc; case: (vecSum_Fnonoverlap Hc). Qed.
 (* reaches it, not Theorem 1.  (Theorem 1 / Corollary 1 above remain valid    *)
 (* standalone; they are simply not applicable to an arbitrary merge.)         *)
 (*                                                                            *)
-(* PAPER PROOF (Section 5.1, sketch; not detailed there): induction on the    *)
-(* running sums [s_i = (vecSumAux (drop i l)).2],                             *)
-(*   |s_i| <= 2 ufp(x_{i-1})  and  |s_i| <= 4 ufp(x_i),                       *)
-(* then a case study on whether an error [e_i] exceeds [1/2 uls(e_j)] for     *)
-(* some [j < i] (cases [i <= 3], [i >= 4], and [0 < e_i <= 1/2 uls(e_j)]).    *)
+(* TIES-TO-EVEN.  The paper's rounding is round-to-nearest, TIES-TO-EVEN      *)
+(* ([RN(t)], p.1); this development is otherwise generic over a symmetric     *)
+(* [choice] ([choice_sym]).  Theorem 6 genuinely NEEDS ties-to-even: in the   *)
+(* same-binade case the running-sum bound reduces to [RN(x_j + s_{j+1}) <=    *)
+(* 2 ufp(x_{j-1})] where the worst configuration lands on the EXACT midpoint  *)
+(* [x_j + s_{j+1} = pow(mag x_j) + ulp(x_j)] (reachable when [mag x_{j+1} =   *)
+(* mag x_j - p]); ties-to-even rounds it down to the even neighbour, a general*)
+(* [choice] (e.g. ties-away-from-zero) rounds it up and breaks the bound.  So *)
+(* [vecSum_Thm6] carries [choice_even : forall z, choice z = ~~ Z.even z].    *)
+(* Theorem 1 never hits this because its strict exponent gap leaves slack.    *)
+(*                                                                            *)
+(* PROOF PLAN (paper Section 5.1, undetailed there; reconstructed):           *)
+(* (a) run-bound [vecSum_run_ufp]: [|s_{j+1}| <= 2 ufp(x_j)] and              *)
+(*     [|s_j| <= 4 ufp(x_j)] by coupled downward induction.  Strict binade    *)
+(*     drop [x_j -> x_{j+1}]: [round_N_le_midp]/float bound.  Same binade     *)
+(*     [mag x_j = mag x_{j-1}]: [pairwise_ulp] forces [mag x_{j+2} < mag x_j] *)
+(*     so [|s_{j+1}| <= 2 ulp(x_j)], then [round_N_le_midp] (strict) or       *)
+(*     [round_N_middle] + [choice_even] (the exact tie).                      *)
+(* (b) err-bound: [|e_{i+1}| <= 2u ufp(x_i)] via [magnitude_vecSum_err] + (a).*)
+(* (c) separation core (a [vecSum_sep] analog on canonical [ex = mag - 1]):   *)
+(*     an overlap [|e_t| > 1/2 uls(e_{i'})], [i' < t], forces some input      *)
+(*     [x_w], [w < t], off the [2^(g+1)] grid; if [w <= t-2] then             *)
+(*     [pairwise_ulp] gives the STRICT drop [ex_w > ex_t] contradicting the   *)
+(*     error bound; the [w = t-1] same-binade sub-case is the residual work.  *)
+(* (d) zeros: input zeros produce output zeros without changing the nonzero   *)
+(*     terms (paper: "removed"), so reduce to the zero-free case; the wIZ      *)
+(*     [Fnonoverlap] ignores them.                                             *)
 (* The [<= 6] bound is necessary: the paper exhibits a 7-input counterexample.*)
-(* NO-UNDERFLOW: as everywhere here (paper: unlimited exponent range), every  *)
-(* nonzero input is assumed NORMAL ([emin + p <= mag]); the interleaving      *)
-(* zeros are the ones [Fnonoverlap] (wIZ) filters out.                        *)
+(* NO-UNDERFLOW: every nonzero input is assumed NORMAL ([emin + p <= mag]).   *)
 Lemma vecSum_Thm6 l :
+  ties_to_even choice ->
   (size l <= 6)%N ->
   {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
   (forall z, z \in l -> z <> 0 -> (emin + p <= mag beta z)%Z) ->

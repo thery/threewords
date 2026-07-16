@@ -80,13 +80,16 @@ Local Notation errc :=
   (2 * (u * u * u) + 42 / 10 * (u * u * u * u)).
 
 (* The sum of two triple words is a triple word (paper Theorem, Section 5.1), *)
-(* under the paper's no-underflow assumption ([isTWnorm]).                    *)
+(* under the paper's no-underflow ([isTWnorm]) and ties-to-even assumptions.  *)
 Theorem TWSum_isTW x y :
+  ties_to_even choice ->
   isTW x -> isTW y -> isTWnorm x -> isTWnorm y -> isTW (TWSum x y).
 Proof. exact: (TWSum_isTW Hp2 emin_le_0 Hp6 choice_sym). Qed.
 
 (* Its relative error is at most [errc = 2u^3 + 4.2u^4] (Ensure of Alg. 8).   *)
-Theorem TWSum_error x y : isTW x -> isTW y -> isTWnorm x -> isTWnorm y ->
+Theorem TWSum_error x y :
+  ties_to_even choice ->
+  isTW x -> isTW y -> isTWnorm x -> isTWnorm y ->
   Rabs (TWval (TWSum x y) - (TWval x + TWval y)) <=
     errc * Rabs (TWval x + TWval y).
 Proof. exact: (TWSum_error Hp2 emin_le_0 Hp6 choice_sym). Qed.

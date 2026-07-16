@@ -152,9 +152,10 @@ Lemma size_vecSum_Merge x0 x1 x2 y0 y1 y2 :
 Proof. by rewrite size_vecSum size_Merge /=; lia. Qed.
 
 Lemma TWSum_isTW x y :
+  ties_to_even choice ->
   isTW x -> isTW y -> isTWnorm x -> isTWnorm y -> isTW (TWSum x y).
 Proof.
-case: x => x0 x1 x2; case: y => y0 y1 y2 => Hx Hy Hnx Hny.
+case: x => x0 x1 x2; case: y => y0 y1 y2 => Hceven Hx Hy Hnx Hny.
 pose z := Merge [:: x0; x1; x2] [:: y0; y1; y2].
 pose e := vecSum z.
 (* Merge keeps the six terms floating-point ...                               *)
@@ -196,6 +197,7 @@ have Hr_nonover : Pnonoverlap (vsebK 3 e).
   - apply/format_vecSum/format_Merge => //; first by apply: (isTW_format Hx).
     by apply: (isTW_format Hy).
   rewrite /e; apply: vecSum_Thm6.
+  - exact: Hceven.
   - by rewrite /z size_Merge.
   - exact: Hz_format.
   - exact: Hz_sorted.
@@ -229,11 +231,13 @@ Qed.
 
 (* A float is at most [(2 - 2u) ufp] of itself (max-mantissa bound).  Holds   *)
 (* also at 0 and in the subnormal range, so no no-underflow hypothesis.       *)
-Lemma TWSum_error x y : isTW x -> isTW y -> isTWnorm x -> isTWnorm y ->
+Lemma TWSum_error x y :
+  ties_to_even choice ->
+  isTW x -> isTW y -> isTWnorm x -> isTWnorm y ->
   Rabs (TWval (TWSum x y) - (TWval x + TWval y)) <=
      errc * Rabs (TWval x + TWval y).
 Proof.
-case: x => x0 x1 x2; case: y => y0 y1 y2 => Hx Hy Hnx Hny.
+case: x => x0 x1 x2; case: y => y0 y1 y2 => Hceven Hx Hy Hnx Hny.
 pose z := Merge [:: x0; x1; x2] [:: y0; y1; y2].
 pose e := vecSum z.
 (* Merge is a permutation: it preserves the exact sum.                        *)
@@ -268,6 +272,7 @@ have Htrunc :
     by apply: isTW_Pnonoverlap Hy.
   have HFe : Fnonoverlap e.
     rewrite /e; apply: vecSum_Thm6.
+    - exact: Hceven.
     - by rewrite /z size_Merge.
     - exact: Hzf.
     - exact: Hzs.

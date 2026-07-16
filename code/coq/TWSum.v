@@ -111,7 +111,8 @@ Local Notation format_vseb := (format_vseb Hp2).
 Local Notation format_vsebK := (format_vsebK Hp2).
 Local Notation vecSum_sum := (vecSum_sum Hp2 emin_le_0 choice_sym).
 Local Notation vseb_sum := (vseb_sum Hp2 emin_le_0 choice_sym).
-Local Notation vecSum_Thm6 := (vecSum_Thm6 Hp2 emin_le_0 choice_sym).
+Local Notation vecSum_run_ufp := (vecSum_run_ufp Hp2 emin_le_0 choice_sym).
+Local Notation vecSum_err_ufp := (vecSum_err_ufp Hp2 emin_le_0 choice_sym).
 Local Notation vseb_Pnonoverlap :=
   (vseb_Pnonoverlap Hp2 emin_le_0 choice_sym).
 
@@ -139,10 +140,15 @@ Local Notation errc := (2 * (u * u * u) + 42 / 10 * (u * u * u * u)).
 (*  Sketch (paper, Section 5.1, p >= 4):                                      *)
 (*   - Merge keeps floating-point numbers, magnitude-sorted, with the         *)
 (*     pairwise-ulp separation, i.e. the hypotheses of Theorem 6.             *)
-(*   - VecSum turns that into an F-nonoverlapping (wIZ) sequence with         *)
-(*     the same exact sum (Theorem 1 / Corollary 1).                          *)
-(*   - VSEB returns a P-nonoverlapping sequence (Theorem 2), so its           *)
-(*     first three terms form a TW number.                                    *)
+(*   - [VSEB (VecSum ...)] is P-nonoverlapping with the same exact sum         *)
+(*     ([vecSum_vseb_Pnonoverlap], paper Theorem 6), so its first three        *)
+(*     terms form a TW number.                                                *)
+(*                                                                            *)
+(*  NB.  The intermediate "[VecSum ...] is F-nonoverlapping" is NOT used any   *)
+(*  more, because it is FALSE for merges of near-equal odd leaders (see the    *)
+(*  note in [VecSum.v] and the machine-checked [CEThm6.v]).  Theorem 6 is a    *)
+(*  DIRECT statement about [VSEB (VecSum ...)]: VSEB repairs the overlap that  *)
+(*  VecSum can leave behind.                                                   *)
 (* ===========================================================================*)
 (* Merging two triples and running VecSum yields exactly six terms, so the    *)
 (* [size <= p + 1] side condition of [vseb_Pnonoverlap] holds once [6 <= p].  *)
@@ -151,10 +157,31 @@ Lemma size_vecSum_Merge x0 x1 x2 y0 y1 y2 :
      (size (vecSum (Merge [:: x0; x1; x2] [:: y0; y1; y2]))) <= p + 1)%Z.
 Proof. by rewrite size_vecSum size_Merge /=; lia. Qed.
 
+(* Paper Theorem 6 (the statement [TWSum] actually needs).  For at most SIX    *)
+(* magnitude-sorted, pairwise-ulp-separated floating-point inputs (with no     *)
+(* underflow: nonzero terms normal), running VecSum and then VSEB yields a     *)
+(* P-nonoverlapping sequence.  Round-to-nearest must be TIES-TO-EVEN.          *)
+(*                                                                            *)
+(* This is DIRECT: the raw [vecSum l] is generally NOT F-nonoverlapping        *)
+(* ([CEThm6.v]), so it does NOT factor through [vecSum_Fnonoverlap]/           *)
+(* [vseb_Pnonoverlap].  The proof (paper Section 5.1, undetailed there) uses   *)
+(* the run-bound [vecSum_run_ufp] and error-bound [vecSum_err_ufp], then a     *)
+(* case study on how VSEB's Fast2Sum steps collapse the (few) overlaps VecSum  *)
+(* can leave.  The [<= 6] bound is necessary (paper's 7-input counterexample). *)
+Lemma vecSum_vseb_Pnonoverlap (l : seq R) :
+  ties_to_even choice ->
+  (size l <= 6)%N ->
+  {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
+  (forall z, z \in l -> z <> 0 -> (emin + p <= mag beta z)%Z) ->
+  Pnonoverlap (vseb (vecSum l)).
+Proof.
+Admitted.
+
 Lemma TWSum_isTW x y :
+  ties_to_even choice ->
   isTW x -> isTW y -> isTWnorm x -> isTWnorm y -> isTW (TWSum x y).
 Proof.
-case: x => x0 x1 x2; case: y => y0 y1 y2 => Hx Hy Hnx Hny.
+case: x => x0 x1 x2; case: y => y0 y1 y2 => Hceven Hx Hy Hnx Hny.
 pose z := Merge [:: x0; x1; x2] [:: y0; y1; y2].
 pose e := vecSum z.
 (* Merge keeps the six terms floating-point ...                               *)
@@ -191,11 +218,8 @@ have He_sum : sumR e = sumR z by apply: vecSum_sum.
 (*             (vecSum_Fnonoverlap Hz_format Hz_sorted Hz_ulp).1).1].         *)
 have Hr_nonover : Pnonoverlap (vsebK 3 e).
   apply/Pnonoverlap_take.
-  case: (@vseb_Pnonoverlap e) => //.
-  - exact: size_vecSum_Merge.
-  - apply/format_vecSum/format_Merge => //; first by apply: (isTW_format Hx).
-    by apply: (isTW_format Hy).
-  rewrite /e; apply: vecSum_Thm6.
+  rewrite /e; apply: vecSum_vseb_Pnonoverlap.
+  - exact: Hceven.
   - by rewrite /z size_Merge.
   - exact: Hz_format.
   - exact: Hz_sorted.
@@ -229,11 +253,13 @@ Qed.
 
 (* A float is at most [(2 - 2u) ufp] of itself (max-mantissa bound).  Holds   *)
 (* also at 0 and in the subnormal range, so no no-underflow hypothesis.       *)
-Lemma TWSum_error x y : isTW x -> isTW y -> isTWnorm x -> isTWnorm y ->
+Lemma TWSum_error x y :
+  ties_to_even choice ->
+  isTW x -> isTW y -> isTWnorm x -> isTWnorm y ->
   Rabs (TWval (TWSum x y) - (TWval x + TWval y)) <=
      errc * Rabs (TWval x + TWval y).
 Proof.
-case: x => x0 x1 x2; case: y => y0 y1 y2 => Hx Hy Hnx Hny.
+case: x => x0 x1 x2; case: y => y0 y1 y2 => Hceven Hx Hy Hnx Hny.
 pose z := Merge [:: x0; x1; x2] [:: y0; y1; y2].
 pose e := vecSum z.
 (* Merge is a permutation: it preserves the exact sum.                        *)
@@ -266,8 +292,10 @@ have Htrunc :
     - by rewrite !inE => /or3P[] /eqP->; case: Hy.
     - by apply: isTW_Pnonoverlap Hx.
     by apply: isTW_Pnonoverlap Hy.
-  have HFe : Fnonoverlap e.
-    rewrite /e; apply: vecSum_Thm6.
+  have Fe : {in e, forall t, format t} by apply: format_vecSum.
+  have Py : Pnonoverlap (vseb e).
+    rewrite /e; apply: vecSum_vseb_Pnonoverlap.
+    - exact: Hceven.
     - by rewrite /z size_Merge.
     - exact: Hzf.
     - exact: Hzs.
@@ -275,10 +303,6 @@ have Htrunc :
     move=> t; rewrite /z mem_Merge => /orP[tIn|tIn] tn0.
       exact: Hnx t tIn tn0.
     exact: Hny t tIn tn0.
-  have Fe : {in e, forall t, format t} by apply: format_vecSum.
-  have Py : Pnonoverlap (vseb e).
-    by case: (vseb_Pnonoverlap _ Fe HFe) => //;
-       rewrite /e; exact: size_vecSum_Merge.
   have Fy : {in vseb e, forall t, format t} by apply: format_vseb.
   set y := vseb e.
   have Hsplit : sumR (vseb e) - sumR (vsebK 3 e) = sumR (drop 3 y).

@@ -65,8 +65,9 @@ Proof. by rewrite /emin /emax /p; lia. Qed.
 (* The triple-word predicate from [TWR.v], specialised to binary64.           *)
 Local Notation isTW := (isTW p emin).
 (* No-underflow assumption (paper: unlimited exponent range): nonzero limbs   *)
-(* are normal.  [TWSum]'s correctness (paper Theorem 6, via [vecSum_Thm6]) is *)
-(* false at the [emin] floor, so both inputs carry it.                        *)
+(* are normal.  [TWSum]'s correctness (paper Theorem 6, via                   *)
+(* [vecSum_vseb_Pnonoverlap]) is false at the [emin] floor, so both inputs    *)
+(* carry it.                                                                  *)
 Local Notation isTWnorm := (isTWnorm p emin).
 
 (* Triple-word addition (Algorithm 8) and its two theorems now live in        *)

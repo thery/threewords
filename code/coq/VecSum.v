@@ -440,7 +440,7 @@ Qed.
 (* error bound behind [Herr] (the paper's [2 u^2 2^(k_{i-1})] would be a      *)
 (* factor [2^p] too small: a single 2Sum error can reach [~u 2^(k_i)]).       *)
 Lemma magnitude_vecSum_err x s e0 : format x -> format s ->
-  Rabs x < pow (e0 + 1) -> Rabs s <= (2 - 2 * u) * pow e0 ->
+  Rabs x < pow (e0 + 1) -> Rabs s <= 2 * pow e0 ->
   (emin <= e0 - p + 1)%Z ->
   Rabs (dwl (TwoSum x s)) <= 2 * u * pow e0.
 Proof.
@@ -452,11 +452,9 @@ have -> : dwl (TwoSum x s) = - (RND (x + s) - (x + s)) by lra.
 rewrite Rabs_Ropp.
 have Hz : Rabs (x + s) < pow (e0 + 2).
   apply: Rle_lt_trans (Rabs_triang _ _) _.
-  have Hs1 : Rabs s < pow (e0 + 1).
-    apply: Rle_lt_trans Hs _.
-    have -> : pow (e0 + 1) = 2 * pow e0 by rewrite bpow_plus bpow_1 /=; lra.
-    have Hu : 0 < u by rewrite uE; apply: bpow_gt_0.
-    have := bpow_gt_0 beta e0; nra.
+  have Hs1 : Rabs s <= pow (e0 + 1).
+    apply: Rle_trans Hs _.
+    by rewrite bpow_plus bpow_1 /=; lra.
   have -> : pow (e0 + 2) = pow (e0 + 1) + pow (e0 + 1)
     by rewrite !bpow_plus /= /Z.pow_pos /=; lra.
   lra.
@@ -509,7 +507,9 @@ apply: magnitude_vecSum_err.
   apply: Rmult_lt_compat_r; first exact: bpow_gt_0.
   have -> : pow p = IZR (2 ^ p) by rewrite IZR_2powp.
   by apply: IZR_lt.
-- exact: Hrun j jLs.
+- apply: Rle_trans (Hrun j jLs) _.
+  have u_ge_0 : 0 <= u by rewrite uE; apply: bpow_ge_0.
+  have := bpow_gt_0 beta (k j); nra.
 - exact: Hemin.
 Qed.
 
@@ -1130,68 +1130,63 @@ have E4 : (4:R) = pow 2 by rewrite /= /Z.pow_pos /=; lra.
 by rewrite E4 E2 -!bpow_plus; apply: bpow_le; lia.
 Qed.
 
-(* ===========================================================================*)
-(*  Paper Theorem 6 (core).                                                   *)
-(* ===========================================================================*)
-(* For at most SIX floating-point inputs that are magnitude-sorted and        *)
-(* pairwise-ulp separated ([|x_{i+1}| <= |x_i|] and [|x_{i+2}| < ulp(x_i)]),  *)
-(* [VecSum] returns an F-nonoverlapping (wIZ) sequence.  This is exactly the  *)
-(* hypothesis set the merge of two triple-words supplies (Theorem 6 is the    *)
-(* result [TWSum] needs), and it is why the paper states it for [x_0..x_5].   *)
-(*                                                                            *)
-(* WHY THIS IS NOT [vecSum_Fnonoverlap] (Corollary 1) IN DISGUISE.  The       *)
-(* Corollary-1 route ([Cor1_hyp] => [Thm1_hyp] => Theorem 1) is UNSOUND for   *)
-(* these inputs.  Take two triple-words with near-equal odd leaders, e.g.     *)
-(*   x = TWR (1 + 3.2^-52) (2^-60) (2^-120),  y = TWR (1 + 2^-52) ... .       *)
-(* Their merge starts [z0 = 1 + 3.2^-52], [z1 = 1 + 2^-52]: same binade, both *)
-(* with odd mantissa.  At index [0] (which is never in the overlap set [I],   *)
-(* since [I <= [1,n-2]]):                                                     *)
-(*   - the off-[I] gap [2.ufp(z1) <= ufp(z0)] fails ([2 <= 1]);               *)
-(*   - the on-[I] bound [ufp(z1) <= 2^(p-2) uls(z0)] fails too, because       *)
-(*     [uls(z0) = 2^-52] (odd mantissa) gives [2^(p-2) uls(z0) = 1/2 < 1].    *)
-(* So NO [inI] satisfies [Cor1_hyp] for the merge, and in fact no exponent    *)
-(* map satisfies [Thm1_hyp] either ([k0 = k1 = 0] forced, but the strict gap  *)
-(* wants [k1 + 1 <= k0]).  The result is still true -- [2Sum] collapses the   *)
-(* two leaders exactly -- but only the paper's DIRECT proof of Theorem 6      *)
-(* reaches it, not Theorem 1.  (Theorem 1 / Corollary 1 above remain valid    *)
-(* standalone; they are simply not applicable to an arbitrary merge.)         *)
-(*                                                                            *)
-(* TIES-TO-EVEN.  The paper's rounding is round-to-nearest, TIES-TO-EVEN      *)
-(* ([RN(t)], p.1); this development is otherwise generic over a symmetric     *)
-(* [choice] ([choice_sym]).  Theorem 6 genuinely NEEDS ties-to-even: in the   *)
-(* same-binade case the running-sum bound reduces to [RN(x_j + s_{j+1}) <=    *)
-(* 2 ufp(x_{j-1})] where the worst configuration lands on the EXACT midpoint  *)
-(* [x_j + s_{j+1} = pow(mag x_j) + ulp(x_j)] (reachable when [mag x_{j+1} =   *)
-(* mag x_j - p]); ties-to-even rounds it down to the even neighbour, a general*)
-(* [choice] (e.g. ties-away-from-zero) rounds it up and breaks the bound.  So *)
-(* [vecSum_Thm6] carries [choice_even : forall z, choice z = ~~ Z.even z].    *)
-(* Theorem 1 never hits this because its strict exponent gap leaves slack.    *)
-(*                                                                            *)
-(* PROOF PLAN (paper Section 5.1, undetailed there; reconstructed):           *)
-(* (a) run-bound [vecSum_run_ufp]: [|s_{j+1}| <= 2 ufp(x_j)] and              *)
-(*     [|s_j| <= 4 ufp(x_j)] by coupled downward induction.  Strict binade    *)
-(*     drop [x_j -> x_{j+1}]: [round_N_le_midp]/float bound.  Same binade     *)
-(*     [mag x_j = mag x_{j-1}]: [pairwise_ulp] forces [mag x_{j+2} < mag x_j] *)
-(*     so [|s_{j+1}| <= 2 ulp(x_j)], then [round_N_le_midp] (strict) or       *)
-(*     [round_N_middle] + [choice_even] (the exact tie).                      *)
-(* (b) err-bound: [|e_{i+1}| <= 2u ufp(x_i)] via [magnitude_vecSum_err] + (a).*)
-(* (c) separation core (a [vecSum_sep] analog on canonical [ex = mag - 1]):   *)
-(*     an overlap [|e_t| > 1/2 uls(e_{i'})], [i' < t], forces some input      *)
-(*     [x_w], [w < t], off the [2^(g+1)] grid; if [w <= t-2] then             *)
-(*     [pairwise_ulp] gives the STRICT drop [ex_w > ex_t] contradicting the   *)
-(*     error bound; the [w = t-1] same-binade sub-case is the residual work.  *)
-(* (d) zeros: input zeros produce output zeros without changing the nonzero   *)
-(*     terms (paper: "removed"), so reduce to the zero-free case; the wIZ     *)
-(*     [Fnonoverlap] ignores them.                                            *)
-(* The [<= 6] bound is necessary: the paper exhibits a 7-input counterexample.*)
-(* NO-UNDERFLOW: every nonzero input is assumed NORMAL ([emin + p <= mag]).   *)
-Lemma vecSum_Thm6 l :
+(* Step (b) of Theorem 6: the per-step error bound in [ufp] form.  Each VecSum *)
+(* error [e_i = nth (vecSum l) i.+1] is the low word of the 2Sum of [x_i] with *)
+(* the tail running sum [s_{i+1}]; [magnitude_vecSum_err] bounds it from       *)
+(* [|x_i| < 2 ufp(x_i)] and the run-bound [|s_{i+1}| <= 2 ufp(x_i)]            *)
+(* ([vecSum_run_ufp], second conjunct at [j = i.+1]).  Mirrors                 *)
+(* [vecSum_err_bound] but keyed to [ufp] rather than the Theorem-1 exponent    *)
+(* map [k].                                                                    *)
+Lemma vecSum_err_ufp (l : seq R) :
   ties_to_even choice ->
-  (size l <= 6)%N ->
-  {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
-  (forall z, z \in l -> z <> 0 -> (emin + p <= mag beta z)%Z) ->
-  Fnonoverlap (vecSum l).
+  {in l, forall z, format z} ->
+  (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
+  (forall i, (i < size l)%N -> (emin + p <= mag beta (nth (0:R) l i))%Z) ->
+  sorted_mag l -> pairwise_ulp l ->
+  forall i, (i.+1 < size l)%N ->
+    Rabs (nth (0:R) (vecSum l) i.+1) <= 2 * u * ufp (nth (0:R) l i).
 Proof.
-Admitted.
+move=> Heven Hfmt Hnz Hnorm Hsort Hpair i Hi.
+have iLl : (i < size l)%N := ltn_trans (ltnSn i) Hi.
+have Fx : format (nth (0:R) l i) by apply: Hfmt; apply: mem_nth.
+have Hrun := vecSum_run_ufp Heven Hfmt Hnz Hnorm Hsort Hpair.
+have -> : nth (0:R) (vecSum l) i.+1 = nth (0:R) (vecSumAux l).1 i
+  by rewrite /vecSum; case: (vecSumAux l).
+rewrite vecSumAux_nth1 //.
+rewrite /ufp; apply: magnitude_vecSum_err.
+- exact: Fx.
+- apply: format_vecSumAux2 => z zIn.
+  by apply: Hfmt; rewrite -(cat_take_drop i.+1 l) mem_cat zIn orbT.
+- have -> : (mag beta (nth (0:R) l i) - 1 + 1 = mag beta (nth (0:R) l i))%Z
+    by lia.
+  by apply: bpow_mag_gt.
+- have [_ /(_ (ltn0Sn i))] := Hrun i.+1 Hi.
+  by rewrite /ufp /=.
+- by have := Hnorm i iLl; lia.
+Qed.
+
+(* ===========================================================================*)
+(*  Toward paper Theorem 6.                                                   *)
+(* ===========================================================================*)
+(* IMPORTANT.  An earlier version of this file stated Theorem 6 as            *)
+(* "[Fnonoverlap (vecSum l)] for magnitude-sorted, pairwise-ulp [l] of size   *)
+(* [<= 6]".  That statement is FALSE: the RAW VecSum output need not be       *)
+(* F-nonoverlapping.  Machine-checked counterexample (see [CEThm6.v], [p=4]): *)
+(*   [l = [15; 15; 15/16; 15/16]]  satisfies every hypothesis, yet            *)
+(*   [vecSum l = [32; -1; 7/8; 0]] and [|7/8| > 1/2 uls(-1) = 1/2].           *)
+(* The paper's own 7-input example likewise has a VecSum output               *)
+(* [(e_i) = u, u^2, u^2, ...] that is not F-nonoverlapping.                   *)
+(*                                                                            *)
+(* The paper's ACTUAL Theorem 6 conclusion is weaker: [VSEB (VecSum x_0..x_5)]*)
+(* is P-nonoverlapping (for [p >= 4]).  VSEB repairs the overlap -- e.g. on   *)
+(* the counterexample [vseb [32;-1;7/8;0] = [32;-1/8;0]], which IS            *)
+(* P-nonoverlapping (the [2Sum(-1, 7/8) = (-1/8, 0)] step collapses the bad   *)
+(* pair).  That coupled statement lives in [TWSum.v] as                       *)
+(* [vecSum_vseb_Pnonoverlap] (it needs both [vecSum] and [vseb]).             *)
+(*                                                                            *)
+(* The reusable building blocks stay here and are proved (Qed):               *)
+(*  - [vecSum_run_ufp] (running-sum bound, step (a) of the paper sketch);     *)
+(*  - [vecSum_err_ufp] (per-step error bound, step (b));                      *)
+(*  - [RN_midpoint_even] (the ties-to-even boundary tie used by (a)).         *)
 
 End SecVecSum.

@@ -8,6 +8,7 @@ MULTmore.v
 Fast2Sum_robust_flt.v
 prelim.v
 Uls.v
+MinusInterval.v
 TwoSum.v
 Nonoverlap.v
 TWR.v

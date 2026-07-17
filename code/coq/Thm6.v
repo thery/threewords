@@ -66,7 +66,9 @@ Local Notation Pnonoverlap := (Pnonoverlap p).
 Local Notation pairwise_ulp := (pairwise_ulp p).
 
 Local Notation vecSum := (vecSum p choice).
+Local Notation vecSumAux := (vecSumAux p choice).
 Local Notation vseb := (vseb p choice).
+Local Notation vsebAux := (vsebAux p choice).
 Local Notation vecSum_run_ufp := (vecSum_run_ufp Hp2 choice_sym).
 Local Notation vecSum_err_ufp := (vecSum_err_ufp Hp2 choice_sym).
 
@@ -150,6 +152,30 @@ have -> : i = (size m - (size m - i))%N by rewrite subKn // -ltnS -Hsz.
 by apply: Hdown; apply: leq_subr.
 Qed.
 
+(* [vecSumAux] on a list with a trailing zero: the deepest step is            *)
+(* [2Sum(x_{n-1}, 0) = (x_{n-1}, 0)] (exact, since [x_{n-1}] is a float), so   *)
+(* the running sum is unchanged and the emitted error is a trailing zero.      *)
+Lemma vecSumAux_rcons0 (m : seq R) :
+  (0 < size m)%N -> {in m, forall z, format z} ->
+  vecSumAux (rcons m 0) =
+    (rcons (vecSumAux m).1 0, (vecSumAux m).2).
+Proof.
+case: m => [//|a m _]; elim: m a => [a aF|b m IH a abF].
+  have Fa : format a by apply: aF; rewrite inE eqxx.
+  have -> : rcons [:: a] 0 = [:: a, 0 & [::]] by [].
+  rewrite vecSumAux_cons.
+  have E0 : vecSumAux [:: 0] = ([::], 0) by [].
+  have Ea : vecSumAux [:: a] = ([::], a) by [].
+  rewrite E0 Ea; case E : (TwoSum p choice a 0) => [si ei1].
+  have := @dwh_TwoSum_r0 p choice a Fa; rewrite E /= => ->.
+  by have := @dwl_TwoSum_r0 p Hp2 choice choice_sym a Fa; rewrite E /= => ->.
+have Hbm : {in b :: m, forall z, format z}.
+  by move=> z zI; apply: abF; rewrite inE zI orbT.
+have IH' := IH b Hbm; rewrite rcons_cons in IH'.
+rewrite rcons_cons vecSumAux_cons rcons_cons vecSumAux_cons IH'.
+by case: (vecSumAux (b :: m)) => es s /=; case: (TwoSum p choice a s).
+Qed.
+
 (* VecSum carries a trailing zero through untouched: the running sum entering *)
 (* the last step is [s = 0], so [2Sum(x_{n-2}, 0) = (x_{n-2}, 0)] and the     *)
 (* emitted error is [0].                                                      *)
@@ -157,7 +183,53 @@ Lemma vecSum_rcons0 (m : seq R) :
   (0 < size m)%N -> {in m, forall z, format z} ->
   vecSum (rcons m 0) = rcons (vecSum m) 0.
 Proof.
-Admitted.
+move=> Hs Hf; rewrite /vecSum vecSumAux_rcons0 //.
+by case: (vecSumAux m) => es s /=.
+Qed.
+
+(* VSEB absorbs a trailing zero at the [vsebAux] level: the terminal step is  *)
+(* [2Sum(_, 0) = (_, 0)], whose zero error either is dropped (output           *)
+(* unchanged) or, at the very last position, emitted as a trailing zero.       *)
+Lemma vsebAux_rcons0 (l : seq R) (eps : R) :
+  format eps -> {in l, forall z, format z} ->
+  vsebAux eps (rcons l 0) = vsebAux eps l \/
+  vsebAux eps (rcons l 0) = rcons (vsebAux eps l) 0.
+Proof.
+(* [vsebAux w [:: 0] = [:: w; 0]]: a trailing zero is an exact merge.         *)
+have vseb0 : forall w : R, format w -> vsebAux w [:: 0] = [:: w; 0].
+  move=> w wF; rewrite vsebAux_1; case Ew : (TwoSum p choice w 0) => [z0 z1].
+  have := @dwh_TwoSum_r0 p choice w wF; rewrite Ew /= => ->.
+  by have := @dwl_TwoSum_r0 p Hp2 choice choice_sym w wF; rewrite Ew /= => ->.
+elim: l eps => [|e l' IH] eps epsF lF.
+  by right; rewrite (vseb0 _ epsF).
+have eF : format e by apply: lF; rewrite inE eqxx.
+have Fl' : {in l', forall z, format z}.
+  by move=> z zI; apply: lF; rewrite inE zI orbT.
+have [rF etF] : format (dwh (TwoSum p choice eps e)) /\
+                format (dwl (TwoSum p choice eps e))
+  by apply: format_TwoSum.
+rewrite rcons_cons.
+case: l' IH lF Fl' rF etF => [|e2 l2] IH lF Fl' rF etF.
+  (* One remaining term: the trailing zero is either dropped or emitted last. *)
+  have -> : e :: rcons [::] 0 = [:: e, 0 & [::]] by [].
+  rewrite vsebAux_consS vsebAux_1.
+  case E : (TwoSum p choice eps e) => [r et].
+  have rF' : format r by move: rF; rewrite E.
+  have etF' : format et by move: etF; rewrite E.
+  case: (Req_EM_T et 0) => [et0|etn0].
+    by left; rewrite [is_left _]/= (vseb0 r rF') et0.
+  by right; rewrite [is_left _]/= (vseb0 et etF').
+(* Two or more terms: recurse, the zero travelling to the tail.               *)
+have -> : e :: rcons (e2 :: l2) 0 = [:: e, e2 & rcons l2 0] by rewrite rcons_cons.
+rewrite !vsebAux_consS.
+case E : (TwoSum p choice eps e) => [r et].
+have rF' : format r by move: rF; rewrite E.
+have etF' : format et by move: etF; rewrite E.
+case: (Req_EM_T et 0) => [et0|etn0]; rewrite [is_left _]/= -rcons_cons.
+  exact: (IH r rF' Fl').
+have [->|->] := IH et etF' Fl'; first by left.
+by right; rewrite rcons_cons.
+Qed.
 
 (* VSEB absorbs a trailing zero: [2Sum(eps, 0) = (eps, 0)] has zero error, so *)
 (* nothing is emitted and the remainder is carried.  The output therefore     *)
@@ -166,7 +238,13 @@ Lemma vseb_rcons0 (X : seq R) :
   (0 < size X)%N -> {in X, forall z, format z} ->
   vseb (rcons X 0) = vseb X \/ vseb (rcons X 0) = rcons (vseb X) 0.
 Proof.
-Admitted.
+case: X => [//|e0 l'] _ Hf.
+have e0F : format e0 by apply: Hf; rewrite inE eqxx.
+have l'F : {in l', forall z, format z}.
+  by move=> z zI; apply: Hf; rewrite inE zI orbT.
+rewrite rcons_cons /vseb.
+exact: vsebAux_rcons0.
+Qed.
 
 (* ===========================================================================*)
 (*  Theorem 6 / draft Theorem 7 -- the target.                                *)

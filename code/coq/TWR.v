@@ -23,7 +23,6 @@ Unset Printing Implicit Defensive.
 Section TWR.
 
 Variable p : Z.
-Variable emin : Z.
 Hypothesis Hp2 : (1 < p)%Z.
 
 Let beta := radix2.
@@ -33,12 +32,12 @@ Open Scope R_scope.
 Local Instance p_gt_0 : Prec_gt_0 p.
 Proof. now apply Z.lt_trans with (2 := Hp2). Qed.
 
-Local Notation fexp := (FLT_exp emin p).
+Local Notation fexp := (FLX_exp p).
 Local Notation format := (generic_format beta fexp).
 Local Notation ulp := (ulp beta fexp).
-Local Notation Pnonoverlap := (Pnonoverlap p emin).
-Local Notation pairwise_ulp := (pairwise_ulp p emin).
-Local Notation format_lt_ulp_le := (@format_lt_ulp_le p emin Hp2).
+Local Notation Pnonoverlap := (Pnonoverlap p).
+Local Notation pairwise_ulp := (pairwise_ulp p).
+Local Notation format_lt_ulp_le := (@format_lt_ulp_le p Hp2).
 
 Inductive twR := TWR (x0 x1 x2 : R).
 

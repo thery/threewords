@@ -23,7 +23,6 @@ Unset Printing Implicit Defensive.
 Section Merge.
 
 Variable p : Z.
-Variable emin : Z.
 Hypothesis Hp2 : (1 < p)%Z.
 
 Local Notation beta := radix2.
@@ -34,13 +33,12 @@ Local Instance p_gt_0 : Prec_gt_0 p.
 Proof. now apply Z.lt_trans with (2 := Hp2). Qed.
 
 Local Notation pow e := (bpow beta e).
-Local Notation fexp := (FLT_exp emin p).
+Local Notation fexp := (FLX_exp p).
 Local Notation format := (generic_format beta fexp).
 Local Notation ulp := (ulp beta fexp).
-Local Notation Pnonoverlap := (Pnonoverlap p emin).
-Local Notation pairwise_ulp := (pairwise_ulp p emin).
-Local Notation format_lt_ulp_0 := (@format_lt_ulp_0 p emin Hp2).
-Local Notation format_lt_ulp_le := (@format_lt_ulp_le p emin Hp2).
+Local Notation Pnonoverlap := (Pnonoverlap p).
+Local Notation pairwise_ulp := (pairwise_ulp p).
+Local Notation format_lt_ulp_le := (@format_lt_ulp_le p Hp2).
 Local Notation Pnonoverlap_imp_pairwise_ul :=
   (Pnonoverlap_imp_pairwise_ul Hp2).
 
@@ -180,8 +178,8 @@ elim: l1 l2 => /= [|a l1 IH1].
     have /= cLub := bl2P 0%N isT.
     apply: Rle_lt_trans cLub.
     have /= := bl2P 1%N isT.
-    have [->/format_lt_ulp_0->//|y_neq0 dLuc] := Req_dec c 0; try lra.
-      by apply: bl2F; rewrite !inE eqxx !orbT.
+    have [->|y_neq0 dLuc] := Req_dec c 0; try lra.
+      by rewrite ulp_FLX_0; split_Rabs; lra.
     apply: Rle_trans (Rlt_le _ _ dLuc) _.
     apply: ulp_le_abs => //.
     by apply: bl2F; rewrite !inE eqxx !orbT.
@@ -210,8 +208,8 @@ case: Rle_bool_spec => [bLa|aLb].
       apply: Rle_lt_trans (a1Lua).
       have /(_ 1%N isT)/= a2Lua1 :=  aa1a2l3P.
       move: a2Lua1.
-      have [->/format_lt_ulp_0->|a1_neq0 a2Lua1] := Req_dec a1 0; try lra.
-        by apply: aa1a2l3F; rewrite !inE eqxx !orbT.
+      have [->|a1_neq0 a2Lua1] := Req_dec a1 0; try lra.
+        by rewrite ulp_FLX_0; split_Rabs; lra.
       apply: Rle_trans (Rlt_le _ _ a2Lua1) _.
       apply: ulp_le_abs => //.
       by apply: aa1a2l3F; rewrite !inE eqxx !orbT.

@@ -24,9 +24,7 @@ Unset Printing Implicit Defensive.
 Section SecVSEB.
 
 Variable p : Z.
-Variable emin : Z.
 Hypothesis Hp2 : (1 < p)%Z.
-Hypothesis emin_le_0 : (emin <= 0)%Z.
 
 Local Notation beta := radix2.
 Local Notation pow e := (bpow beta e).
@@ -46,52 +44,50 @@ Local Notation rnd := (Znearest choice).
 Local Instance valid_rnd : Valid_rnd rnd := valid_rnd_N choice.
 
 Local Notation float := (float radix2).
-Local Notation fexp := (FLT_exp emin p).
+Local Notation fexp := (FLX_exp p).
 Local Notation format := (generic_format beta fexp).
 Local Notation cexp := (cexp beta fexp).
 Local Notation mant := (scaled_mantissa beta fexp).
 Local Notation RND := (round beta fexp rnd).
 Local Notation ulp := (ulp beta fexp).
-Local Notation uls := (uls p emin).
+Local Notation uls := (uls p).
 Local Notation error_le_half_ulp_RN :=
-  (@error_le_half_ulp_round beta (FLT_exp emin p)
-     (FLT_exp_valid emin p) (FLT_exp_monotone emin p) choice).
+  (@error_le_half_ulp_round beta (FLT_exp p)
+     (FLT_exp_valid p) (FLT_exp_monotone p) choice).
 Local Notation TwoSum_correct_RN :=
-  (@TwoSum_correct emin p choice Hp2 emin_le_0 choice_sym).
+  (@TwoSum_correct p choice Hp2 choice_sym).
 
-Local Notation TwoSum := (TwoSum p emin choice).
-Local Notation TwoSum_hi := (TwoSum_hi p emin choice).
-Local Notation formatDWR := (formatDWR p emin).
-Local Notation magnitudeDWR := (magnitudeDWR p emin).
+Local Notation TwoSum := (TwoSum p choice).
+Local Notation TwoSum_hi := (TwoSum_hi p choice).
+Local Notation formatDWR := (formatDWR p).
+Local Notation magnitudeDWR := (magnitudeDWR p).
 Local Notation format_TwoSum := (format_TwoSum Hp2 choice).
 Local Notation TwoSum_correct_loc :=
-  (TwoSum_correct_loc Hp2 emin_le_0 choice_sym).
-Local Notation dwh_TwoSum_r0 := (@dwh_TwoSum_r0 p emin choice).
+  (TwoSum_correct_loc Hp2 choice_sym).
+Local Notation dwh_TwoSum_r0 := (@dwh_TwoSum_r0 p choice).
 Local Notation dwl_TwoSum_r0 := 
-  (dwl_TwoSum_r0 Hp2 emin_le_0 choice_sym).
+  (dwl_TwoSum_r0 Hp2 choice_sym).
 Local Notation magnitude_TwoSum :=
-  (magnitude_TwoSum Hp2 emin_le_0 choice_sym).
-Local Notation TwoSum_err_imul := (TwoSum_err_imul Hp2 emin_le_0 choice_sym).
+  (magnitude_TwoSum Hp2 choice_sym).
+Local Notation TwoSum_err_imul := (TwoSum_err_imul Hp2 choice_sym).
 Local Notation TwoSum_err_uls_ge :=
-  (TwoSum_err_uls_ge Hp2 emin_le_0 choice_sym).
+  (TwoSum_err_uls_ge Hp2 choice_sym).
 
-Local Notation Pnonoverlap := (Pnonoverlap p emin).
-Local Notation pairwise_ulp := (pairwise_ulp p emin).
-Local Notation Fnonoverlap := (Fnonoverlap p emin).
-Local Notation format_lt_ulp_0 := (@format_lt_ulp_0 p emin Hp2).
-Local Notation format_lt_ulp_le := (@format_lt_ulp_le p emin Hp2).
+Local Notation Pnonoverlap := (Pnonoverlap p).
+Local Notation pairwise_ulp := (pairwise_ulp p).
+Local Notation Fnonoverlap := (Fnonoverlap p).
+Local Notation format_lt_ulp_le := (@format_lt_ulp_le p Hp2).
 Local Notation Pnonoverlap_imp_pairwise_ul :=
   (Pnonoverlap_imp_pairwise_ul Hp2).
 Local Notation abs_le_ufp_norm := (abs_le_ufp_norm Hp2).
-Local Notation nu_of_lt_ulp := (nu_of_lt_ulp Hp2).
-Local Notation small_head_zero := (@small_head_zero p emin Hp2).
-Local Notation sumR_ufp_bound := (@sumR_ufp_bound p emin Hp2).
-Local Notation nth_step_zero := (@nth_step_zero p emin Hp2).
+Local Notation small_head_zero := (@small_head_zero p Hp2).
+Local Notation sumR_ufp_bound := (@sumR_ufp_bound p Hp2).
+Local Notation nth_step_zero := (@nth_step_zero p Hp2).
 Local Notation Fnonoverlap_imm := (Fnonoverlap_imm Hp2).
 Local Notation Fnonoverlap_TwoSum_merge := 
-  (Fnonoverlap_TwoSum_merge Hp2 emin_le_0 choice_sym).
+  (Fnonoverlap_TwoSum_merge choice_sym).
 Local Notation Fnonoverlap_TwoSum_err :=
-  (Fnonoverlap_TwoSum_err Hp2 emin_le_0 choice_sym). 
+  (Fnonoverlap_TwoSum_err choice_sym). 
 
 (* ===========================================================================*)
 (*  Algorithm 5: VecSumErrBranch (VSEB)                                       *)
@@ -291,9 +287,6 @@ have HsumLt : sumRabs l < uls eps by nra.
 have Hg : uls eps = pow (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps)))).
   by rewrite /uls; case: Req_bool_spec => // eps0; case: (epsn0 eps0).
 set g := (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps))))%Z.
-have Hgemin : (emin <= g)%Z.
-  by rewrite /g; have := Zle_0_nat (trZ (Ztrunc (mant eps)));
-     rewrite /cexp /FLT_exp; lia.
 have Hhalf : uls eps * (/ 2) ^ (size l) = pow (g - Z.of_nat (size l)).
   by rewrite pow_halfN Hg -bpow_plus; congr bpow; lia.
 (* [|eps|]'s integer mantissa is bounded ([< 2^p]), giving the block bound.   *)
@@ -302,7 +295,7 @@ have HmB : (Z.abs (Ztrunc (mant eps)) < beta ^ p)%Z.
     last lia.
   apply: Rlt_le_trans (_ : pow (mag beta eps - cexp eps) <= _)%R.
     exact: scaled_mantissa_lt_bpow.
-  by apply: bpow_le; rewrite /cexp /FLT_exp; lia.
+  by apply: bpow_le; rewrite /cexp /FLX_exp; lia.
 have Heps : Rabs eps = IZR (Z.abs (Ztrunc (mant eps))) * pow (cexp eps).
   by rewrite {1}epsF /F2R /= Rabs_mult -abs_IZR Rabs_pow.
 have Hcu : pow (cexp eps) <= uls eps.
@@ -345,17 +338,10 @@ have [HM|HM] := Rle_lt_or_eq_dec _ _ Hae.
   have H2 : 2 * Rabs eps = pow (g + 1) by rewrite H3 -HM Hg.
   exists (pred beta fexp (2 * Rabs eps)); split.
   + by apply: generic_format_pred; rewrite H2; apply: generic_format_bpow;
-       rewrite /FLT_exp; lia.
+       rewrite /FLX_exp; lia.
   + rewrite H2 pred_bpow.
     have Hlow : pow (fexp (g + 1)) <= Rabs eps - sumRabs l.
       rewrite -HM /fexp /FLT_exp.
-      have [Hc|Hc] := Z.max_spec (g + 1 - p) emin.
-        rewrite (proj2 Hc).
-        have Hs : sumRabs l <= uls eps - pow emin.
-          rewrite -HgF; apply: (sumRabs_lt_le lF) => //;
-            rewrite HgF; exact: HsumLt.
-        lra.
-      rewrite (proj2 Hc).
       have Hle : pow (g + 1 - p) <= pow (g - Z.of_nat (size l)).
         by apply: bpow_le; lia.
       have Hs2 : sumRabs l <= uls eps - pow (g - Z.of_nat (size l)).
@@ -392,6 +378,7 @@ case: l' IH lF Fno Hsz => [|e2 l''] IH lF Fno Hsz.
   move=> [|i] /= Hi; last by move: Hi; rewrite ltnS ltnS ltn0.
   (* |y1| < ulp y0: the 2Sum error is <= half an ulp of the high word.        *)
   have Hm := magnitude_TwoSum epsF Fe; rewrite E1 /= in Hm.
+(* FAIL *)
   have Hy : 0 < ulp y0 by apply: ulp_gt_0.
   by lra.
 (* General step: [2Sum(eps, e) = (r, et)].                                    *)

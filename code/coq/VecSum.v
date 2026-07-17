@@ -24,9 +24,7 @@ Unset Printing Implicit Defensive.
 Section SecVecSum.
 
 Variable p : Z.
-Variable emin : Z.
 Hypothesis Hp2 : (1 < p)%Z.
-Hypothesis emin_le_0 : (emin <= 0)%Z.
 
 Local Notation beta := radix2.
 Local Notation pow e := (bpow beta e).
@@ -46,44 +44,39 @@ Local Notation rnd := (Znearest choice).
 Local Instance valid_rnd : Valid_rnd rnd := valid_rnd_N choice.
 
 Local Notation float := (float radix2).
-Local Notation fexp := (FLT_exp emin p).
+Local Notation fexp := (FLX_exp p).
 Local Notation format := (generic_format beta fexp).
 Local Notation cexp := (cexp beta fexp).
 Local Notation mant := (scaled_mantissa beta fexp).
 Local Notation RND := (round beta fexp rnd).
 Local Notation ulp := (ulp beta fexp).
-Local Notation uls := (uls p emin).
+Local Notation uls := (uls p).
 Local Notation error_le_half_ulp_RN :=
-  (@error_le_half_ulp_round beta (FLT_exp emin p)
-     (FLT_exp_valid emin p) (FLT_exp_monotone emin p) choice).
-Local Notation TwoSum_correct_RN :=
-  (@TwoSum_correct emin p choice Hp2 emin_le_0 choice_sym).
-
-Local Notation TwoSum := (TwoSum p emin choice).
-Local Notation TwoSum_hi := (TwoSum_hi p emin choice).
-Local Notation formatDWR := (formatDWR p emin).
-Local Notation magnitudeDWR := (magnitudeDWR p emin).
+  (@error_le_half_ulp_round beta (FLT_exp p)
+     (FLT_exp_valid p) (FLT_exp_monotone p) choice).
+Local Notation TwoSum := (TwoSum p choice).
+Local Notation TwoSum_hi := (TwoSum_hi p choice).
+Local Notation formatDWR := (formatDWR p).
+Local Notation magnitudeDWR := (magnitudeDWR p).
 Local Notation format_TwoSum := (format_TwoSum Hp2 choice).
 Local Notation TwoSum_correct_loc :=
-  (TwoSum_correct_loc Hp2 emin_le_0 choice_sym).
+  (TwoSum_correct_loc Hp2 choice_sym).
 Local Notation magnitude_TwoSum :=
-  (magnitude_TwoSum Hp2 emin_le_0 choice_sym).
-Local Notation TwoSum_err_imul := (TwoSum_err_imul Hp2 emin_le_0 choice_sym).
+  (magnitude_TwoSum Hp2 choice_sym).
+Local Notation TwoSum_err_imul := (TwoSum_err_imul Hp2 choice_sym).
 Local Notation TwoSum_err_uls_ge :=
-  (TwoSum_err_uls_ge Hp2 emin_le_0 choice_sym).
+  (TwoSum_err_uls_ge Hp2 choice_sym).
 
-Local Notation Pnonoverlap := (Pnonoverlap p emin).
-Local Notation pairwise_ulp := (pairwise_ulp p emin).
-Local Notation Fnonoverlap := (Fnonoverlap p emin).
-Local Notation format_lt_ulp_0 := (@format_lt_ulp_0 p emin Hp2).
-Local Notation format_lt_ulp_le := (@format_lt_ulp_le p emin Hp2).
+Local Notation Pnonoverlap := (Pnonoverlap p).
+Local Notation pairwise_ulp := (pairwise_ulp p).
+Local Notation Fnonoverlap := (Fnonoverlap p).
+Local Notation format_lt_ulp_le := (@format_lt_ulp_le p Hp2).
 Local Notation Pnonoverlap_imp_pairwise_ul :=
   (Pnonoverlap_imp_pairwise_ul Hp2).
 Local Notation abs_le_ufp_norm := (abs_le_ufp_norm Hp2).
-Local Notation nu_of_lt_ulp := (nu_of_lt_ulp Hp2).
-Local Notation small_head_zero := (@small_head_zero p emin Hp2).
-Local Notation sumR_ufp_bound := (@sumR_ufp_bound p emin Hp2).
-Local Notation nth_step_zero := (@nth_step_zero p emin Hp2).
+Local Notation small_head_zero := (@small_head_zero p Hp2).
+Local Notation sumR_ufp_bound := (@sumR_ufp_bound p Hp2).
+Local Notation nth_step_zero := (@nth_step_zero p Hp2).
 
 (* [p] is symbolic here (concrete only in [addition.v]), so the base-2 power  *)
 (* identity that used to hold by computation needs [IZR_Zpower] ([0 <= p]).   *)
@@ -261,7 +254,6 @@ Qed.
 (* leftmost bit, i.e. the largest power of two <= |x| (for x <> 0).  Paper    *)
 (* Theorem 1 / Corollary 1 (p.3) state the VecSum input conditions with it.   *)
 Definition repr (k : Z) (x : R) : Prop :=
-  (emin <= k - p + 1)%Z /\
   exists2 M : Z, (Z.abs M < 2 ^ p)%Z & x = IZR M * pow (k - p + 1)%Z.
 
 (* Being [repr]-esentable at [k] makes [x] an FLT float: it is [F2R] of the   *)
@@ -269,11 +261,10 @@ Definition repr (k : Z) (x : R) : Prop :=
 (* is >= emin.                                                                *)
 Lemma repr_format k x : repr k x -> format x.
 Proof.
-move=> [Hemin [M Mlt ->]].
-apply: generic_format_FLT; exists (Float beta M (k - p + 1)%Z).
+move=> [M Mlt ->].
+apply: generic_format_FLX; exists (Float beta M (k - p + 1)%Z).
 - by rewrite /F2R.
-- exact: Mlt.
-exact: Hemin.
+by exact: Mlt.
 Qed.
 
 (* Hypotheses of Theorem 1 on inputs [l] with a chosen exponent map [k]:      *)
@@ -298,7 +289,7 @@ case=> Hrepr Hgap Hlast.
 (*                              = (2 - 2u) 2^(k_j).                           *)
 have Hx : forall j, (j < size l)%N ->
   Rabs (nth 0 l j) <= (2 - 2 * u) * pow (k j).
-  move=> j jLs; have [_ [M Mlt ->]] := Hrepr j jLs.
+  move=> j jLs; have [M Mlt ->] := Hrepr j jLs.
   rewrite Rabs_mult (Rabs_pos_eq _ (bpow_ge_0 _ _)) -abs_IZR.
   have I2p := IZR_2powp.
   have Hkj : pow (k j) = pow (p - 1) * pow (k j - p + 1)
@@ -338,7 +329,6 @@ have [Hi2|Hi2] := eqVneq i.+2 (size l).
 (* step: the suffix has >= 2 elements, so s_{i+1} = RN(x_{i+1} + s_{i+2}).    *)
 have iLs' : (i < size l)%N := ltn_trans (ltnSn i) iLs.
 have Hi2lt : (i.+2 < size l)%N by rewrite ltn_neqAle Hi2 iLs.
-have [Hemin _] := Hrepr i iLs'.
 have Hd1 : drop i.+1 l = nth 0 l i.+1 :: drop i.+2 l by rewrite (drop_nth 0).
 have Hd2 : drop i.+2 l = nth 0 l i.+2 :: drop i.+3 l
   by rewrite (drop_nth 0) // Hi2lt.
@@ -363,9 +353,8 @@ have Meq : (2 - 2 * u) * pow (k i) = IZR (2 ^ p - 1) * pow (k i - p + 1).
   rewrite Hki -Rmult_assoc; congr (_ * _).
   by rewrite minus_IZR I2p Hpp; nra.
 have FB : format ((2 - 2 * u) * pow (k i)).
-  rewrite Meq; apply: generic_format_FLT.
-  exists (Float beta (2 ^ p - 1) (k i - p + 1));
-    [by rewrite /F2R /= | | exact: Hemin].
+  rewrite Meq; apply: generic_format_FLX.
+  exists (Float beta (2 ^ p - 1) (k i - p + 1)); first by rewrite /F2R /=.
   rewrite [Fnum _]/=; have h : (0 < 2 ^ p)%Z by apply: Z.pow_pos_nonneg; lia.
   rewrite Z.abs_eq; last by lia.
   by change (2 ^ p - 1 < 2 ^ p)%Z; lia.
@@ -433,10 +422,9 @@ Qed.
 (* factor [2^p] too small: a single 2Sum error can reach [~u 2^(k_i)]).       *)
 Lemma magnitude_vecSum_err x s e0 : format x -> format s ->
   Rabs x < pow (e0 + 1) -> Rabs s <= (2 - 2 * u) * pow e0 ->
-  (emin <= e0 - p + 1)%Z ->
   Rabs (dwl (TwoSum x s)) <= 2 * u * pow e0.
 Proof.
-move=> Fx Fs Hx Hs Hemin.
+move=> Fx Fs Hx Hs.
 have Hc : dwh (TwoSum x s) + dwl (TwoSum x s) = x + s
   by exact: TwoSum_correct_loc Fx Fs.
 rewrite TwoSum_hi in Hc.
@@ -454,10 +442,10 @@ have Hz : Rabs (x + s) < pow (e0 + 2).
   lra.
 have Hulp : ulp (x + s) <= pow (e0 + 2 - p).
   have [z0|z0] := Req_dec (x + s) 0.
-    by rewrite z0 ulp_FLT_0; apply: bpow_le; lia.
+    by rewrite z0 ulp_FLX_0; apply: bpow_ge_0.
   rewrite ulp_neq_0 //; apply: bpow_le; rewrite /cexp /FLT_exp.
   have Hm : (mag beta (x + s) <= e0 + 2)%Z by apply: mag_le_bpow.
-  lia.
+  by rewrite /fexp; lia.
 apply: (Rle_trans _ (/ 2 * ulp (x + s))).
   by apply: error_le_half_ulp.
 apply: Rle_trans (_ : / 2 * pow (e0 + 2 - p) <= _).
@@ -487,7 +475,7 @@ have Hrun := VecSum_run_bound Hk.
 have [Hrepr _ _] := Hk.
 move=> j jLs.
 have jLl : (j < size l)%N := ltn_trans (ltnSn j) jLs.
-have [Hemin [M HM Hxeq]] := Hrepr j jLl.
+have [M HM Hxeq] := Hrepr j jLl.
 have -> : nth 0 (vecSum l) j.+1 = nth 0 (vecSumAux l).1 j
   by rewrite /vecSum; case: (vecSumAux l).
 rewrite vecSumAux_nth1 //.
@@ -501,8 +489,7 @@ apply: magnitude_vecSum_err.
   apply: Rmult_lt_compat_r; first exact: bpow_gt_0.
   have -> : pow p = IZR (2 ^ p) by rewrite IZR_2powp.
   by apply: IZR_lt.
-- exact: Hrun j jLs.
-- exact: Hemin.
+by exact: Hrun j jLs.
 Qed.
 
 (* Prefix/suffix split of the VecSum walk (paper: "e_i, ..., e_0 and s_0      *)
@@ -588,9 +575,10 @@ have gE : uls xi = pow (cexp xi + Z.of_nat (trZ (Ztrunc (mant xi)))).
 set g := (cexp xi + Z.of_nat (trZ (Ztrunc (mant xi))))%Z.
 case: (Rle_lt_dec (Rabs e) (/ 2 * uls xi)) => [//|Hgt]; exfalso.
 have Hur : uls xi < ulp r by lra.
-have Hemin : pow emin <= uls xi.
-  by apply: (is_imul_uls_ge Fxi Hni (is_imul_pow_emin Fxi)).
-have rn0 : r <> 0 by move=> r0; move: Hur; rewrite r0 ulp_FLT_0; lra.
+have rn0 : r <> 0.
+  move=> r0; move: Hur; rewrite r0 ulp_FLX_0.
+  suff : 0 < uls xi by lra.
+  by rewrite gE; apply: bpow_gt_0.
 have Hur2 : ulp r = pow (cexp r) by rewrite ulp_neq_0.
 have Hcexp : (g + 1 <= cexp r)%Z.
   suff : (g < cexp r)%Z by lia.
@@ -635,7 +623,7 @@ have Hex : exists2 w, (w < t)%N & ~ is_imul (nth 0 l w) (pow (g + 1)).
   by rewrite size_take_min ltn_min i'Lt i'Sz.
 have [w wLt Hw] := Hex.
 have Hkw : (k w <= g + p - 1)%Z.
-  have [_ [M HM HxM]] := Hrepr w (ltn_trans wLt Ht').
+  have [M HM HxM] := Hrepr w (ltn_trans wLt Ht').
   case: (Z_le_gt_dec (k w) (g + p - 1)) => // Hgtw.
   case: Hw.
   apply: is_imul_pow_le (_ : is_imul (nth 0 l w) (pow (k w - p + 1))) _;
@@ -719,7 +707,7 @@ have an0 : a <> 0.
   by lra.
 have Hle : Rabs (nth 0 es 0) <= / 2 * uls s.
   have H : (1 < size (s :: es))%N by rewrite /= ltnS.
-  exact: (Fnonoverlap_imm Hp2 Fses H sn0).
+  by apply: (Fnonoverlap_imm Fses H sn0).
 have Hulsei : uls s <= uls ei1.
   have -> : ei1 = dwl (TwoSum a s) by rewrite E.
   by apply: (TwoSum_err_uls_ge Fa Fs an0 sn0 Hulsle); rewrite E.
@@ -748,20 +736,15 @@ Definition Thm1_hyp_wk (k : nat -> Z) (l : seq R) : Prop :=
 (* [Ztrunc (mant x)] (bounded by [2^p] and [>= emin] by the FLT format).      *)
 Lemma repr_canonical x : format x -> x <> 0 -> repr (cexp x + p - 1) x.
 Proof.
-move=> xF xn0; split.
-  by rewrite (_ : (cexp x + p - 1 - p + 1)%Z = cexp x); [apply: Z.le_max_r|lia].
+move=> xF xn0.
 exists (Ztrunc (mant x)).
   have Hm2 : (Z.abs (Ztrunc (mant x)) <= 2 ^ p - 1)%Z :=
-    Fast2Sum_robust_flt.FLT_mant_le Hp2 xF.
+    Fast2Sum_robust_flx.FLX_mant_le Hp2 xF.
   by lia.
 rewrite (_ : (cexp x + p - 1 - p + 1)%Z = cexp x); last by lia.
 have H := scaled_mantissa_mult_bpow beta fexp x.
 by rewrite -{1}H {1}(scaled_mantissa_generic beta fexp x xF).
 Qed.
-
-(* The canonical exponent [cexp x] is never below [emin] ([FLT_exp] uses max).*)
-Lemma cexp_ge_emin x : (emin <= cexp x)%Z.
-Proof. by apply: Z.le_max_r. Qed.
 
 (* In a magnitude-sorted list the zeros are trailing: the predecessor of a    *)
 (* nonzero entry is itself nonzero.                                           *)
@@ -783,12 +766,47 @@ Proof.
 move=> Fy xn0 yn0 Hlt.
 have Hux : ulp x = pow (cexp x) by rewrite ulp_neq_0.
 have Hmag : (mag beta y <= cexp x)%Z by apply: mag_le_bpow => //; rewrite -Hux.
-have Hemin_lt : (emin < cexp x)%Z.
-  apply: (lt_bpow beta); apply: Rle_lt_trans (alpha_lB Fy yn0) _.
-  by rewrite -Hux.
-have Hc2 : cexp y = Z.max (mag beta y - p) emin by [].
-by rewrite Hc2; apply: Z.max_lub_lt; lia.
+have Hc2 : cexp y = (mag beta y - p)%Z by [].
+by rewrite Hc2; lia.
 Qed.
+
+Fixpoint cmin_aux z (l : seq R) : Z := 
+  if l is f :: l1 then 
+    if Req_bool f 0 then cmin_aux z l1 else cmin_aux (Z.min z (cexp f)) l1
+  else z.
+
+Lemma cmin_aux_le z l: (cmin_aux z l <= z)%Z.
+Proof.
+elim: l z => //= [z|f l IH /= z]; first by lia.
+case: Req_bool_spec => // _.
+by apply: Z.le_trans (IH _) _; lia.
+Qed.
+
+Lemma cmin_aux_correct z l i : 
+  nth (0 : R) l i <> 0 -> (cmin_aux z l <= cexp (nth (0 : R) l i))%Z.
+Proof.
+elim: l i z => /= [i z|f l IH [|i] /= z]; first by rewrite nth_nil; case.
+  case: Req_bool_spec => // f_neq0 _.
+  by apply: Z.le_trans (@cmin_aux_le _ _) _; lia.
+case: Req_bool_spec => // _ nth_neq0; first by apply: IH.
+by apply: IH.
+Qed.
+
+Fixpoint cmin (l : seq R) := 
+  if l is f :: l1 then 
+    if Req_bool f 0 then cmin l1 else cmin_aux (cexp f) l1
+  else 0%Z.
+
+Lemma cmin_correct l i : 
+  nth (0 : R) l i <> 0 -> (cmin l <= cexp (nth (0 : R) l i))%Z.
+Proof.
+elim: l i => /= [i |f l IH [|i] /=]; first by rewrite nth_nil; case.
+  case: Req_bool_spec => // f_neq0 _.
+  by apply: cmin_aux_le.
+case: Req_bool_spec => // _ nth_neq0; first by apply: IH.
+by apply: cmin_aux_correct.
+Qed.
+
 
 (* PIECE 1: build the relaxed exponent map from the concrete hypotheses.  Take*)
 (* [k i := cexp (nth 0 l i) + p - 1] on nonzero entries (so [repr] holds via  *)
@@ -803,11 +821,11 @@ Lemma sorted_pairwise_k l :
 Proof.
 move=> lF lM lP.
 pose k := fun (i : nat) =>
-   if Req_bool (nth (0 : R) l i) 0 then (emin + p - 1)%Z
+   if Req_bool (nth (0 : R) l i) 0 then (cmin l + p - 1)%Z
    else (cexp (nth (0 : R) l i) + p - 1)%Z.
 have Fnth : forall i, (i < size l)%N -> format (nth (0:R) l i).
   by move=> i Hi; apply: lF; apply: mem_nth.
-have kE_z : forall i, nth (0:R) l i = 0 -> k i = (emin + p - 1)%Z.
+have kE_z : forall i, nth (0:R) l i = 0 -> k i = (cmin l + p - 1)%Z.
   by move=> i Hi; rewrite /k Hi; case: Req_bool_spec.
 have kE_nz : forall i, nth (0:R) l i <> 0 ->
     k i = (cexp (nth (0:R) l i) + p - 1)%Z.
@@ -816,7 +834,7 @@ exists k; split.
 - move=> i Hi.
   case: (Req_dec (nth (0:R) l i) 0) => [Hz|Hnz]; last first.
     by rewrite (kE_nz i Hnz); apply: repr_canonical => //; exact: Fnth.
-  rewrite (kE_z i Hz) Hz; split; first by lia.
+  rewrite (kE_z i Hz) Hz.
   exists 0%Z; last by rewrite Rmult_0_l.
   by rewrite Z.abs_0; apply: Z.pow_pos_nonneg; lia.
 - move=> i Hi.
@@ -824,11 +842,13 @@ exists k; split.
     rewrite (kE_z _ Hz1).
     case: (Req_dec (nth (0:R) l i) 0) => [Hz0|Hnz0].
       by rewrite (kE_z _ Hz0); lia.
-    by rewrite (kE_nz _ Hnz0); have := @cexp_ge_emin (nth (0:R) l i); lia.
+    rewrite (kE_nz _ Hnz0).
+    suff : (cmin l <= cexp (nth 0%R l i))%Z by lia.
+    by apply: cmin_correct.
   have Hnz0 := sorted_mag_pred_neq0 lM Hi Hnz1.
   rewrite (kE_nz _ Hnz1) (kE_nz _ Hnz0).
   suff: (cexp (nth (0:R) l i.+1) <= cexp (nth (0:R) l i))%Z by lia.
-  by apply: Fast2Sum_robust_flt.cexp_le => //; exact: (lM i Hi).
+  by apply: Fast2Sum_robust_flx.cexp_le => //; exact: (lM i Hi).
 - move=> i Hi Hnz2.
   have Hi1 : (i.+1 < size l)%N by apply: ltn_trans (ltnSn i.+1) Hi.
   have Hnz1 := sorted_mag_pred_neq0 lM Hi Hnz2.

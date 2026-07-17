@@ -272,21 +272,23 @@ rewrite -tech_pow_Rmult IH pow_N1 -bpow_plus Nat2Z.inj_succ.
 by congr bpow; lia.
 Qed.
 
-(* Reusable block bound (paper Thm 2): the first term emitted by VSEB from a  *)
-(* nonzero remainder [eps] over an F-nonoverlap tail has magnitude [< 2|eps|].*)
-Lemma vsebAux_head_lt eps l :
+(* Block bound, stated on the MASS of the tail.  This is all the estimate     *)
+(* really needs: the F-nonoverlap hypothesis of [vsebAux_head_lt] below is    *)
+(* used ONLY to bound [sumRabs l] by [uls eps] geometrically                  *)
+(* ([Fnonoverlap_aux_sumRabs]), never term by term.  Splitting it out gives a *)
+(* reusable entry point for callers whose tail is NOT F-nonoverlapping -- in  *)
+(* particular a [VecSum] output, which need not be (see [CEThm6.v]).          *)
+Lemma vsebAux_head_lt_mass eps l :
   (Z.of_nat (size l).+2 <= p + 1)%Z ->
-  format eps -> {in l, forall z, format z} -> Fnonoverlap (eps :: l) ->
-  eps <> 0 -> Rabs (nth 0 (vsebAux eps l) 0) < 2 * Rabs eps.
+  format eps -> {in l, forall z, format z} -> eps <> 0 ->
+  sumRabs l <= uls eps * (1 - (/ 2) ^ (size l)) ->
+  Rabs (nth 0 (vsebAux eps l) 0) < 2 * Rabs eps.
 Proof.
-move=> Hsz epsF lF Fno epsn0.
+move=> Hsz epsF lF epsn0 Hsum.
 have Hu0 : 0 < uls eps by apply: uls_gt_0.
 have Hae : uls eps <= Rabs eps by apply: uls_le_abs.
 have He0 : 0 < Rabs eps by apply: Rabs_pos_lt.
 have Hd0 : 0 < (/ 2) ^ (size l) by apply: pow_lt; lra.
-have Hsum : sumRabs l <= uls eps * (1 - (/ 2) ^ (size l)).
-  have H := Fnonoverlap_consE epsn0 Fno.
-  by apply: Fnonoverlap_aux_sumRabs.
 have HsumLt : sumRabs l < uls eps by nra.
 have Hg : uls eps = pow (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps)))).
   by rewrite /uls; case: Req_bool_spec => // eps0; case: (epsn0 eps0).
@@ -363,6 +365,20 @@ have [HM|HM] := Rle_lt_or_eq_dec _ _ Hae.
       lra.
     by rewrite -H2; lra.
   + by apply: pred_lt_id; rewrite H2; have := bpow_gt_0 beta (g + 1); lra.
+Qed.
+
+(* Reusable block bound (paper Thm 2): the first term emitted by VSEB from a  *)
+(* nonzero remainder [eps] over an F-nonoverlap tail has magnitude [< 2|eps|].*)
+(* F-nonoverlap enters only through the mass bound it implies.                *)
+Lemma vsebAux_head_lt eps l :
+  (Z.of_nat (size l).+2 <= p + 1)%Z ->
+  format eps -> {in l, forall z, format z} -> Fnonoverlap (eps :: l) ->
+  eps <> 0 -> Rabs (nth 0 (vsebAux eps l) 0) < 2 * Rabs eps.
+Proof.
+move=> Hsz epsF lF Fno epsn0.
+apply: vsebAux_head_lt_mass => //.
+have H := Fnonoverlap_consE epsn0 Fno.
+by apply: Fnonoverlap_aux_sumRabs.
 Qed.
 
 (* Core of Thm 2, by induction on the tail [l] of [eps :: l] (paper's running *)

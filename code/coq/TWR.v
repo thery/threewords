@@ -75,7 +75,7 @@ Qed.
 (* A triple-word, viewed as a 3-element list, is P-nonoverlapping (Def. 5).   *)
 Lemma isTW_Pnonoverlap x : isTW x -> Pnonoverlap (TW2l x).
 Proof.
-by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|[]]].
+by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|[]]] // _; right.
 Qed.
 
 (* The three limbs of a triple-word are floats (part of Def. 5).              *)

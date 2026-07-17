@@ -21,6 +21,16 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+(* Round-to-nearest TIES-TO-EVEN, as a condition on the tie-breaking [choice]:*)
+(* on a tie, keep the even mantissa.  Strictly stronger than the symmetry     *)
+(* [choice_sym] the rest of the development assumes; paper Theorem 6 genuinely*)
+(* needs it (the same-binade running-sum bound lands on an exact rounding     *)
+(* midpoint).  The paper's [RN] means ties-to-even (Section 1), so this is    *)
+(* the paper's own assumption, not a strengthening of it -- it is the         *)
+(* development that was more general.                                         *)
+Definition ties_to_even (choice : Z -> bool) :=
+  forall z : Z, choice z = ~~ Z.even z.
+
 Section SecVecSum.
 
 Variable p : Z.
@@ -855,7 +865,9 @@ exists k; split.
   have Hnz0 := sorted_mag_pred_neq0 lM Hi1 Hnz1.
   rewrite (kE_nz _ Hnz2) (kE_nz _ Hnz0).
   suff: (cexp (nth (0:R) l i.+2) < cexp (nth (0:R) l i))%Z by lia.
-  by exact: (cexp_lt_ulp (Fnth i.+2 Hi) Hnz0 Hnz2 (lP i Hi)).
+  (* [Hnz2] rules out the zero guard, recovering the strict pairwise bound.   *)
+  by exact: (cexp_lt_ulp (Fnth i.+2 Hi) Hnz0 Hnz2
+              (pairwise_ulp_lt lP Hi Hnz2)).
 Qed.
 
 (* PIECE 2 (to prove): the separation under the relaxed gap -- the core of    *)
@@ -895,6 +907,76 @@ Lemma vecSum_Fnonoverlap l :
 Proof.
 move=> lF lM lP; split; last by apply: vecSum_sum.
 exact: vecSum_Fnonoverlap_sep lF lM lP.
+Qed.
+
+(* ===========================================================================*)
+(*  Toward paper Theorem 6 (ported from the FLT development).                 *)
+(*                                                                            *)
+(*  NB the [emin] scaffolding of the FLT versions is GONE here: [emin <= e-p] *)
+(*  in [RN_midpoint_even], and the no-underflow hypothesis                    *)
+(*  [emin + p <= mag (nth l i)] in the two bounds below, all disappear -- FLX *)
+(*  IS the paper's model (unlimited exponent range), so these statements are  *)
+(*  the paper's, unpatched.                                                   *)
+(* ===========================================================================*)
+
+(* Round-to-nearest ties-to-even sends the exact midpoint [pow e + pow(e-p)]  *)
+(* (halfway between the even float [pow e] and its successor) DOWN to [pow e].*)
+(* This is the one place paper Theorem 6 needs ties-to-even (see              *)
+(* [vecSum_run_ufp]'s same-binade case): a general symmetric [choice] could   *)
+(* round it up.                                                               *)
+Lemma RN_midpoint_even e : ties_to_even choice ->
+  RND (pow e + pow (e - p)) = pow e.
+Proof.
+move=> Heven.
+have Hpe := bpow_gt_0 beta e.
+have Hpep := bpow_gt_0 beta (e - p).
+have Hmagx : mag beta (pow e + pow (e - p)) = (e + 1)%Z :> Z.
+  apply: mag_unique_pos; split.
+    have -> : (e + 1 - 1 = e)%Z by lia.
+    by lra.
+  rewrite bpow_plus bpow_1 /=.
+  have : pow (e - p) < pow e by apply: bpow_lt; lia.
+  lra.
+have Hcexp : cexp (pow e + pow (e - p)) = (e + 1 - p)%Z.
+  by rewrite /cexp Hmagx /FLX_exp.
+have Hpm1 : pow (-1)%Z = / 2 by rewrite /= /Z.pow_pos /=; lra.
+have Hpp1 : pow (p - 1) = IZR (2 ^ (p - 1)).
+  have -> : (2 = radix2 :> Z)%Z by [].
+  by rewrite IZR_Zpower //; lia.
+have Hsm : mant (pow e + pow (e - p)) = pow (p - 1) + / 2.
+  rewrite /scaled_mantissa Hcexp Rmult_plus_distr_r -!bpow_plus.
+  have -> : (e + - (e + 1 - p) = p - 1)%Z by lia.
+  have -> : (e - p + - (e + 1 - p) = -1)%Z by lia.
+  by rewrite Hpm1.
+have Hfloor : Zfloor (mant (pow e + pow (e - p))) = (2 ^ (p - 1))%Z.
+  rewrite Hsm Hpp1; apply: Zfloor_imp.
+  rewrite plus_IZR; have := bpow_gt_0 beta (p - 1); rewrite -Hpp1.
+  by move=> ?; lra.
+have Heven2 : Z.even (2 ^ (p - 1)) = true.
+  have -> : (2 ^ (p - 1) = 2 * 2 ^ (p - 2))%Z.
+    by rewrite -Z.pow_succ_r; [congr (_ ^ _)%Z; lia | lia].
+  by rewrite Z.even_mul.
+have HRD : round beta fexp Zfloor (pow e + pow (e - p)) = pow e.
+  rewrite /round Hfloor Hcexp /F2R /= -Hpp1 -bpow_plus.
+  by congr bpow; lia.
+have Hceil : Zceil (mant (pow e + pow (e - p))) = (2 ^ (p - 1) + 1)%Z.
+  rewrite Hsm Hpp1; apply: Zceil_imp.
+  rewrite minus_IZR plus_IZR; have := bpow_gt_0 beta (p - 1); rewrite -Hpp1.
+  by move=> ?; lra.
+have HRU : round beta fexp Zceil (pow e + pow (e - p)) =
+    pow e + pow (e + 1 - p).
+  rewrite /round Hceil Hcexp /F2R /= plus_IZR -Hpp1 Rmult_plus_distr_r.
+  rewrite -bpow_plus Rmult_1_l.
+  by congr (_ + _); congr bpow; lia.
+have Hmid : (pow e + pow (e - p)) - round beta fexp Zfloor (pow e + pow (e - p))
+          = round beta fexp Zceil (pow e + pow (e - p)) - (pow e + pow (e - p)).
+  rewrite HRD HRU.
+  have -> : pow (e + 1 - p) = 2 * pow (e - p).
+    by rewrite -[in RHS](bpow_1 beta) -bpow_plus; congr bpow; lia.
+  lra.
+rewrite (@round_N_middle beta fexp choice (pow e + pow (e - p)) Hmid) Hfloor.
+have -> : choice (2 ^ (p - 1)) = false by rewrite Heven Heven2.
+exact: HRD.
 Qed.
 
 End SecVecSum.

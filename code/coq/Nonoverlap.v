@@ -65,13 +65,36 @@ elim: l => /= [|a l IH]; first by rewrite Rabs_R0; lra.
 by apply: Rle_trans (Rabs_triang _ _) _; lra.
 Qed.
 
-(* P-nonoverlapping (Priest, Definition 1): |x_{i+1}| < ulp (x_i).            *)
+(* P-nonoverlapping (Priest, Definition 1): |x_{i+1}| < ulp (x_i), with a     *)
+(* guard letting the successor be ZERO.                                       *)
+(*                                                                            *)
+(* The guard is FORCED by FLX, where [ulp 0 = 0] (there is no exponent floor).*)
+(* Without it, a zero term makes the condition [|x_{i+1}| < 0] unsatisfiable, *)
+(* so [[0; 0]] would not be P-nonoverlapping -- yet [[0; 0]] is exactly what  *)
+(* [vseb (vecSum [x; -x])] returns, on an input meeting every hypothesis of   *)
+(* Theorem 6.  It would also deny [(1, 0, 0)] the status of a TW.             *)
+(*                                                                            *)
+(* This does NOT weaken the FLT reading: there [ulp 0 = pow emin], and the    *)
+(* smallest nonzero format value IS [pow emin], so [|x_{i+1}| < ulp 0] already*)
+(* forces [x_{i+1} = 0] on format lists.  The guard merely writes out what the*)
+(* [ulp 0 = pow emin] accident was silently doing.  Note it still REJECTS     *)
+(* [[0; big]] (the [ulp 0] bound bites when the successor is nonzero), so it  *)
+(* is strictly stronger than the zero-FILTERING reading of Definition 3 --    *)
+(* which matters, since [isTW] is a PRECONDITION of RoundTW (Thm 5)/3Prod.    *)
 Definition Pnonoverlap (l : seq R) : Prop :=
-  forall i, (i.+1 < size l)%N -> Rabs (nth 0 l i.+1) < ulp (nth 0 l i).
+  forall i, (i.+1 < size l)%N ->
+    nth 0 l i.+1 = 0 \/ Rabs (nth 0 l i.+1) < ulp (nth 0 l i).
 
 (* Dropping the head of a P-nonoverlapping sequence keeps it P-nonoverlapping.*)
 Lemma Pnonoverlap_cons a l : Pnonoverlap (a :: l) -> Pnonoverlap l.
 Proof. by move=> alP i iLs; apply: (alP i.+1). Qed.
+
+(* Eliminator: at a NONZERO successor the guard cannot fire, so Priest's      *)
+(* strict bound is recovered.  This is how nearly every consumer uses         *)
+(* [Pnonoverlap] -- the guard only ever matters for a zero successor.         *)
+Lemma Pnonoverlap_lt l i : Pnonoverlap l -> (i.+1 < size l)%N ->
+  nth 0 l i.+1 <> 0 -> Rabs (nth 0 l i.+1) < ulp (nth 0 l i).
+Proof. by move=> Pl Hi Hn0; case: (Pl i Hi). Qed.
 
 (* The two preconditions of Theorem 6 on the merged sequence.                 *)
 
@@ -103,28 +126,39 @@ Qed.
 
 (* --- pairwise ulp separation ---------------------------------------------  *)
 (* [pairwise_ulp l]: each term is below ulp of the term two positions before; *)
-(* this tolerates a single overlap but never two in a row.                    *)
+(* this tolerates a single overlap but never two in a row.  Same zero guard   *)
+(* as [Pnonoverlap], forced by [ulp 0 = 0] under FLX: without it a TW with    *)
+(* zero limbs is excluded outright, e.g. [Merge (1,0,0) (1,0,0)] gives        *)
+(* [[1; 1; 0; 0; 0; 0]], whose [i = 2] instance would demand [0 < ulp 0].     *)
 Definition pairwise_ulp (l : seq R) : Prop :=
-  forall i, (i.+2 < size l)%N -> Rabs (nth 0 l i.+2) < ulp (nth 0 l i).
+  forall i, (i.+2 < size l)%N ->
+    nth 0 l i.+2 = 0 \/ Rabs (nth 0 l i.+2) < ulp (nth 0 l i).
 
-(* Peel the head: the third-term bound [Rabs a3 < ulp a1] plus the tail.      *)
+(* Eliminator, as [Pnonoverlap_lt]: a nonzero term two positions on gets the  *)
+(* strict bound back.                                                         *)
+Lemma pairwise_ulp_lt l i : pairwise_ulp l -> (i.+2 < size l)%N ->
+  nth 0 l i.+2 <> 0 -> Rabs (nth 0 l i.+2) < ulp (nth 0 l i).
+Proof. by move=> Pl Hi Hn0; case: (Pl i Hi). Qed.
+
+(* Peel the head: the third-term bound (guarded) plus the tail.               *)
 Lemma pairwise_ulp_cons a1 a2 a3 l :
   pairwise_ulp [:: a1, a2, a3 & l] ->
-  Rabs a3 < ulp a1 /\ pairwise_ulp [::a2, a3 & l].
+  (a3 = 0 \/ Rabs a3 < ulp a1) /\ pairwise_ulp [::a2, a3 & l].
 Proof.
 move=> a1a2a3lU; split; last by move=> n Hn; apply: (a1a2a3lU n.+1).
 by apply: (a1a2a3lU 0%N).
 Qed.
 
-(* Cons a head given its bound against the third term.                        *)
+(* Cons a head given its (guarded) bound against the third term.              *)
 Lemma pairwise_ulp_cons_inv a1 a2 a3 l :
-  Rabs a3 < ulp a1 ->
+  (a3 = 0 \/ Rabs a3 < ulp a1) ->
   pairwise_ulp (a2 :: a3 :: l) -> pairwise_ulp [:: a1, a2, a3 & l].
 Proof. by move=> a2La1 a2lN [//|i Hi]; apply: (a2lN i). Qed.
 
 (* Cons a head onto any tail: the only new obligation is the third-term bound.*)
 Lemma pairwise_ulp_cons1_inv a l :
-  pairwise_ulp l  -> ((1 < size l)%N -> Rabs(nth 0 l 1) < ulp a) ->
+  pairwise_ulp l  ->
+  ((1 < size l)%N -> nth 0 l 1 = 0 \/ Rabs(nth 0 l 1) < ulp a) ->
   pairwise_ulp (a :: l).
 Proof.
 case: l => // b [|c l] //= bclP /(_ isT) cLua.
@@ -156,10 +190,13 @@ Lemma Pnonoverlap_imp_pairwise_ul l :
 Proof.
 elim: l => //= a [|b [|c l]] // IH abclF abclP.
 apply: pairwise_ulp_cons_inv.
-  have /= bLua := abclP 0%N isT.
+  have /= := abclP 1%N isT => -[c0|cLub]; first by left.
+  right.
+  (* [b = 0] is impossible here: it would make [ulp b = 0] under FLX, and     *)
+  (* [cLub] already puts [Rabs c] strictly below it.                          *)
+  have /= := abclP 0%N isT => -[b0|bLua].
+    by move: cLub; rewrite b0 ulp_FLX_0; split_Rabs; lra.
   apply: Rle_lt_trans bLua.
-  have /= := abclP 1%N isT.
-  move=> cLub.
   apply: Rle_trans (Rlt_le _ _ cLub) _.
   apply: ulp_le_abs => //.
     by move=> b_eq0; move: cLub; rewrite b_eq0 ulp_FLX_0; split_Rabs; lra.
@@ -590,8 +627,9 @@ suff Hl0 : sumR l = 0 by rewrite a0 Hl0 Rplus_0_r.
 case: l IH Pl Fl => [//|b l'] IH Pl Fl.
 apply: IH; first exact: Pnonoverlap_cons Pl.
   by move=> t tin; apply: Fl; rewrite inE tin orbT.
-have Hb : Rabs b < ulp a by apply: (Pl 0%N).
-by rewrite /=; move: Hb; rewrite a0 ulp_FLX_0; split_Rabs; lra.
+(* The successor is 0 outright, or its [ulp a = ulp 0 = 0] bound is absurd.   *)
+have /= := Pl 0%N isT => -[//|Hb].
+by move: Hb; rewrite a0 ulp_FLX_0; split_Rabs; lra.
 Qed.
 
 (* Key bound: for a P-nonoverlap list of floats, the whole sum is at most     *)
@@ -613,7 +651,6 @@ case: l IH Pl Fl => [|b l] IH Pl Fl.
   have -> : nth 0 [:: a] 0 = a by [].
   have -> : sumR [:: a] = a by rewrite /= Rplus_0_r.
   nra.
-have Hb : Rabs b < ulp a by apply: (Pl 0%N).
 have Fb : format b by apply: Fl; rewrite !inE eqxx orbT.
 have Hub : 0 < ufp b := ufp_gt_0 b.
 have -> : nth 0 (a :: b :: l) 0 = a by [].
@@ -627,6 +664,9 @@ case: (Req_dec b 0) => [b0|bn0].
       by move=> t tin; apply: Fl; rewrite inE tin orbT.
     by rewrite /= b0.
   by rewrite Hs0 Rplus_0_r; nra.
+(* [b <> 0] here, so the zero guard cannot fire and the strict bound stands.  *)
+have Hb : Rabs b < ulp a.
+  by have /= := Pl 0%N isT => -[b0|//]; case: bn0.
 have Na : a <> 0.
   by move=> a_eq0; move: Hb; rewrite a_eq0 ulp_FLX_0; split_Rabs; lra.
 have Hstep : ufp b <= u * ufp a by apply: ufp_ulp_step.
@@ -650,7 +690,7 @@ Lemma nth_step_zero l i : Pnonoverlap l -> {in l, forall z, format z} ->
 Proof.
 move=> Pl Fl Hi.
 case: (ltnP i.+1 (size l)) => [Hlt|Hle]; last by rewrite nth_default.
-have Hb : Rabs (nth 0 l i.+1) < ulp (nth 0 l i) by apply: Pl.
+have := Pl i Hlt => -[//|Hb].
 by move: Hb; rewrite Hi ulp_FLX_0; split_Rabs; lra.
 Qed.
 

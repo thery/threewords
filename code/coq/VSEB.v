@@ -84,10 +84,10 @@ Local Notation small_head_zero := (@small_head_zero p Hp2).
 Local Notation sumR_ufp_bound := (@sumR_ufp_bound p Hp2).
 Local Notation nth_step_zero := (@nth_step_zero p Hp2).
 Local Notation Fnonoverlap_imm := (Fnonoverlap_imm Hp2).
-Local Notation Fnonoverlap_TwoSum_merge := 
-  (Fnonoverlap_TwoSum_merge choice_sym).
+Local Notation Fnonoverlap_TwoSum_merge :=
+  (Fnonoverlap_TwoSum_merge Hp2 choice_sym).
 Local Notation Fnonoverlap_TwoSum_err :=
-  (Fnonoverlap_TwoSum_err choice_sym). 
+  (Fnonoverlap_TwoSum_err Hp2 choice_sym).
 
 (* ===========================================================================*)
 (*  Algorithm 5: VecSumErrBranch (VSEB)                                       *)
@@ -270,19 +270,23 @@ Qed.
 
 (* Reusable block bound (paper Thm 2): the first term emitted by VSEB from a  *)
 (* nonzero remainder [eps] over an F-nonoverlap tail has magnitude [< 2|eps|].*)
-Lemma vsebAux_head_lt eps l :
+(* Block bound, stated on the MASS of the tail.  This is all the estimate     *)
+(* really needs: the F-nonoverlap hypothesis of [vsebAux_head_lt] below is    *)
+(* used ONLY to bound [sumRabs l] by [uls eps] geometrically                  *)
+(* ([Fnonoverlap_aux_sumRabs]), never term by term.  Splitting it out gives a *)
+(* reusable entry point for callers whose tail is NOT F-nonoverlapping -- in  *)
+(* particular a [VecSum] output, which need not be (see [CEThm6.v] on main).  *)
+Lemma vsebAux_head_lt_mass eps l :
   (Z.of_nat (size l).+2 <= p + 1)%Z ->
-  format eps -> {in l, forall z, format z} -> Fnonoverlap (eps :: l) ->
-  eps <> 0 -> Rabs (nth 0 (vsebAux eps l) 0) < 2 * Rabs eps.
+  format eps -> {in l, forall z, format z} -> eps <> 0 ->
+  sumRabs l <= uls eps * (1 - (/ 2) ^ (size l)) ->
+  Rabs (nth 0 (vsebAux eps l) 0) < 2 * Rabs eps.
 Proof.
-move=> Hsz epsF lF Fno epsn0.
+move=> Hsz epsF lF epsn0 Hsum.
 have Hu0 : 0 < uls eps by apply: uls_gt_0.
 have Hae : uls eps <= Rabs eps by apply: uls_le_abs.
 have He0 : 0 < Rabs eps by apply: Rabs_pos_lt.
 have Hd0 : 0 < (/ 2) ^ (size l) by apply: pow_lt; lra.
-have Hsum : sumRabs l <= uls eps * (1 - (/ 2) ^ (size l)).
-  have H := Fnonoverlap_consE epsn0 Fno.
-  by apply: Fnonoverlap_aux_sumRabs.
 have HsumLt : sumRabs l < uls eps by nra.
 have Hg : uls eps = pow (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps)))).
   by rewrite /uls; case: Req_bool_spec => // eps0; case: (epsn0 eps0).
@@ -351,6 +355,20 @@ have [HM|HM] := Rle_lt_or_eq_dec _ _ Hae.
   + by apply: pred_lt_id; rewrite H2; have := bpow_gt_0 beta (g + 1); lra.
 Qed.
 
+(* Reusable block bound (paper Thm 2): the first term emitted by VSEB from a  *)
+(* nonzero remainder [eps] over an F-nonoverlap tail has magnitude [< 2|eps|].*)
+(* F-nonoverlap enters only through the mass bound it implies.                *)
+Lemma vsebAux_head_lt eps l :
+  (Z.of_nat (size l).+2 <= p + 1)%Z ->
+  format eps -> {in l, forall z, format z} -> Fnonoverlap (eps :: l) ->
+  eps <> 0 -> Rabs (nth 0 (vsebAux eps l) 0) < 2 * Rabs eps.
+Proof.
+move=> Hsz epsF lF Fno epsn0.
+apply: vsebAux_head_lt_mass => //.
+have H := Fnonoverlap_consE epsn0 Fno.
+by apply: Fnonoverlap_aux_sumRabs.
+Qed.
+
 (* Core of Thm 2, by induction on the tail [l] of [eps :: l] (paper's running *)
 (* remainder [eps] and high words [r_i]).  A step [2Sum(eps, e) = (r, et)]:   *)
 (* when [et = 0] the remainder [r] is carried on (no term emitted); when      *)
@@ -378,8 +396,16 @@ case: l' IH lF Fno Hsz => [|e2 l''] IH lF Fno Hsz.
   move=> [|i] /= Hi; last by move: Hi; rewrite ltnS ltnS ltn0.
   (* |y1| < ulp y0: the 2Sum error is <= half an ulp of the high word.        *)
   have Hm := magnitude_TwoSum epsF Fe; rewrite E1 /= in Hm.
-(* FAIL *)
-  have Hy : 0 < ulp y0 by apply: ulp_gt_0.
+  (* Under FLX [ulp 0 = 0], so [0 < ulp y0] is NOT free: [y0 = 0] is real     *)
+  (* here ([2Sum(x, -x) = (0, 0)], reached from the legitimate Theorem-6      *)
+  (* input [[x; -x]]).  The zero guard covers it, and [Hm] itself decides     *)
+  (* which way: if [y0 = 0] then [Hm] reads [Rabs y1 <= 0], so [y1 = 0].      *)
+  case: (Req_dec y1 0) => [y10|y1n0]; first by left.
+  right.
+  have y0n0 : y0 <> 0.
+    by move=> y00; apply: y1n0; move: Hm;
+       rewrite y00 ulp_FLX_0; split_Rabs; lra.
+  have Hy : 0 < ulp y0 by rewrite ulp_neq_0 //; apply: bpow_gt_0.
   by lra.
 (* General step: [2Sum(eps, e) = (r, et)].                                    *)
 rewrite vsebAux_consS; case E1 : (TwoSum eps e) => [r et].
@@ -428,6 +454,8 @@ have Hrec : Pnonoverlap (vsebAux et (e2 :: l'')).
 move=> [|i] /= Hi.
   (* Head: emitted [r = y_j] vs next [y_{j+1}].  [ulp r >= 2 |et|]            *)
   (* ([magnitude_TwoSum]) and [|y_{j+1}| < 2 |et|] ([vsebAux_head_lt]).       *)
+  (* The zero guard is not needed here: [et <> 0] forces [ulp r > 0].         *)
+  right.
   have Hulp : 2 * Rabs et <= ulp r.
     by have Hm := magnitude_TwoSum epsF Fe; rewrite E1 /= in Hm; lra.
   have Hnext : Rabs (nth 0 (vsebAux et (e2 :: l'')) 0) < 2 * Rabs et.

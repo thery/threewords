@@ -14,5 +14,6 @@ TWR.v
 Merge.v
 VecSum.v
 VSEB.v
+Thm6.v
 TWSum.v
 addition.v

@@ -430,8 +430,11 @@ Qed.
 (* exact sum has magnitude below [2^(e0+2)]).  This is the tight per-step     *)
 (* error bound behind [Herr] (the paper's [2 u^2 2^(k_{i-1})] would be a      *)
 (* factor [2^p] too small: a single 2Sum error can reach [~u 2^(k_i)]).       *)
+(* The running-sum hypothesis is [|s| <= 2 pow e0], NOT [(2-2u) pow e0]: the  *)
+(* Theorem-6 run bound [vecSum_run_ufp] only delivers the former, and the     *)
+(* slack is not needed ([Rabs x < pow (e0+1)] is already strict).             *)
 Lemma magnitude_vecSum_err x s e0 : format x -> format s ->
-  Rabs x < pow (e0 + 1) -> Rabs s <= (2 - 2 * u) * pow e0 ->
+  Rabs x < pow (e0 + 1) -> Rabs s <= 2 * pow e0 ->
   Rabs (dwl (TwoSum x s)) <= 2 * u * pow e0.
 Proof.
 move=> Fx Fs Hx Hs.
@@ -442,11 +445,9 @@ have -> : dwl (TwoSum x s) = - (RND (x + s) - (x + s)) by lra.
 rewrite Rabs_Ropp.
 have Hz : Rabs (x + s) < pow (e0 + 2).
   apply: Rle_lt_trans (Rabs_triang _ _) _.
-  have Hs1 : Rabs s < pow (e0 + 1).
-    apply: Rle_lt_trans Hs _.
-    have -> : pow (e0 + 1) = 2 * pow e0 by rewrite bpow_plus bpow_1 /=; lra.
-    have Hu : 0 < u by rewrite uE; apply: bpow_gt_0.
-    have := bpow_gt_0 beta e0; nra.
+  have Hs1 : Rabs s <= pow (e0 + 1).
+    apply: Rle_trans Hs _.
+    by rewrite bpow_plus bpow_1 /=; lra.
   have -> : pow (e0 + 2) = pow (e0 + 1) + pow (e0 + 1)
     by rewrite !bpow_plus /= /Z.pow_pos /=; lra.
   lra.
@@ -499,7 +500,11 @@ apply: magnitude_vecSum_err.
   apply: Rmult_lt_compat_r; first exact: bpow_gt_0.
   have -> : pow p = IZR (2 ^ p) by rewrite IZR_2powp.
   by apply: IZR_lt.
-by exact: Hrun j jLs.
+(* [VecSum_run_bound] gives the sharper [(2-2u) pow (k j)]; relax it to the   *)
+(* [2 pow (k j)] that [magnitude_vecSum_err] now asks for.                    *)
+apply: Rle_trans (Hrun j jLs) _.
+have Hu : 0 < u by rewrite uE; apply: bpow_gt_0.
+have := bpow_gt_0 beta (k j); nra.
 Qed.
 
 (* Prefix/suffix split of the VecSum walk (paper: "e_i, ..., e_0 and s_0      *)
@@ -919,6 +924,19 @@ Qed.
 (*  the paper's, unpatched.                                                   *)
 (* ===========================================================================*)
 
+(* FLX analogue of [Pff2Flocq.round_N_opp_sym], which is FLT-only (it is      *)
+(* stated for [round_flt]).  A symmetric tie-breaking [choice] makes          *)
+(* round-to-nearest odd: [round_N_opp] flips [choice] to                      *)
+(* [fun t => ~~ choice (-(t+1))], which [choice_sym] says is [choice] again,  *)
+(* pointwise -- so [round_ext] closes it without functional extensionality.   *)
+Lemma RN_opp_sym x : RND (- x) = - RND x.
+Proof.
+rewrite round_N_opp; congr (- _).
+apply: round_ext => t.
+rewrite /Znearest; case: Rcompare => //.
+by rewrite -choice_sym.
+Qed.
+
 (* Round-to-nearest ties-to-even sends the exact midpoint [pow e + pow(e-p)]  *)
 (* (halfway between the even float [pow e] and its successor) DOWN to [pow e].*)
 (* This is the one place paper Theorem 6 needs ties-to-even (see              *)
@@ -977,6 +995,160 @@ have Hmid : (pow e + pow (e - p)) - round beta fexp Zfloor (pow e + pow (e - p))
 rewrite (@round_N_middle beta fexp choice (pow e + pow (e - p)) Hmid) Hfloor.
 have -> : choice (2 ^ (p - 1)) = false by rewrite Heven Heven2.
 exact: HRD.
+Qed.
+
+(* Paper Theorem 6, step (a) / the draft's step *1 (see [doc/thm6.md] 5.1):   *)
+(* the running high word [s_j = (vecSumAux (drop j l)).2] of a VecSum on a    *)
+(* magnitude-sorted, pairwise-ulp separated, zero-free sequence obeys         *)
+(* [|s_j| <= 4 ufp(x_j)] and (for [j >= 1]) [|s_j| <= 2 ufp(x_{j-1})], by     *)
+(* coupled downward induction.  The same-binade step (no strict exponent      *)
+(* drop) uses [pairwise_ulp] to shrink the tail and [RN_midpoint_even] for    *)
+(* the boundary tie -- the draft's "after rounding (ties-to-even)".           *)
+Lemma vecSum_run_ufp (l : seq R) :
+  ties_to_even choice ->
+  {in l, forall z, format z} ->
+  (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
+  sorted_mag l -> pairwise_ulp l ->
+  forall j, (j < size l)%N ->
+    Rabs (vecSumAux (drop j l)).2 <= 4 * ufp (nth (0:R) l j) /\
+    ((0 < j)%N -> Rabs (vecSumAux (drop j l)).2 <= 2 * ufp (nth (0:R) l j.-1)).
+Proof.
+move=> Heven Hfmt Hnz Hsort Hpair.
+have Fnth : forall i, (i < size l)%N -> format (nth (0:R) l i).
+  by move=> i Hi; apply: Hfmt; apply: mem_nth.
+have ufpE : forall i, ufp (nth (0:R) l i) = pow (mag beta (nth (0:R) l i) - 1).
+  by move=> i; rewrite /ufp.
+have ulpE : forall i, (i < size l)%N ->
+    ulp (nth (0:R) l i) = pow (mag beta (nth (0:R) l i) - p).
+  move=> i Hi; rewrite ulp_neq_0; last exact: Hnz.
+  by rewrite /cexp /FLX_exp.
+have magmon : forall i, (i.+1 < size l)%N ->
+    (mag beta (nth (0:R) l i.+1) <= mag beta (nth (0:R) l i))%Z.
+  by move=> i Hi; apply: mag_le_abs; [exact: Hnz i.+1 Hi | exact: Hsort i Hi].
+have E2 : (2:R) = pow 1 by rewrite /= /Z.pow_pos /=; lra.
+have Fufp4 : forall i, (i < size l)%N -> format (4 * ufp (nth (0:R) l i)).
+  move=> i Hi.
+  have E4 : (4:R) = pow 2 by rewrite /= /Z.pow_pos /=; lra.
+  rewrite ufpE E4 -bpow_plus.
+  by apply: generic_format_bpow; rewrite /FLX_exp; lia.
+move=> j; have [d le_d] := ubnP (size l - j).
+elim: d j le_d => // d IHd j; rewrite ltnS => le_d Hj.
+have Fx := Fnth j Hj.
+have Hx2 : Rabs (nth (0:R) l j) < 2 * ufp (nth (0:R) l j) by apply: abs_lt_2ufp.
+have HxN := abs_le_ufp_norm Fx.
+have Uj : 0 < ufp (nth (0:R) l j) by apply: ufp_gt_0.
+have [Hlast|Hlast] := eqVneq j.+1 (size l).
+  have Hdrop : drop j l = [:: nth (0:R) l j]
+    by rewrite (drop_nth 0) // Hlast drop_size.
+  rewrite Hdrop /=; split; first by lra.
+  move=> j0.
+  have Hmm : (mag beta (nth (0:R) l j) <= mag beta (nth (0:R) l j.-1))%Z.
+    by move: (magmon j.-1); rewrite prednK //; apply.
+  apply: Rle_trans (Rlt_le _ _ Hx2) _.
+  rewrite !ufpE; apply: Rmult_le_compat_l; first by lra.
+  by apply: bpow_le; lia.
+have Hj1 : (j.+1 < size l)%N by rewrite ltn_neqAle Hlast Hj.
+have Hde : (size l - j.+1 < d)%N.
+  by apply: (leq_trans _ le_d); rewrite subnS prednK ?subn_gt0.
+have [IHB IHA] := IHd j.+1 Hde Hj1.
+have IHA' : Rabs (vecSumAux (drop j.+1 l)).2 <= 2 * ufp (nth (0:R) l j)
+  := IHA (ltn0Sn j).
+have Hd1 : drop j l = nth (0:R) l j :: drop j.+1 l by rewrite (drop_nth 0).
+have Hd2 : drop j.+1 l = nth (0:R) l j.+1 :: drop j.+2 l
+  by rewrite (drop_nth 0).
+have Hs : (vecSumAux (drop j l)).2
+            = RND (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2).
+  rewrite Hd1 Hd2 vecSumAux_cons -Hd2.
+  by case: (vecSumAux (drop j.+1 l)) => es s /=; rewrite /TwoSum.
+rewrite Hs.
+have HB : Rabs (RND (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2))
+            <= 4 * ufp (nth (0:R) l j).
+  apply: abs_round_le_generic; first exact: Fufp4 j Hj.
+  apply: Rle_trans (Rabs_triang _ _) _; lra.
+split; first exact: HB.
+move=> j0.
+have Hmm : (mag beta (nth (0:R) l j) <= mag beta (nth (0:R) l j.-1))%Z.
+  by move: (magmon j.-1); rewrite prednK //; apply.
+have [Hne|Heq] :=
+  Z.eq_dec (mag beta (nth (0:R) l j)) (mag beta (nth (0:R) l j.-1)).
+  have Hjm1 : (j.-1 < size l)%N by apply: leq_ltn_trans (leq_pred j) Hj.
+  have HulpM := ulpE j Hj.
+  have Hs1 : Rabs (vecSumAux (drop j.+1 l)).2 <= 2 * ulp (nth (0:R) l j).
+    apply: Rle_trans IHB _.
+    (* [Hnz] rules out the zero guard on [pairwise_ulp].                      *)
+    have Hp1 : Rabs (nth (0:R) l j.+1) < ulp (nth (0:R) l j.-1).
+      move: (Hpair j.-1); rewrite (prednK j0) => /(_ Hj1) -[Hz|//].
+      by case: (Hnz j.+1 Hj1).
+    have Hmg1 : (mag beta (nth (0:R) l j.+1) <= mag beta (nth (0:R) l j) - p)%Z.
+      apply: mag_le_bpow; first exact: Hnz j.+1 Hj1.
+      apply: Rlt_le_trans Hp1 _.
+      by rewrite (ulpE j.-1 Hjm1); apply: bpow_le; lia.
+    rewrite (ufpE j.+1) HulpM.
+    have E4 : (4:R) = pow 2 by rewrite /= /Z.pow_pos /=; lra.
+    by rewrite E4 E2 -!bpow_plus; apply: bpow_le; lia.
+  have Hu2u : (2 - 2 * u) * ufp (nth (0:R) l j)
+      = pow (mag beta (nth (0:R) l j)) - ulp (nth (0:R) l j).
+    rewrite Rmult_minus_distr_r ufpE HulpM uE E2 -!bpow_plus.
+    by congr (_ - _); congr bpow; lia.
+  have Hv : Rabs (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2)
+      <= pow (mag beta (nth (0:R) l j)) + ulp (nth (0:R) l j).
+    apply: Rle_trans (Rabs_triang _ _) _.
+    by rewrite Hu2u in HxN; lra.
+  have Ht : 2 * ufp (nth (0:R) l j.-1) = pow (mag beta (nth (0:R) l j)).
+    by rewrite (ufpE j.-1) -Hne E2 -bpow_plus; congr bpow; lia.
+  rewrite Ht.
+  (* The [(emin <= mag - p)] side condition of the FLT version is gone.       *)
+  have Htie := RN_midpoint_even (mag beta (nth (0:R) l j)) Heven.
+  rewrite -HulpM in Htie.
+  have Hup : RND (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2)
+      <= pow (mag beta (nth (0:R) l j)).
+    rewrite -Htie; apply: round_le.
+    have := Rle_abs (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2); lra.
+  have Hlo : - pow (mag beta (nth (0:R) l j))
+      <= RND (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2).
+    have Hopp := RN_opp_sym (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2).
+    suff Hs2 : RND (- (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2))
+        <= pow (mag beta (nth (0:R) l j)) by move: Hs2; rewrite Hopp; lra.
+    rewrite -Htie; apply: round_le.
+    have := Rle_abs (- (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2)).
+    rewrite Rabs_Ropp; lra.
+  by split_Rabs; lra.
+apply: Rle_trans HB _.
+rewrite !ufpE.
+have E4 : (4:R) = pow 2 by rewrite /= /Z.pow_pos /=; lra.
+by rewrite E4 E2 -!bpow_plus; apply: bpow_le; lia.
+Qed.
+
+(* Step (b) of Theorem 6 / the draft's "What is more, we still have           *)
+(* [|e_i| <= 2u ufp(x_{i-1})]" (see [doc/thm6.md] 5.1).  Each VecSum error    *)
+(* [e_i = nth (vecSum l) i.+1] is the low word of the 2Sum of [x_i] with the  *)
+(* tail running sum [s_{i+1}]; [magnitude_vecSum_err] bounds it from          *)
+(* [|x_i| < 2 ufp(x_i)] and the run bound [|s_{i+1}| <= 2 ufp(x_i)]           *)
+(* ([vecSum_run_ufp], second conjunct at [j = i.+1]).                         *)
+Lemma vecSum_err_ufp (l : seq R) :
+  ties_to_even choice ->
+  {in l, forall z, format z} ->
+  (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
+  sorted_mag l -> pairwise_ulp l ->
+  forall i, (i.+1 < size l)%N ->
+    Rabs (nth (0:R) (vecSum l) i.+1) <= 2 * u * ufp (nth (0:R) l i).
+Proof.
+move=> Heven Hfmt Hnz Hsort Hpair i Hi.
+have iLl : (i < size l)%N := ltn_trans (ltnSn i) Hi.
+have Fx : format (nth (0:R) l i) by apply: Hfmt; apply: mem_nth.
+have Hrun := vecSum_run_ufp Heven Hfmt Hnz Hsort Hpair.
+have -> : nth (0:R) (vecSum l) i.+1 = nth (0:R) (vecSumAux l).1 i
+  by rewrite /vecSum; case: (vecSumAux l).
+rewrite vecSumAux_nth1 //.
+rewrite /ufp; apply: magnitude_vecSum_err.
+- exact: Fx.
+- apply: format_vecSumAux2 => z zIn.
+  by apply: Hfmt; rewrite -(cat_take_drop i.+1 l) mem_cat zIn orbT.
+- have -> : (mag beta (nth (0:R) l i) - 1 + 1 = mag beta (nth (0:R) l i))%Z
+    by lia.
+  by apply: bpow_mag_gt.
+- have [_ /(_ (ltn0Sn i))] := Hrun i.+1 Hi.
+  by rewrite /ufp /=.
 Qed.
 
 End SecVecSum.

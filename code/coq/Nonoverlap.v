@@ -89,6 +89,17 @@ Definition Pnonoverlap (l : seq R) : Prop :=
 Lemma Pnonoverlap_cons a l : Pnonoverlap (a :: l) -> Pnonoverlap l.
 Proof. by move=> alP i iLs; apply: (alP i.+1). Qed.
 
+(* A trailing zero is harmless: the only new constraint has a zero successor, *)
+(* which is exactly what the guard covers.  (Under the unguarded reading this *)
+(* would need [0 < ulp (last l)], i.e. a nonzero last element -- false in     *)
+(* general, and not even true for [l = [:: 0]] under FLX.)                    *)
+Lemma Pnonoverlap_rcons0 l : Pnonoverlap l -> Pnonoverlap (rcons l 0).
+Proof.
+move=> Pl i; rewrite size_rcons ltnS leq_eqVlt => /orP[/eqP Hi|Hi].
+  by left; rewrite nth_rcons -Hi ltnn eqxx.
+by rewrite !nth_rcons Hi (ltn_trans (ltnSn i) Hi); apply: Pl.
+Qed.
+
 (* Eliminator: at a NONZERO successor the guard cannot fire, so Priest's      *)
 (* strict bound is recovered.  This is how nearly every consumer uses         *)
 (* [Pnonoverlap] -- the guard only ever matters for a zero successor.         *)
@@ -124,6 +135,15 @@ case: l => // a3 l /sorted_mag_cons[a1La3 a3lS] a1La2.
 by apply: sorted_mag_cons_inv => //; lra.
 Qed.
 
+(* Dropping the LAST entry preserves the magnitude order.                     *)
+Lemma sorted_mag_rcons m x : sorted_mag (rcons m x) -> sorted_mag m.
+Proof.
+move=> H i Hi.
+have Hi1 : (i < size m)%N by apply: ltn_trans Hi.
+have Hi' : (i.+1 < size (rcons m x))%N by rewrite size_rcons ltnS ltnW.
+by have := H i Hi'; rewrite !nth_rcons Hi Hi1.
+Qed.
+
 (* --- pairwise ulp separation ---------------------------------------------  *)
 (* [pairwise_ulp l]: each term is below ulp of the term two positions before; *)
 (* this tolerates a single overlap but never two in a row.  Same zero guard   *)
@@ -133,6 +153,15 @@ Qed.
 Definition pairwise_ulp (l : seq R) : Prop :=
   forall i, (i.+2 < size l)%N ->
     nth 0 l i.+2 = 0 \/ Rabs (nth 0 l i.+2) < ulp (nth 0 l i).
+
+(* Dropping the LAST entry preserves the pairwise-ulp separation.             *)
+Lemma pairwise_ulp_rcons m x : pairwise_ulp (rcons m x) -> pairwise_ulp m.
+Proof.
+move=> H i Hi.
+have Hi1 : (i < size m)%N by apply: ltn_trans Hi; apply: ltnW.
+have Hi' : (i.+2 < size (rcons m x))%N by rewrite size_rcons ltnS ltnW.
+by have := H i Hi'; rewrite !nth_rcons Hi Hi1.
+Qed.
 
 (* Eliminator, as [Pnonoverlap_lt]: a nonzero term two positions on gets the  *)
 (* strict bound back.                                                         *)

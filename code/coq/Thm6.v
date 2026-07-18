@@ -294,6 +294,156 @@ by apply: (Hrec i); move: Hi; rewrite ltnS.
 Qed.
 
 (* ===========================================================================*)
+(*  Reduction of [vecSum_vsebMass] to two STATIC properties of the VecSum     *)
+(*  error sequence [E = vecSum l].  Both are verified true by exhaustive       *)
+(*  [p = 4, 5, 6] simulation; each isolates one half of draft 5.2-5.3.        *)
+(*                                                                            *)
+(*   (A) [suffMass E]: every error's [uls] dominates the total mass of all    *)
+(*       LATER errors, with the [(1 - 2u)] margin.  This is the block-mass     *)
+(*       estimate (draft 5.3: the emitted-tail errors are tiny, "at most 3").  *)
+(*   (C) [ulsMono E]: [uls] is non-increasing along the nonzero errors.  Via  *)
+(*       [TwoSum_err_uls_ge] this lifts the tail-mass bound from [uls(e_k)] to *)
+(*       [uls(et)], the actual VSEB remainder.                                 *)
+(* ===========================================================================*)
+
+(* Each nonzero entry's [uls] bounds the mass of the strict suffix after it.  *)
+Definition suffMass (L : seq R) : Prop :=
+  forall k, (k < size L)%N -> nth 0 L k <> 0 ->
+    sumRabs (drop k.+1 L) <= uls (nth 0 L k) * (1 - 2 * u).
+
+(* [uls] is non-increasing on the nonzero entries.                            *)
+Definition ulsMono (L : seq R) : Prop :=
+  forall i j, (i < j)%N -> (j < size L)%N ->
+    nth 0 L i <> 0 -> nth 0 L j <> 0 -> uls (nth 0 L j) <= uls (nth 0 L i).
+
+(* A remainder [rho] whose [uls] dominates every nonzero entry of [L].        *)
+Definition dominates (rho : R) (L : seq R) : Prop :=
+  forall z, z \in L -> z <> 0 -> uls z <= uls rho.
+
+Lemma suffMass_cons e L :
+  suffMass (e :: L) -> (e <> 0 -> sumRabs L <= uls e * (1 - 2 * u)) /\ suffMass L.
+Proof.
+move=> Hs; split=> [en0|k Hk kn0].
+  by have := Hs 0%N isT en0; rewrite drop1.
+by have := Hs k.+1 Hk kn0; rewrite -[drop _ (e :: L)]/(drop k.+1 L).
+Qed.
+
+Lemma ulsMono_cons e L :
+  ulsMono (e :: L) -> ulsMono L /\ (e <> 0 -> dominates e L).
+Proof.
+move=> Hm; split=> [i j Hij Hj ni nj|en0 z /(nthP 0)[j Hj <-] nj].
+  by have := Hm i.+1 j.+1 Hij Hj ni nj.
+by have := Hm 0%N j.+1 isT Hj en0 nj.
+Qed.
+
+Lemma dominates_cons rho e L : dominates rho (e :: L) -> dominates rho L.
+Proof. by move=> Hd z zL; apply: Hd; rewrite inE zL orbT. Qed.
+
+(* The walk induction: [vsebMass rho L] follows from the two static facts on   *)
+(* [L] plus the running [uls]-domination invariant.  At an emit the tail mass  *)
+(* bound comes from [suffMass] and is lifted to [uls et] by                    *)
+(* [TwoSum_err_uls_ge] (needs [uls e <= uls rho], the invariant); the          *)
+(* invariant is transported to the new remainder by [ulsMono].                 *)
+Lemma vsebMass_gen rho L :
+  format rho -> {in L, forall z, format z} ->
+  (rho = 0 \/ dominates rho L) -> ulsMono L -> suffMass L ->
+  vsebMass rho L.
+Proof.
+elim: L rho => [|e L' IH] rho Frho FL Hdom HM HS; first by [].
+case: L' IH FL Hdom HM HS => [|e2 L''] IH FL Hdom HM HS; first by [].
+have Fe : format e by apply: FL; rewrite inE eqxx.
+have FL' : {in e2 :: L'', forall z, format z}
+  by move=> z zI; apply: FL; rewrite inE zI orbT.
+have [rF etF] : format (dwh (TwoSum p choice rho e)) /\
+                format (dwl (TwoSum p choice rho e)) by apply: format_TwoSum.
+have [HSe HSL'] := suffMass_cons HS.
+have [HML' Hdome] := ulsMono_cons HM.
+rewrite vsebMass_consS; case E : (TwoSum p choice rho e) => [r et].
+rewrite E /= in rF etF.
+have Hc : dwh (TwoSum p choice rho e) + dwl (TwoSum p choice rho e) = rho + e
+  by exact: TwoSum_correct_loc Frho Fe.
+rewrite E /= in Hc.
+have Hr : r = RND (rho + e) by have := TwoSum_hi rho e; rewrite E.
+case: (Req_dec e 0) => [e0|en0].
+  have Eet : et = 0.
+    by have := @dwl_TwoSum_r0 p Hp2 choice choice_sym rho Frho; rewrite -e0 E /=.
+  have Er : r = rho.
+    by have := @dwh_TwoSum_r0 p choice rho Frho; rewrite -e0 E /=.
+  rewrite Eet Er; move: (Req_EM_T (0:R) 0); case=> [E0|E0]; last by case: E0.
+  rewrite [is_left _]/=.
+  apply: IH => //.
+  case: Hdom => [rho0|Hd]; [by left | by right; apply: dominates_cons Hd].
+move: (Req_EM_T et 0); case=> [et0|etn0]; rewrite [is_left _]/=.
+  have Hre : r = rho + e by move: Hc; rewrite et0 Rplus_0_r.
+  apply: IH => //.
+  case: (Req_dec r 0) => [r0|rn0]; first by left.
+  right => z zI zn0.
+  have Hze : uls z <= uls e by apply: Hdome.
+  have Hg_e : uls e = pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e)))).
+    by rewrite /uls; case: Req_bool_spec => // e_0; case: en0.
+  have Him_e : is_imul e (uls e) by apply: uls_imul.
+  have Him_rho : is_imul rho (uls e).
+    case: (Req_dec rho 0) => [rho0|rhon0].
+      by rewrite rho0; exists 0%Z; rewrite Rmult_0_l.
+    have Hler : uls e <= uls rho.
+      case: Hdom => [rho0|Hd]; first by case: rhon0.
+      by apply: Hd; [rewrite inE eqxx | exact: en0].
+    have Hg_rho : uls rho = pow (cexp rho + Z.of_nat (trZ (Ztrunc (mant rho)))).
+      by rewrite /uls; case: Req_bool_spec => // rho_0; case: rhon0.
+    have Hle_exp : (cexp e + Z.of_nat (trZ (Ztrunc (mant e))) <=
+                    cexp rho + Z.of_nat (trZ (Ztrunc (mant rho))))%Z.
+      by apply: (le_bpow beta); rewrite -Hg_e -Hg_rho.
+    have := uls_imul Frho; rewrite Hg_rho => Him_rho0.
+    by rewrite Hg_e; apply: is_imul_pow_le Him_rho0 Hle_exp.
+  have Him_r : is_imul r (uls e) by rewrite Hre; apply: is_imul_add.
+  have Her : uls e <= uls r.
+    by rewrite Hg_e; apply: is_imul_uls_ge => //; rewrite -Hg_e; exact: Him_r.
+  apply: Rle_trans Hze Her.
+have rhon0 : rho <> 0.
+  move=> rho0; apply: etn0.
+  have Hre0 : r = e by rewrite Hr rho0 Rplus_0_l round_generic.
+  by move: Hc; rewrite Hre0 rho0 Rplus_0_l; lra.
+have Hler : uls e <= uls rho.
+  case: Hdom => [rho0|Hd]; first by case: rhon0.
+  by apply: Hd; [rewrite inE eqxx|exact: en0].
+have Huls_e_et : uls e <= uls et.
+  have H := @TwoSum_err_uls_ge p Hp2 choice choice_sym rho e Frho Fe rhon0 en0 Hler.
+  by move: H; rewrite E /=; apply.
+have H12u : 0 <= 1 - 2 * u.
+  have -> : 2 * u = pow (1 - p) by rewrite /Fmore.u; lra.
+  by have := bpow_le beta (1 - p) 0 ltac:(lia); rewrite (pow0E beta); lra.
+split; last first.
+  apply: IH => //.
+  right => z zI zn0.
+  apply: Rle_trans Huls_e_et.
+  by apply: (Hdome en0).
+apply: Rle_trans (HSe en0) _.
+by apply: Rmult_le_compat_r.
+Qed.
+
+(* (A) -- draft 5.3 block-mass estimate.  SIMULATION-verified (p = 4, 5, 6).  *)
+Lemma vecSum_suffMass (l : seq R) :
+  ties_to_even choice ->
+  (size l <= 6)%N ->
+  {in l, forall z, format z} ->
+  (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
+  sorted_mag l -> pairwise_ulp l ->
+  suffMass (vecSum l).
+Proof.
+Admitted.
+
+(* (C) -- [uls] non-increasing on the nonzero errors.  SIMULATION-verified.   *)
+Lemma vecSum_ulsMono (l : seq R) :
+  ties_to_even choice ->
+  (size l <= 6)%N ->
+  {in l, forall z, format z} ->
+  (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
+  sorted_mag l -> pairwise_ulp l ->
+  ulsMono (vecSum l).
+Proof.
+Admitted.
+
+(* ===========================================================================*)
 (*  THE HARD CORE (the draft's Theorem 7 proof, doc/thm6.md 5.2-5.3): the      *)
 (*  VecSum output supplies the block-mass invariant.  This is where steps      *)
 (*  *2 (the conditions forced by a violation) and *3 (the VSEB case study)     *)
@@ -307,7 +457,19 @@ Lemma vecSum_vsebMass (l : seq R) :
   sorted_mag l -> pairwise_ulp l ->
   vsebMass (head 0 (vecSum l)) (behead (vecSum l)).
 Proof.
-Admitted.
+move=> Heven Hsz Hfmt Hnz Hsort Hpair.
+have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
+have HA := vecSum_suffMass Heven Hsz Hfmt Hnz Hsort Hpair.
+have HC := vecSum_ulsMono Heven Hsz Hfmt Hnz Hsort Hpair.
+case E : (vecSum l) HfV HA HC => [|e0 L] HfV HA HC; first by [].
+have [_ HAL] := suffMass_cons HA.
+have [HCL Hdom] := ulsMono_cons HC.
+apply: vsebMass_gen => //.
+- by apply: HfV; rewrite inE eqxx.
+- by move=> z zL; apply: HfV; rewrite inE zL orbT.
+case: (Req_dec e0 0) => [->|e0n0]; first by left.
+by right; apply: Hdom.
+Qed.
 
 (* ===========================================================================*)
 (*  LAYER 2 (the draft's Theorem 7 proper): the ZERO-FREE case.               *)

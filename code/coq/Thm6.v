@@ -389,6 +389,33 @@ have H := is_imul_bound_pow_format Hge Fs.
 by rewrite (_ : (k + 1 = k + p - p + 1)%Z); last lia.
 Qed.
 
+(* Draft 5.2, "[~(2u | x_{i'})] so [|x_{i'}| < 1]": a float off the            *)
+(* [2 uls(e_j) = pow(k+1)] grid has magnitude below [1 = 2^p uls(e_j) =        *)
+(* pow(k+p)].  Contrapositive of [is_imul_bound_pow_format]: a format number   *)
+(* of magnitude [>= pow(k+p)] has [cexp >= k+1], so it lies on the [pow(k+1)]  *)
+(* grid.                                                                       *)
+Lemma abs_lt_of_not_imul (x : R) (k : Z) :
+  format x -> ~ is_imul x (pow (k + 1)) -> Rabs x < pow (k + p).
+Proof.
+move=> Fx Hni.
+case: (Rlt_le_dec (Rabs x) (pow (k + p))) => [//|Hge]; exfalso.
+apply: Hni; have := is_imul_bound_pow_format Hge Fx.
+by rewrite (_ : (k + 1 = k + p - p + 1)%Z); last lia.
+Qed.
+
+(* Chained magnitude isotony (draft's "by isotony"): on a [sorted_mag] list a  *)
+(* later entry has no larger magnitude than an earlier one.                    *)
+Lemma sorted_mag_le_nth (l : seq R) (i j : nat) :
+  sorted_mag l -> (i <= j)%N -> (j < size l)%N ->
+  Rabs (nth 0 l j) <= Rabs (nth 0 l i).
+Proof.
+move=> Hs; elim: j => [|j IH] Hij Hj.
+  by move: Hij; rewrite leqn0 => /eqP->; apply: Rle_refl.
+move: Hij; rewrite leq_eqVlt ltnS => /orP[/eqP->|Hij]; first exact: Rle_refl.
+apply: Rle_trans (Hs j Hj) _.
+by apply: IH => //; apply: ltn_trans (ltnSn j) Hj.
+Qed.
+
 (* Divisibility propagates from inputs to the VecSum output: if every input   *)
 (* lies on the grid [pow g], so does every output ([vecSumAux_imul] packaged   *)
 (* for [vecSum]).                                                              *)
@@ -463,6 +490,25 @@ have Hnej : ~ is_imul (nth 0 (vecSum l) j) (pow (k + 1))
   by exact: not_imul_uls_succ Fej Hej0 Huls.
 apply: (vecSum_not_imul_prefix Hilt Hf Hji _ Hnej).
 exact: vecSum_run_imul_of_violation Hi Hf Hviol.
+Qed.
+
+(* Draft 5.2, combining the previous two: at a violation, some input [x_{i'}]  *)
+(* ([i' < i]) is off the [pow(k+1)] grid, hence [|x_{i'}| < 1 = pow(k+p)], and *)
+(* by [sorted_mag] isotony EVERY later input [x_m] ([m >= i']) satisfies       *)
+(* [|x_m| < 1].  (The draft's "[|x_{i'}| < 1] so by isotony [|x_{i-2}| < 1]".) *)
+Lemma vecSum_inputs_lt_of_violation (l : seq R) (i j : nat) (k : Z) :
+  (i.+1 < size l)%N -> {in l, forall z, format z} -> sorted_mag l ->
+  (j <= i)%N -> nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  exists2 i', (i' < i)%N &
+    forall m, (i' <= m)%N -> (m < size l)%N -> Rabs (nth 0 l m) < pow (k + p).
+Proof.
+move=> Hi Hf Hsort Hji Hej0 Huls Hviol.
+have [i' Hi'i Hoff] := vecSum_exists_offgrid_input Hi Hf Hji Hej0 Huls Hviol.
+have Hi's : (i' < size l)%N by apply: ltn_trans Hi'i (ltn_trans (ltnSn i) Hi).
+exists i' => // m Hm Hmsz.
+apply: Rle_lt_trans (sorted_mag_le_nth Hsort Hm Hmsz) _.
+by apply: (abs_lt_of_not_imul _ Hoff); apply: Hf; apply: mem_nth.
 Qed.
 
 (* ===========================================================================*)

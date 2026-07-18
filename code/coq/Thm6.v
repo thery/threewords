@@ -331,6 +331,63 @@ by move: Hm;
 Qed.
 
 (* ===========================================================================*)
+(*  Step *2 forcing (doc/thm6.md 5.2), scale-invariant: [uls(e_j)] is kept    *)
+(*  symbolic (as [pow k]) instead of the paper's WLOG [uls(e_j) = u], which is *)
+(*  the FLX-legal reading of the WLOG rescaling.                              *)
+(* ===========================================================================*)
+
+(* An ulp lower bound forces a magnitude lower bound.  From                    *)
+(* [5/8 pow k <= 1/2 ulp s] we get [ulp s >= 2 pow k] (the next power of two   *)
+(* above [5/4 pow k]) and hence [|s| >= ufp s = 2^(p-1) ulp s >= pow(k+p)].    *)
+(* This is the draft's "[|e_i| <= 1/2 ulp(s_{i-1})] gives [|s_{i-1}| >= 1]"    *)
+(* (with [1 = 2^p uls(e_j)] after the [uls(e_j) = u] normalisation).           *)
+Lemma abs_ge_of_ulp_lb (s : R) (k : Z) :
+  5 / 8 * pow k <= / 2 * ulp s -> pow (k + p) <= Rabs s.
+Proof.
+move=> H.
+have Hk : 0 < pow k by apply: bpow_gt_0.
+have Hs0 : s <> 0 by move=> s0; move: H; rewrite s0 ulp_FLX_0; lra.
+have Hulp : ulp s = pow (cexp s) by rewrite ulp_neq_0.
+have Hce : (k < cexp s)%Z by apply: (lt_bpow beta); rewrite -Hulp; lra.
+have Hcexp : cexp s = (mag beta s - p)%Z by rewrite /cexp /FLX_exp.
+apply: Rle_trans (bpow_mag_le beta s Hs0).
+apply: bpow_le; lia.
+Qed.
+
+(* Draft 5.2, first step: a violation forces the preceding running sum large. *)
+(* If a VecSum error [e_{i+1}] reaches [5/8 uls(e_j)] (with [uls(e_j) = pow k])*)
+(* then [|s_i| >= 2^p uls(e_j) = pow(k+p)] -- the draft's [|s_{i-1}| >= 1].     *)
+(* Combines [vecSum_err_le_half_ulp_run] ([|e_{i+1}| <= 1/2 ulp(s_i)]) with    *)
+(* [abs_ge_of_ulp_lb].                                                         *)
+Lemma vecSum_run_ge_of_violation (l : seq R) (i : nat) (k : Z) :
+  (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  pow (k + p) <= Rabs (vecSumAux (drop i l)).2.
+Proof.
+move=> Hi Hf Hviol.
+apply: abs_ge_of_ulp_lb; apply: Rle_trans Hviol _.
+exact: vecSum_err_le_half_ulp_run.
+Qed.
+
+(* Draft 5.2, divisibility: since [|s_i| >= 2^p uls(e_j)], the running sum is  *)
+(* a multiple of [2 uls(e_j) = pow(k+1)] -- the draft's "[2u | s_{i-1}]" (with *)
+(* [uls(e_j) = u]).  A float of magnitude [>= pow(k+p)] lies on a grid at      *)
+(* least as coarse as [pow(k+1)] ([is_imul_bound_pow_format]).                 *)
+Lemma vecSum_run_imul_of_violation (l : seq R) (i : nat) (k : Z) :
+  (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  is_imul (vecSumAux (drop i l)).2 (pow (k + 1)).
+Proof.
+move=> Hi Hf Hviol.
+have Fs : format (vecSumAux (drop i l)).2.
+  have Hdf : {in drop i l, forall z, format z} by move=> z /mem_drop; apply: Hf.
+  by have [Fs _] := format_vecSumAux Hdf.
+have Hge := vecSum_run_ge_of_violation Hi Hf Hviol.
+have H := is_imul_bound_pow_format Hge Fs.
+by rewrite (_ : (k + 1 = k + p - p + 1)%Z); last lia.
+Qed.
+
+(* ===========================================================================*)
 (*  Reduction of [vecSum_vsebMass] to two STATIC properties of the VecSum     *)
 (*  error sequence [E = vecSum l].  Both are verified true by exhaustive       *)
 (*  [p = 4, 5, 6] simulation; each isolates one half of draft 5.2-5.3.        *)

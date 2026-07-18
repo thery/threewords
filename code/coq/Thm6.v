@@ -662,6 +662,109 @@ Qed.
 (*   - [c] is a float trapped in [(1 - 11/8 u, 1 - u]], so [|c| = 1 - u];       *)
 (*   - hence [|d| = u + |b|] and [2u^2 | b].                                    *)
 (* ===========================================================================*)
+(* Conclusion 1 -- [|a| = 1] -- the tie-exclusion, PROVED.  [a] is a multiple  *)
+(* of [2u] with [1 <= |a|], and [|a| <= 1 + u + 1/2 ulp a] pins [mag a] (using  *)
+(* [p >= 4]), so [ulp a = 2u] and [|a| <= 1 + 2u]: [|a| in {1, 1+2u}].  The     *)
+(* boundary [1+2u] is excluded because there [c+d = +-(1 + u)] is exactly the   *)
+(* midpoint [pow(K+p) + pow((K+p)-p)], which round-to-nearest-EVEN sends to     *)
+(* [pow(K+p)] ([RN_midpoint_even]), not to [1+2u].                             *)
+Lemma interval_pin_abs (a b c d : R) (K : Z) :
+  ties_to_even choice ->
+  format c -> a = RND (c + d) ->
+  is_imul a (pow (K + 1)) -> pow (K + p) <= Rabs a ->
+  Rabs c <= pow (K + p) - pow K -> Rabs d <= pow (K + 1) ->
+  a + b = c + d -> 5 / 8 * pow K <= Rabs b -> Rabs b <= / 2 * ulp a ->
+  Rabs a = pow (K + p).
+Proof.
+move=> Heven Fc Ha_rnd [za Hza] Ha_ge Hc_le Hd_le Hid Hb_lo Hb_hi.
+have HG : 0 < pow K by apply: bpow_gt_0.
+have HA : 0 < pow (K + p) by apply: bpow_gt_0.
+have H2G : pow (K + 1) = 2 * pow K by rewrite bpow_plus bpow_1 /=; lra.
+have HAG : pow (K + p) = pow p * pow K by rewrite -bpow_plus; congr bpow; lia.
+have Hb_eq : b = c + d - a by lra.
+have an0 : a <> 0 by move=> a0; move: Ha_ge; rewrite a0 Rabs_R0; lra.
+have Hulp_le : / 2 * ulp a <= Rabs a * pow (- p).
+  rewrite ulp_neq_0 //.
+  have Hmg : pow (mag beta a - 1) <= Rabs a by apply: bpow_mag_le.
+  have -> : cexp a = (mag beta a - 1 + (1 - p))%Z by rewrite /cexp /FLX_exp; lia.
+  rewrite bpow_plus.
+  have -> : pow (1 - p) = 2 * pow (- p) by rewrite bpow_plus bpow_1 /=; lra.
+  have := bpow_gt_0 beta (- p); nra.
+have Hpp : pow 4 <= pow p by apply: bpow_le.
+have Hp16 : (16 : R) <= pow p by move: Hpp; rewrite /= /Z.pow_pos /=; lra.
+have Hpn : 0 < pow (- p) by apply: bpow_gt_0.
+have Hpu : pow (- p) <= / 16.
+  have := bpow_le beta (- p) (-4) ltac:(lia); rewrite /= /Z.pow_pos /=; lra.
+have Ha_lt2A : Rabs a < 2 * pow (K + p).
+  have Hchain : Rabs a <= pow (K + p) - pow K + pow (K + 1) + / 2 * ulp a.
+    have := Rabs_triang (c + d) (- a); rewrite Rabs_Ropp.
+    have -> : c + d + - a = b by lra.
+    have := Rabs_triang c d; split_Rabs; lra.
+  rewrite H2G HAG in Hchain *; nra.
+have HKp1 : pow (K + p + 1) = 2 * pow (K + p) by rewrite bpow_plus bpow_1 /=; lra.
+have Hmag : mag beta a = (K + p + 1)%Z :> Z.
+  apply: mag_unique.
+  rewrite (_ : (K + p + 1 - 1 = K + p)%Z); last lia.
+  by rewrite HKp1; split; lra.
+have Hulpa : ulp a = 2 * pow K.
+  rewrite ulp_neq_0 // /cexp /FLX_exp Hmag.
+  by rewrite (_ : (K + p + 1 - p = K + 1)%Z) ?H2G //; lia.
+have Hb_le_G : Rabs b <= pow K by move: Hb_hi; rewrite Hulpa; lra.
+have Ha_le : Rabs a <= pow (K + p) + 2 * pow K.
+  have := Rabs_triang (c + d) (- a); rewrite Rabs_Ropp.
+  have -> : c + d + - a = b by lra.
+  have := Rabs_triang c d; rewrite Hulpa in Hb_hi; split_Rabs; lra.
+have Hpow1 : pow (p - 1) = IZR (2 ^ (p - 1))
+  by rewrite -IZR_Zpower; [congr IZR|lia].
+have HAeq : pow (K + p) = IZR (2 ^ (p - 1)) * pow (K + 1)
+  by rewrite -Hpow1 -bpow_plus; congr bpow; lia.
+have Hza' : Rabs a = IZR (Z.abs za) * pow (K + 1).
+  by rewrite Hza Rabs_mult abs_IZR (Rabs_pos_eq (pow _)) //; apply: bpow_ge_0.
+have Hzge : (2 ^ (p - 1) <= Z.abs za)%Z.
+  apply: le_IZR; apply: (Rmult_le_reg_r (pow (K + 1))); first by apply: bpow_gt_0.
+  by rewrite -HAeq -Hza'.
+have Hzle : (Z.abs za <= 2 ^ (p - 1) + 1)%Z.
+  apply: le_IZR; apply: (Rmult_le_reg_r (pow (K + 1))); first by apply: bpow_gt_0.
+  rewrite -Hza' plus_IZR Rmult_plus_distr_r Rmult_1_l -HAeq.
+  by move: Ha_le; rewrite H2G.
+have HKpe : pow (K + p) + pow K = pow (K + p) + pow (K + p - p)
+  by congr (_ + _); congr bpow; lia.
+have HRmid := @RN_midpoint_even p Hp2 choice (K + p) Heven.
+rewrite -HKpe in HRmid.
+have Hcase : (Z.abs za = 2 ^ (p - 1) \/ Z.abs za = 2 ^ (p - 1) + 1)%Z by lia.
+case: Hcase => Hcase; first by rewrite Hza' Hcase HAeq.
+exfalso.
+have HRaeq : Rabs a = pow (K + p) + 2 * pow K.
+  by rewrite Hza' Hcase plus_IZR Rmult_plus_distr_r Rmult_1_l -HAeq H2G.
+have Hcd_le : Rabs (c + d) <= pow (K + p) + pow K
+  by have := Rabs_triang c d; lra.
+case: (Rle_lt_dec 0 a) => Ha0.
+  have Hapos : a = pow (K + p) + 2 * pow K by rewrite -HRaeq Rabs_pos_eq.
+  have Hcd : c + d = pow (K + p) + pow K.
+    move: Hid Hb_le_G Hcd_le; rewrite Hapos; split_Rabs; lra.
+  by move: HRmid; rewrite -Hcd -Ha_rnd Hapos; lra.
+have Haneg : a = - (pow (K + p) + 2 * pow K).
+  by have := Rabs_left _ Ha0; rewrite HRaeq; lra.
+have Hcd : c + d = - (pow (K + p) + pow K).
+  move: Hid Hb_le_G Hcd_le; rewrite Haneg; split_Rabs; lra.
+have Hopp := @RN_opp_sym p choice choice_sym (pow (K + p) + pow (K + p - p)).
+have Haval : a = - pow (K + p)
+  by rewrite Ha_rnd Hcd HKpe Hopp -HKpe HRmid.
+move: Haneg Haval; lra.
+Qed.
+
+(* Conclusions 2 & 3 -- [|c| = 1 - u] and [2u^2 | b] -- given [|a| = 1].  Still *)
+(* the signed interval + divisibility residue of the case study; ADMITTED.     *)
+Lemma interval_pin_rest (a b c d : R) (K : Z) :
+  ties_to_even choice ->
+  format c -> a = RND (c + d) ->
+  is_imul a (pow (K + 1)) -> Rabs a = pow (K + p) ->
+  Rabs c <= pow (K + p) - pow K -> Rabs d <= pow (K + 1) ->
+  a + b = c + d -> 5 / 8 * pow K <= Rabs b -> Rabs b <= / 2 * ulp a ->
+  Rabs c = pow (K + p) - pow K /\ is_imul b (pow (K - p + 1)).
+Proof.
+Admitted.
+
 Lemma interval_pin (a b c d : R) (K : Z) :
   ties_to_even choice ->
   format c -> a = RND (c + d) ->
@@ -672,7 +775,11 @@ Lemma interval_pin (a b c d : R) (K : Z) :
       Rabs c = pow (K + p) - pow K &
       is_imul b (pow (K - p + 1)) ].
 Proof.
-Admitted.
+move=> Heven Fc Hr Hai Hge Hcl Hdl Hi Hbl Hbh.
+have HRa := interval_pin_abs Heven Fc Hr Hai Hge Hcl Hdl Hi Hbl Hbh.
+have [HC HB] := interval_pin_rest Heven Fc Hr Hai HRa Hcl Hdl Hi Hbl Hbh.
+by split.
+Qed.
 
 Lemma vecSum_pinning_of_violation (l : seq R) (i j : nat) (k : Z) :
   ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->

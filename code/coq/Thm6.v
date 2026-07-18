@@ -60,6 +60,8 @@ Local Instance valid_rnd : Valid_rnd rnd := valid_rnd_N choice.
 Local Notation fexp := (FLX_exp p).
 Local Notation format := (generic_format beta fexp).
 Local Notation ulp := (ulp beta fexp).
+Local Notation cexp := (cexp beta fexp).
+Local Notation mant := (scaled_mantissa beta fexp).
 Local Notation uls := (uls p).
 
 Local Notation Pnonoverlap := (Pnonoverlap p).
@@ -79,6 +81,7 @@ Local Notation TwoSum_correct_loc := (TwoSum_correct_loc Hp2 choice_sym).
 Local Notation format_TwoSum := (@format_TwoSum p Hp2 choice).
 Local Notation magnitude_TwoSum := (magnitude_TwoSum Hp2 choice_sym).
 Local Notation vsebAux_head_lt_mass := (vsebAux_head_lt_mass Hp2 choice_sym).
+Local Notation vsebAux_head_leB := (vsebAux_head_leB Hp2 choice_sym).
 Local Notation uls_gt_0 := (@uls_gt_0 p).
 Local Notation uls_le_abs := (@uls_le_abs p).
 Local Notation format_vecSum := (format_vecSum Hp2).
@@ -117,20 +120,110 @@ Local Notation size_vecSum := (@size_vecSum p choice).
 (*  most 3 of them", and the final [|e_4| = |e_3|] / [|e_5| <= uls(e_4)] step.*)
 (*  It is necessary: Theorem 6 is FALSE for 7 inputs (doc/thm6.md 3).         *)
 (* ===========================================================================*)
+(* Length-free variant of [vsebAux_head_lt_mass]: the block bound             *)
+(* [|head| < 2|eps|] from a mass bound WITHOUT the block-length hypothesis.    *)
+(* The length was only needed in the power-of-two ([uls eps = |eps|]) case of  *)
+(* [vsebAux_head_lt_mass], to keep [pred(2|eps|)] above the tail mass; the      *)
+(* stronger margin [(1 - 2u)] here supplies exactly that slack directly.  This *)
+(* matters because a VecSum output can emit over a long (mostly-zero) tail     *)
+(* whose length exceeds [p - 1] (e.g. at [p = 4], a size-6 output), so the     *)
+(* length bound is genuinely unavailable -- but the tail mass is tiny.         *)
+Lemma vsebAux_head_lt_massU eps l :
+  format eps -> {in l, forall z, format z} -> eps <> 0 ->
+  sumRabs l <= uls eps * (1 - 2 * u) ->
+  Rabs (nth 0 (vsebAux eps l) 0) < 2 * Rabs eps.
+Proof.
+move=> epsF lF epsn0 Hsum.
+have Hu0 : 0 < uls eps by apply: uls_gt_0.
+have Hae : uls eps <= Rabs eps by apply: uls_le_abs.
+have He0 : 0 < Rabs eps by apply: Rabs_pos_lt.
+have Hupos : 0 < u by rewrite /Fmore.u; have := bpow_gt_0 beta (1 - p); lra.
+have Hg : uls eps = pow (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps)))).
+  by rewrite /uls; case: Req_bool_spec => // eps0; case: (epsn0 eps0).
+set g := (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps))))%Z.
+have HmB : (Z.abs (Ztrunc (mant eps)) < beta ^ p)%Z.
+  apply: lt_IZR; rewrite abs_IZR -scaled_mantissa_generic // IZR_Zpower;
+    last lia.
+  apply: Rlt_le_trans (_ : pow (mag beta eps - cexp eps) <= _)%R.
+    exact: scaled_mantissa_lt_bpow.
+  by apply: bpow_le; rewrite /cexp /FLX_exp; lia.
+have Heps : Rabs eps = IZR (Z.abs (Ztrunc (mant eps))) * pow (cexp eps).
+  by rewrite {1}epsF /F2R /= Rabs_mult -abs_IZR Rabs_pow.
+have Hcu : pow (cexp eps) <= uls eps.
+  by rewrite Hg; apply: bpow_le; rewrite /g;
+     have := Zle_0_nat (trZ (Ztrunc (mant eps))); lia.
+suff [B [FB HVB HBlt]] :
+    exists B, [/\ format B, Rabs eps + sumRabs l <= B & B < 2 * Rabs eps].
+  by apply: Rle_lt_trans (vsebAux_head_leB epsF lF FB HVB) HBlt.
+have [HM|HM] := Rle_lt_or_eq_dec _ _ Hae.
+- (* [uls eps < Rabs eps] (mantissa > 1): [B = |eps| + uls eps] is a float in *)
+  (* range, and [< 2|eps|] since [uls eps < |eps|].                           *)
+  exists (Rabs eps + uls eps).
+  have Huim : is_imul (uls eps) (pow g) by rewrite Hg; exists 1%Z;
+    rewrite Rmult_1_l.
+  have Heim : is_imul (Rabs eps) (pow g).
+    have Him : is_imul eps (pow g) by rewrite -Hg; exact: uls_imul epsF.
+    case: (Rle_lt_dec 0 eps) => He.
+      by rewrite Rabs_pos_eq.
+    by rewrite Rabs_left //; apply: is_imul_opp.
+  split.
+  + apply: (imul_format Hp2 (e := g) (b := Rabs eps + uls eps)) => //.
+    * by apply: is_imul_add.
+    * by rewrite Rabs_pos_eq; lra.
+    rewrite bpow_plus.
+    have Hub : Rabs eps <= (pow p - 1) * uls eps.
+      rewrite Heps.
+      apply: Rle_trans (_ : (pow p - 1) * pow (cexp eps) <= _).
+        apply: Rmult_le_compat_r; first by apply: bpow_ge_0.
+        have -> : pow p - 1 = IZR (beta ^ p - 1).
+          by rewrite minus_IZR IZR_Zpower //; lia.
+        by apply: IZR_le; lia.
+      apply: Rmult_le_compat_l; last exact: Hcu.
+      by rewrite -(pow0E beta); have := bpow_le beta 0 p ltac:(lia); lra.
+    have -> : pow g = uls eps by rewrite Hg.
+    nra.
+  + by nra.
+  + by lra.
+(* [uls eps = Rabs eps] (a power of two): [B = pred(2|eps|)].  Here the       *)
+(* [(1 - 2u)] margin -- not a block-length bound -- keeps [B] above the tail  *)
+(* mass, which is the whole point of this length-free variant.                *)
+have HgF : pow g = uls eps by rewrite Hg.
+have H3 : pow (g + 1) = 2 * pow g by rewrite bpow_plus bpow_1 /=; lra.
+have H2 : 2 * Rabs eps = pow (g + 1) by rewrite H3 -HM Hg.
+exists (pred beta fexp (2 * Rabs eps)); split.
++ by apply: generic_format_pred; rewrite H2;
+     apply: generic_format_bpow; rewrite /FLX_exp; lia.
++ rewrite H2 pred_bpow.
+  have Hpm : pow (fexp (g + 1)) = uls eps * (2 * u).
+    have Hueq : u = pow (- p).
+      rewrite /Fmore.u (_ : (- p = 1 + - p - 1)%Z); last lia.
+      by rewrite !bpow_plus bpow_1 /=; lra.
+    rewrite /fexp /FLX_exp -HgF Hueq.
+    rewrite (_ : (g + 1 - p = g + (1 - p))%Z); last lia.
+    rewrite bpow_plus; congr (_ * _).
+    rewrite (_ : (1 - p = 1 + - p)%Z); last lia.
+    by rewrite bpow_plus bpow_1 /=; lra.
+  rewrite -H2 Hpm; nra.
++ by apply: pred_lt_id; rewrite H2; have := bpow_gt_0 beta (g + 1); lra.
+Qed.
+
 (* ===========================================================================*)
 (*  The VSEB block-mass invariant.                                            *)
 (*                                                                            *)
-(*  The engine of Theorem 2 is [vsebAux_head_lt_mass]: the first term VSEB    *)
+(*  The engine of Theorem 2 is [vsebAux_head_lt_massU]: the first term VSEB   *)
 (*  emits from a nonzero remainder [eps] over a tail [l] has [|.| < 2 |eps|],  *)
-(*  needing ONLY the mass bound [sum|l| <= uls(eps)(1 - 2^{-|l|})] and the     *)
-(*  block-length bound [|l| + 2 <= p + 1] -- NOT F-nonoverlap.  Paired with    *)
-(*  the always-true [2 |et| <= ulp(r)] ([magnitude_TwoSum]), P-nonoverlap of  *)
-(*  each emitted step follows.  [vsebMass] records exactly those two           *)
-(*  obligations at every VSEB emit along the walk, so that [vseb] of any list *)
-(*  satisfying it is P-nonoverlapping (the [vsebAux_Pnonoverlap_mass] driver   *)
-(*  below).  This is the interface the draft's Theorem-7 proof feeds: it is    *)
-(*  weaker than F-nonoverlap (the VecSum output is not F-nonoverlapping), and  *)
-(*  the [<= 6] bound enters through the per-emit block-length obligation.      *)
+(*  needing ONLY the mass bound [sum|l| <= uls(eps)(1 - 2u)] -- NOT            *)
+(*  F-nonoverlap, and NOT any block-length bound (a VecSum output can emit     *)
+(*  over a long, mostly-zero tail; e.g. at [p = 4] a size-6 output emits with  *)
+(*  a 4-term tail, so [|l| + 2 <= p + 1] genuinely fails).  Paired with the    *)
+(*  always-true [2 |et| <= ulp(r)] ([magnitude_TwoSum]), P-nonoverlap of each  *)
+(*  emitted step follows.  [vsebMass] records exactly this mass obligation at  *)
+(*  every VSEB emit along the walk, so that [vseb] of any list satisfying it   *)
+(*  is P-nonoverlapping (the [vsebAux_Pnonoverlap_mass] driver below).  This   *)
+(*  is the interface the draft's Theorem-7 proof feeds: it is weaker than      *)
+(*  F-nonoverlap (the VecSum output is not F-nonoverlapping).  The [<= 6]      *)
+(*  bound and [p >= 4] enter through the per-emit mass bound (draft 5.3: the   *)
+(*  emitted-tail errors are [<= u^2] and there are "at most 3 of them").       *)
 (* ===========================================================================*)
 Fixpoint vsebMass (eps : R) (l : seq R) : Prop :=
   match l with
@@ -139,9 +232,7 @@ Fixpoint vsebMass (eps : R) (l : seq R) : Prop :=
   | e :: l' =>
       let: DWR r et := TwoSum p choice eps e in
       if Req_EM_T et 0 then vsebMass r l'
-      else [/\ (Z.of_nat (size l').+2 <= p + 1)%Z,
-               sumRabs l' <= uls et * (1 - (/ 2) ^ size l') &
-               vsebMass et l']
+      else sumRabs l' <= uls et * (1 - 2 * u) /\ vsebMass et l'
   end.
 
 (* One-step unfolding (by reflexivity), exposing [TwoSum eps e] the way        *)
@@ -150,9 +241,7 @@ Lemma vsebMass_consS eps e e2 l :
   vsebMass eps [:: e, e2 & l] =
   (let: DWR r et := TwoSum p choice eps e in
    if Req_EM_T et 0 then vsebMass r (e2 :: l)
-   else [/\ (Z.of_nat (size (e2 :: l)).+2 <= p + 1)%Z,
-            sumRabs (e2 :: l) <= uls et * (1 - (/ 2) ^ size (e2 :: l)) &
-            vsebMass et (e2 :: l)]).
+   else sumRabs (e2 :: l) <= uls et * (1 - 2 * u) /\ vsebMass et (e2 :: l)).
 Proof. by []. Qed.
 
 (* The driver: [vseb] of a list carrying the block-mass invariant is           *)
@@ -192,14 +281,14 @@ have Fet : format et
   by have H := format_TwoSum epsF Fe; rewrite E1 /= in H; case: H.
 have Fl' : {in e2 :: l'', forall z, format z}
   by move=> z zI; apply: lF; rewrite inE zI orbT.
-case: Hm => Hszl' Hmass Hmrec.
+case: Hm => Hmass Hmrec.
 have Hrec : Pnonoverlap (vsebAux et (e2 :: l'')) by apply: IH.
 move=> [|i] /= Hi.
   right.
   have Hulp : 2 * Rabs et <= ulp r.
     by have Hmag := magnitude_TwoSum epsF Fe; rewrite E1 /= in Hmag; lra.
   have Hnext : Rabs (nth 0 (vsebAux et (e2 :: l'')) 0) < 2 * Rabs et.
-    by apply: vsebAux_head_lt_mass.
+    by apply: vsebAux_head_lt_massU.
   by apply: (Rlt_le_trans _ _ _ Hnext Hulp).
 by apply: (Hrec i); move: Hi; rewrite ltnS.
 Qed.

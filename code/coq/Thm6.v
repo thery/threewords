@@ -616,6 +616,37 @@ have -> : pow (k + 1) = 4 * pow (k - 1).
 by apply: Rmult_le_compat_l; [lra | exact: Hufp].
 Qed.
 
+(* Draft 5.2, "at the right of i": "[|x_i| < u] so [forall i' >= i+1,          *)
+(* |e_{i'}| <= u^2]".  Each later error [e = dwl(2Sum(x, s))] with a small      *)
+(* input [|x| < u = pow k] has [|e| <= 2u ufp(x) <= 2u pow(k-1) = pow(k-p) =    *)
+(* u^2] ([vecSum_err_ufp] + [ufp_le_of_abs_lt]).  This is the block-mass        *)
+(* content feeding [suffMass]; it does NOT need the pinning.                    *)
+Lemma vecSum_tail_err_le_u2_of_violation (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  exists2 i', (i' < i)%N &
+    forall m, (i' <= m)%N -> (m.+2.+1 < size l)%N ->
+      Rabs (nth 0 (vecSum l) m.+2.+1) <= pow (k - p).
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
+have [i' Hi'i Hxlt] :=
+  vecSum_inputs_lt_u_of_violation Hi Hf Hsort Hpair Hji Hej0 Huls Hviol.
+exists i' => // m Hm Hmsz.
+have Hmsz2 : (m.+2 < size l)%N by apply: ltn_trans (ltnSn _) Hmsz.
+have Hxn0 : nth 0 l m.+2 <> 0 by apply: Hnz.
+have Hufp : ufp (nth 0 l m.+2) <= pow (k - 1)
+  by apply: ufp_le_of_abs_lt Hxn0 (Hxlt m Hm Hmsz2).
+have Herr := vecSum_err_ufp Heven Hf Hnz Hsort Hpair Hmsz.
+apply: Rle_trans Herr _.
+have H2u : 2 * u = pow (1 - p) by rewrite /Fmore.u; lra.
+have -> : pow (k - p) = 2 * u * pow (k - 1).
+  by rewrite H2u -bpow_plus; congr bpow; lia.
+by apply: Rmult_le_compat_l; [have := bpow_ge_0 beta (1 - p); lra | exact: Hufp].
+Qed.
+
 (* ===========================================================================*)
 (*  Reduction of [vecSum_vsebMass] to two STATIC properties of the VecSum     *)
 (*  error sequence [E = vecSum l].  Both are verified true by exhaustive       *)

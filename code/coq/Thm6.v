@@ -377,6 +377,19 @@ move=> xn0 Hlt; rewrite /ufp; apply: bpow_le.
 have := mag_le_bpow beta x _ xn0 Hlt; lia.
 Qed.
 
+(* A format number strictly below [pow m] is at most its predecessor           *)
+(* [pred(pow m) = pow m - pow(m - p)].  The draft's "[|x_{i-1}| <= 1 - u]"      *)
+(* ([1 = pow(k+p)], [u = pow k], so [1 - u = pow(k+p) - pow k]).                *)
+Lemma abs_le_pred_of_lt (x : R) (m : Z) :
+  format x -> Rabs x < pow m -> Rabs x <= pow m - pow (m - p).
+Proof.
+move=> Fx Hlt.
+have Fabs : format (Rabs x) by apply: generic_format_abs.
+have Fpow : format (pow m) by apply: generic_format_bpow; rewrite /FLX_exp; lia.
+have Hpg : Rabs x <= pred beta fexp (pow m) by apply: pred_ge_gt.
+by rewrite pred_bpow in Hpg; exact: Hpg.
+Qed.
+
 (* Draft 5.2, first step: a violation forces the preceding running sum large. *)
 (* If a VecSum error [e_{i+1}] reaches [5/8 uls(e_j)] (with [uls(e_j) = pow k])*)
 (* then [|s_i| >= 2^p uls(e_j) = pow(k+p)] -- the draft's [|s_{i-1}| >= 1].     *)
@@ -530,6 +543,25 @@ have Hi's : (i' < size l)%N by apply: ltn_trans Hi'i (ltn_trans (ltnSn i) Hi).
 exists i' => // m Hm Hmsz.
 apply: Rle_lt_trans (sorted_mag_le_nth Hsort Hm Hmsz) _.
 by apply: (abs_lt_of_not_imul _ Hoff); apply: Hf; apply: mem_nth.
+Qed.
+
+(* Draft 5.2, "[|x_{i-1}| <= 1 - u]": each earlier input, being format and     *)
+(* [< 1 = pow(k+p)], is [<= 1 - u = pow(k+p) - pow k].                         *)
+Lemma vecSum_inputs_le_1mu_of_violation (l : seq R) (i j : nat) (k : Z) :
+  (i.+1 < size l)%N -> {in l, forall z, format z} -> sorted_mag l ->
+  (j <= i)%N -> nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  exists2 i', (i' < i)%N &
+    forall m, (i' <= m)%N -> (m < size l)%N ->
+      Rabs (nth 0 l m) <= pow (k + p) - pow k.
+Proof.
+move=> Hi Hf Hsort Hji Hej0 Huls Hviol.
+have [i' Hi'i Hlt] :=
+  vecSum_inputs_lt_of_violation Hi Hf Hsort Hji Hej0 Huls Hviol.
+exists i' => // m Hm Hmsz.
+have Fm : format (nth 0 l m) by apply: Hf; apply: mem_nth.
+have := abs_le_pred_of_lt Fm (Hlt m Hm Hmsz).
+by rewrite (_ : (k + p - p = k)%Z); last lia.
 Qed.
 
 (* Draft 5.2, "[|x_i| < u]": with [|x_m| < 1] for the earlier inputs           *)

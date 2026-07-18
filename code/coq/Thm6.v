@@ -648,6 +648,87 @@ by apply: Rmult_le_compat_l; [have := bpow_ge_0 beta (1 - p); lra | exact: Hufp]
 Qed.
 
 (* ===========================================================================*)
+(*  Draft 5.2, the "close to equality" PINNING (the draft's only gap -- it     *)
+(*  says "by an easy case study" without detail).  Written top-down: the pure  *)
+(*  interval/divisibility core [interval_pin] is isolated (and, for now,        *)
+(*  admitted), and [vecSum_pinning_of_violation] gathers the bounds -- all      *)
+(*  proved by the *2 lemmas above -- and applies it.                           *)
+(*                                                                            *)
+(*  Notation ([K] plays [uls(e_j)]'s exponent, so [pow K = u], [pow(K+p) = 1], *)
+(*  [pow(K+1) = 2u], [pow(K-p) = u^2]): with [a = s_i], [b = e_{i+1}],          *)
+(*  [c = x_i], [d = s_{i+1}] and the exact 2Sum identity [a + b = c + d],       *)
+(*   - [a] is a multiple of [2u] with [|a| >= 1] and [|a+b| <= 1+u], so [a] is  *)
+(*     pinned to [|a| = 1];                                                     *)
+(*   - [c] is a float trapped in [(1 - 11/8 u, 1 - u]], so [|c| = 1 - u];       *)
+(*   - hence [|d| = u + |b|] and [2u^2 | b].                                    *)
+(* ===========================================================================*)
+Lemma interval_pin (a b c d : R) (K : Z) :
+  ties_to_even choice ->
+  format c -> a = RND (c + d) ->
+  is_imul a (pow (K + 1)) -> pow (K + p) <= Rabs a ->
+  Rabs c <= pow (K + p) - pow K -> Rabs d <= pow (K + 1) ->
+  a + b = c + d -> 5 / 8 * pow K <= Rabs b -> Rabs b <= / 2 * ulp a ->
+  [/\ Rabs a = pow (K + p),
+      Rabs c = pow (K + p) - pow K &
+      is_imul b (pow (K - p + 1)) ].
+Proof.
+Admitted.
+
+Lemma vecSum_pinning_of_violation (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  [/\ Rabs (vecSumAux (drop i l)).2 = pow (k + p),
+      Rabs (nth 0 l i) = pow (k + p) - pow k &
+      is_imul (nth 0 (vecSum l) i.+1) (pow (k - p + 1)) ].
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
+have iLl : (i < size l)%N by apply: ltn_trans (ltnSn i) Hi.
+have Ha_imul := vecSum_run_imul_of_violation Hi Hf Hviol.
+have Ha_ge := vecSum_run_ge_of_violation Hi Hf Hviol.
+have Hb_hi := vecSum_err_le_half_ulp_run Hi Hf.
+have Fc : format (nth 0 l i) by apply: Hf; apply: mem_nth.
+have [i'c Hi'c Hc] :=
+  vecSum_inputs_le_1mu_of_violation Hi Hf Hsort Hji Hej0 Huls Hviol.
+have Hc_le : Rabs (nth 0 l i) <= pow (k + p) - pow k
+  by apply: Hc (ltnW Hi'c) iLl.
+have Hi1 : (0 < i)%N by apply: leq_ltn_trans (leq0n i'c) Hi'c.
+have [i'd Hi'd Hd] :=
+  vecSum_run_le_2u_of_violation Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
+have Hi1eq : (i.-1.+2 = i.+1)%N by rewrite prednK.
+have Hle : (i'd <= i.-1)%N by rewrite -ltnS (prednK Hi1).
+have Hd_sz : (i.-1.+2 < size l)%N by rewrite Hi1eq.
+have Hd_le := Hd i.-1 Hle Hd_sz; rewrite Hi1eq in Hd_le.
+have He : nth 0 (vecSum l) i.+1 =
+          dwl (TwoSum (nth 0 l i) (vecSumAux (drop i.+1 l)).2).
+  by rewrite -(vecSumAux_nth1 Hi) /vecSum; case: (vecSumAux l).
+have Hsdwh : (vecSumAux (drop i l)).2 =
+             dwh (TwoSum (nth 0 l i) (vecSumAux (drop i.+1 l)).2).
+  have Hdne : (0 < size (drop i.+1 l))%N by rewrite size_drop subn_gt0.
+  rewrite (drop_nth 0 iLl).
+  case Hd0 : (drop i.+1 l) Hdne => [//|b0 l0] _.
+  rewrite vecSumAux_cons; case E : (vecSumAux (b0 :: l0)) => [es s].
+  by case: (TwoSum (nth 0 l i) s).
+have Fs1 : format (vecSumAux (drop i.+1 l)).2.
+  have Hdf : {in drop i.+1 l, forall z, format z}
+    by move=> z /mem_drop; apply: Hf.
+  by have [F _] := format_vecSumAux Hdf.
+have Hcorr : dwh (TwoSum (nth 0 l i) (vecSumAux (drop i.+1 l)).2) +
+             dwl (TwoSum (nth 0 l i) (vecSumAux (drop i.+1 l)).2) =
+             nth 0 l i + (vecSumAux (drop i.+1 l)).2
+  by exact: TwoSum_correct_loc Fc Fs1.
+have Hid : (vecSumAux (drop i l)).2 + nth 0 (vecSum l) i.+1 =
+           nth 0 l i + (vecSumAux (drop i.+1 l)).2
+  by rewrite He Hsdwh.
+have Ha_rnd : (vecSumAux (drop i l)).2 =
+              RND (nth 0 l i + (vecSumAux (drop i.+1 l)).2)
+  by rewrite Hsdwh TwoSum_hi.
+exact: (interval_pin Heven Fc Ha_rnd Ha_imul Ha_ge Hc_le Hd_le Hid Hviol Hb_hi).
+Qed.
+
+(* ===========================================================================*)
 (*  Reduction of [vecSum_vsebMass] to two STATIC properties of the VecSum     *)
 (*  error sequence [E = vecSum l].  Both are verified true by exhaustive       *)
 (*  [p = 4, 5, 6] simulation; each isolates one half of draft 5.2-5.3.        *)

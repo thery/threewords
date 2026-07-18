@@ -93,6 +93,8 @@ Local Notation uls_gt_0 := (@uls_gt_0 p).
 Local Notation uls_le_abs := (@uls_le_abs p).
 Local Notation format_vecSum := (format_vecSum Hp2).
 Local Notation size_vecSum := (@size_vecSum p choice).
+Local Notation vecSumAux_imul := (@vecSumAux_imul p Hp2 choice choice_sym).
+Local Notation vecSumAux_split := (@vecSumAux_split p choice).
 
 (* ===========================================================================*)
 (*  Theorem 6 / draft Theorem 7.                                              *)
@@ -385,6 +387,82 @@ have Fs : format (vecSumAux (drop i l)).2.
 have Hge := vecSum_run_ge_of_violation Hi Hf Hviol.
 have H := is_imul_bound_pow_format Hge Fs.
 by rewrite (_ : (k + 1 = k + p - p + 1)%Z); last lia.
+Qed.
+
+(* Divisibility propagates from inputs to the VecSum output: if every input   *)
+(* lies on the grid [pow g], so does every output ([vecSumAux_imul] packaged   *)
+(* for [vecSum]).                                                              *)
+Lemma vecSum_imul_forward (l : seq R) (g : Z) :
+  {in l, forall z, format z} -> {in l, forall z, is_imul z (pow g)} ->
+  {in vecSum l, forall z, is_imul z (pow g)}.
+Proof.
+move=> Hf Hm z; rewrite /vecSum.
+have [H2 H1] := vecSumAux_imul Hf Hm.
+case E : (vecSumAux l) => [es s0]; rewrite E /= in H2 H1.
+by rewrite inE => /orP[/eqP->//|]; apply: H1.
+Qed.
+
+(* Draft 5.2, the propagation step: [2u | s_{i-1}] but [~ 2u | e_j] (j < i)    *)
+(* forces some INPUT [x_{i'}] off the grid, with [i' < t] when the offending   *)
+(* output sits in the prefix [j <= t] and the running sum [s_t] is on grid.    *)
+(* Via [vecSumAux_split]: [vecSum (take t l ++ [s_t])] is the [t+1]-prefix of  *)
+(* [vecSum l], and its inputs are [x_0..x_{t-1}] plus the (on-grid) [s_t].     *)
+Lemma vecSum_not_imul_prefix (l : seq R) (t j : nat) (g : Z) :
+  (t < size l)%N -> {in l, forall z, format z} -> (j <= t)%N ->
+  is_imul (vecSumAux (drop t l)).2 (pow g) ->
+  ~ is_imul (nth 0 (vecSum l) j) (pow g) ->
+  exists2 i', (i' < t)%N & ~ is_imul (nth 0 l i') (pow g).
+Proof.
+move=> Ht Hf Hjt Hs Hnj.
+set st := (vecSumAux (drop t l)).2.
+set L := take t l ++ [:: st].
+have Fst : format st.
+  have Hdf : {in drop t l, forall z, format z} by move=> z /mem_drop; apply: Hf.
+  by have [F _] := format_vecSumAux Hdf.
+have HvL : vecSum L = (vecSumAux l).2 :: take t (vecSumAux l).1
+  by rewrite /vecSum /L vecSumAux_split.
+have Hnthj : nth 0 (vecSum L) j = nth 0 (vecSum l) j.
+  rewrite HvL /vecSum; case: (vecSumAux l) => es s0.
+  rewrite [(es, s0).1]/= [(es, s0).2]/=.
+  by rewrite -[s0 :: take t es]/(take t.+1 (s0 :: es)) nth_take.
+have HszL : size L = t.+1.
+  by rewrite /L size_cat size_take_min /= addn1 (minn_idPl (ltnW Ht)).
+apply: Classical_Prop.NNPP => Hnex.
+have Hall : {in L, forall z, is_imul z (pow g)}.
+  move=> z; rewrite /L mem_cat inE => /orP[|/eqP->]; last exact: Hs.
+  move=> /(nthP 0)[i' Hi' <-].
+  move: Hi'; rewrite size_take_min ltn_min => /andP[Hi't _].
+  rewrite nth_take //.
+  apply: Classical_Prop.NNPP => Hni'.
+  by apply: Hnex; exists i'.
+have HfL : {in L, forall z, format z}.
+  by move=> z; rewrite /L mem_cat inE => /orP[/mem_take/Hf //|/eqP->//].
+have Him := vecSum_imul_forward HfL Hall.
+apply: Hnj; rewrite -Hnthj; apply: Him; apply: mem_nth.
+by rewrite size_vecSum HszL.
+Qed.
+
+(* Draft 5.2, "[exists i' <= i-2, ~(2u | x_{i'})]": at a violation, with a     *)
+(* reference error [e_j] ([j <= i]) whose [uls(e_j) = pow k] (so [e_j] is an   *)
+(* odd multiple of the grid, [~ 2u | e_j] by [not_imul_uls_succ]), some input  *)
+(* [x_{i'}] with [i' < i] is off the [2 uls(e_j) = pow(k+1)] grid.             *)
+Lemma vecSum_exists_offgrid_input (l : seq R) (i j : nat) (k : Z) :
+  (i.+1 < size l)%N -> {in l, forall z, format z} -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  exists2 i', (i' < i)%N & ~ is_imul (nth 0 l i') (pow (k + 1)).
+Proof.
+move=> Hi Hf Hji Hej0 Huls Hviol.
+have Hilt : (i < size l)%N by apply: ltn_trans (ltnSn i) Hi.
+have Hjs : (j < size (vecSum l))%N.
+  rewrite size_vecSum prednK; last by apply: ltn_trans Hi.
+  by apply: leq_ltn_trans Hji Hilt.
+have Fej : format (nth 0 (vecSum l) j)
+  by apply: (format_vecSum Hf); apply: mem_nth.
+have Hnej : ~ is_imul (nth 0 (vecSum l) j) (pow (k + 1))
+  by exact: not_imul_uls_succ Fej Hej0 Huls.
+apply: (vecSum_not_imul_prefix Hilt Hf Hji _ Hnej).
+exact: vecSum_run_imul_of_violation Hi Hf Hviol.
 Qed.
 
 (* ===========================================================================*)

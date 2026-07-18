@@ -356,6 +356,19 @@ apply: Rle_trans (bpow_mag_le beta s Hs0).
 apply: bpow_le; lia.
 Qed.
 
+(* Dual of [abs_ge_of_ulp_lb]: a magnitude upper bound forces an ulp upper     *)
+(* bound.  [|x| < pow m] gives [mag x <= m], so [ulp x = pow(cexp x) =          *)
+(* pow(mag x - p) <= pow(m - p)].  Used for the draft's [|x_{i-2}| < 1] giving  *)
+(* [ulp(x_{i-2}) <= u], hence [|x_i| < u].                                     *)
+Lemma ulp_le_of_abs_lt (x : R) (m : Z) :
+  Rabs x < pow m -> ulp x <= pow (m - p).
+Proof.
+move=> Hlt.
+case: (Req_dec x 0) => [->|xn0]; first by rewrite ulp_FLX_0; apply: bpow_ge_0.
+rewrite ulp_neq_0 //; apply: bpow_le.
+have := mag_le_bpow beta x _ xn0 Hlt; rewrite /cexp /FLX_exp; lia.
+Qed.
+
 (* Draft 5.2, first step: a violation forces the preceding running sum large. *)
 (* If a VecSum error [e_{i+1}] reaches [5/8 uls(e_j)] (with [uls(e_j) = pow k])*)
 (* then [|s_i| >= 2^p uls(e_j) = pow(k+p)] -- the draft's [|s_{i-1}| >= 1].     *)
@@ -509,6 +522,30 @@ have Hi's : (i' < size l)%N by apply: ltn_trans Hi'i (ltn_trans (ltnSn i) Hi).
 exists i' => // m Hm Hmsz.
 apply: Rle_lt_trans (sorted_mag_le_nth Hsort Hm Hmsz) _.
 by apply: (abs_lt_of_not_imul _ Hoff); apply: Hf; apply: mem_nth.
+Qed.
+
+(* Draft 5.2, "[|x_i| < u]": with [|x_m| < 1] for the earlier inputs           *)
+(* ([m >= i']) we get [ulp(x_m) <= u = pow k] ([ulp_le_of_abs_lt]), so          *)
+(* [pairwise_ulp] ([|x_{m+2}| < ulp(x_m)]) yields [|x_{m+2}| < u].              *)
+Lemma vecSum_inputs_lt_u_of_violation (l : seq R) (i j : nat) (k : Z) :
+  (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  exists2 i', (i' < i)%N &
+    forall m, (i' <= m)%N -> (m.+2 < size l)%N -> Rabs (nth 0 l m.+2) < pow k.
+Proof.
+move=> Hi Hf Hsort Hpair Hji Hej0 Huls Hviol.
+have [i' Hi'i Hlt] :=
+  vecSum_inputs_lt_of_violation Hi Hf Hsort Hji Hej0 Huls Hviol.
+exists i' => // m Hm Hmsz.
+have Hmsz' : (m < size l)%N.
+  by apply: ltn_trans Hmsz; apply: ltn_trans (ltnSn m) (ltnSn m.+1).
+have Hulp : ulp (nth 0 l m) <= pow k.
+  have := ulp_le_of_abs_lt (Hlt m Hm Hmsz').
+  by rewrite (_ : (k + p - p = k)%Z); last lia.
+have [Hz|Hlt2] := Hpair m Hmsz; first by rewrite Hz Rabs_R0; apply: bpow_gt_0.
+exact: Rlt_le_trans Hlt2 Hulp.
 Qed.
 
 (* ===========================================================================*)

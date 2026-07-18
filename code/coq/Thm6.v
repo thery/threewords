@@ -76,6 +76,13 @@ Local Notation vecSum_err_ufp := (vecSum_err_ufp Hp2 choice_sym).
 
 Local Notation RND := (round beta fexp rnd).
 Local Notation magnitudeDWR := (magnitudeDWR p).
+Local Notation TwoSum := (TwoSum.TwoSum p choice).
+Local Notation vecSumAux_cons := (@vecSumAux_cons p choice).
+Local Notation vecSumAux_nth1 := (@vecSumAux_nth1 p choice).
+Local Notation format_vecSumAux := (@format_vecSumAux p Hp2 choice).
+Local Notation dwh_TwoSum_r0 := (@dwh_TwoSum_r0 p choice).
+Local Notation dwl_TwoSum_r0 := (@dwl_TwoSum_r0 p Hp2 choice choice_sym).
+Local Notation TwoSum_err_uls_ge := (@TwoSum_err_uls_ge p Hp2 choice choice_sym).
 Local Notation TwoSum_hi := (@TwoSum_hi p choice).
 Local Notation TwoSum_correct_loc := (TwoSum_correct_loc Hp2 choice_sym).
 Local Notation format_TwoSum := (@format_TwoSum p Hp2 choice).
@@ -230,7 +237,7 @@ Fixpoint vsebMass (eps : R) (l : seq R) : Prop :=
   | [::]    => True
   | [:: _]  => True
   | e :: l' =>
-      let: DWR r et := TwoSum p choice eps e in
+      let: DWR r et := TwoSum eps e in
       if Req_EM_T et 0 then vsebMass r l'
       else sumRabs l' <= uls et * (1 - 2 * u) /\ vsebMass et l'
   end.
@@ -239,7 +246,7 @@ Fixpoint vsebMass (eps : R) (l : seq R) : Prop :=
 (* [vsebAux_consS] does, so a following [case] captures it.                     *)
 Lemma vsebMass_consS eps e e2 l :
   vsebMass eps [:: e, e2 & l] =
-  (let: DWR r et := TwoSum p choice eps e in
+  (let: DWR r et := TwoSum eps e in
    if Req_EM_T et 0 then vsebMass r (e2 :: l)
    else sumRabs (e2 :: l) <= uls et * (1 - 2 * u) /\ vsebMass et (e2 :: l)).
 Proof. by []. Qed.
@@ -257,7 +264,7 @@ elim: l eps => [|e l' IH] eps epsF lF Hm.
 have Fe : format e by apply: lF; rewrite inE eqxx.
 case: l' IH lF Hm => [|e2 l''] IH lF Hm.
   (* Last step: [vsebAux eps [:: e] = [:: y0; y1]], [|y1| < ulp y0].           *)
-  rewrite vsebAux_1; case E1 : (TwoSum p choice eps e) => [y0 y1].
+  rewrite vsebAux_1; case E1 : (TwoSum eps e) => [y0 y1].
   move=> [|i] /= Hi; last by move: Hi; rewrite ltnS ltnS ltn0.
   have Hmag := magnitude_TwoSum epsF Fe; rewrite E1 /= in Hmag.
   case: (Req_dec y1 0) => [y10|y1n0]; first by left.
@@ -268,7 +275,7 @@ case: l' IH lF Hm => [|e2 l''] IH lF Hm.
   have Hy : 0 < ulp y0 by rewrite ulp_neq_0 //; apply: bpow_gt_0.
   by lra.
 (* General step: [2Sum(eps, e) = (r, et)].                                    *)
-rewrite vsebAux_consS; case E1 : (TwoSum p choice eps e) => [r et].
+rewrite vsebAux_consS; case E1 : (TwoSum eps e) => [r et].
 have Hr : r = RND (eps + e) by have := TwoSum_hi eps e; rewrite E1.
 move: Hm; rewrite vsebMass_consS E1.
 case: (Req_EM_T et 0) => [et0|etn0] Hm.
@@ -291,6 +298,36 @@ move=> [|i] /= Hi.
     by apply: vsebAux_head_lt_massU.
   by apply: (Rlt_le_trans _ _ _ Hnext Hulp).
 by apply: (Hrec i); move: Hi; rewrite ltnS.
+Qed.
+
+(* Paper core tool (doc/thm6.md 5.4): each VecSum error is at most half an     *)
+(* ulp of the running high word it is dropped from, [|e_{i+1}| <= 1/2 ulp(s_i)]*)
+(* -- directly [magnitude_TwoSum] on the step [2Sum(x_i, s_{i+1}) = (s_i,      *)
+(* e_{i+1})].  This is the draft's recurring [|e_i| <= 1/2 ulp(s_{i-1})].      *)
+Lemma vecSum_err_le_half_ulp_run (l : seq R) i :
+  (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  Rabs (nth 0 (vecSum l) i.+1) <= / 2 * ulp ((vecSumAux (drop i l)).2).
+Proof.
+move=> Hi Hf.
+have iLl : (i < size l)%N by apply: ltn_trans (ltnSn i) Hi.
+have Fx : format (nth 0 l i) by apply: Hf; apply: mem_nth.
+have Hdf : {in drop i.+1 l, forall z, format z}
+  by move=> z /mem_drop zI; apply: Hf.
+have [Fs _] := format_vecSumAux Hdf.
+have -> : nth 0 (vecSum l) i.+1 = nth 0 (vecSumAux l).1 i
+  by rewrite /vecSum; case: (vecSumAux l).
+rewrite (vecSumAux_nth1 Hi).
+have Hs : (vecSumAux (drop i l)).2
+        = dwh (TwoSum (nth 0 l i) (vecSumAux (drop i.+1 l)).2).
+  have Hdne : (0 < size (drop i.+1 l))%N by rewrite size_drop subn_gt0.
+  rewrite (drop_nth 0 iLl).
+  case Hd : (drop i.+1 l) Hdne => [//|b l0] _.
+  rewrite vecSumAux_cons; case E : (vecSumAux (b :: l0)) => [es s].
+  by case: (TwoSum (nth 0 l i) s).
+rewrite Hs; have Hm := magnitude_TwoSum Fx Fs.
+by move: Hm;
+   case: (TwoSum (nth 0 l i) (vecSumAux (drop i.+1 l)).2) => hi lo /=;
+   lra.
 Qed.
 
 (* ===========================================================================*)
@@ -354,21 +391,21 @@ case: L' IH FL Hdom HM HS => [|e2 L''] IH FL Hdom HM HS; first by [].
 have Fe : format e by apply: FL; rewrite inE eqxx.
 have FL' : {in e2 :: L'', forall z, format z}
   by move=> z zI; apply: FL; rewrite inE zI orbT.
-have [rF etF] : format (dwh (TwoSum p choice rho e)) /\
-                format (dwl (TwoSum p choice rho e)) by apply: format_TwoSum.
+have [rF etF] : format (dwh (TwoSum rho e)) /\
+                format (dwl (TwoSum rho e)) by apply: format_TwoSum.
 have [HSe HSL'] := suffMass_cons HS.
 have [HML' Hdome] := ulsMono_cons HM.
-rewrite vsebMass_consS; case E : (TwoSum p choice rho e) => [r et].
+rewrite vsebMass_consS; case E : (TwoSum rho e) => [r et].
 rewrite E /= in rF etF.
-have Hc : dwh (TwoSum p choice rho e) + dwl (TwoSum p choice rho e) = rho + e
+have Hc : dwh (TwoSum rho e) + dwl (TwoSum rho e) = rho + e
   by exact: TwoSum_correct_loc Frho Fe.
 rewrite E /= in Hc.
 have Hr : r = RND (rho + e) by have := TwoSum_hi rho e; rewrite E.
 case: (Req_dec e 0) => [e0|en0].
   have Eet : et = 0.
-    by have := @dwl_TwoSum_r0 p Hp2 choice choice_sym rho Frho; rewrite -e0 E /=.
+    by have := dwl_TwoSum_r0 Frho; rewrite -e0 E /=.
   have Er : r = rho.
-    by have := @dwh_TwoSum_r0 p choice rho Frho; rewrite -e0 E /=.
+    by have := dwh_TwoSum_r0 Frho; rewrite -e0 E /=.
   rewrite Eet Er; move: (Req_EM_T (0:R) 0); case=> [E0|E0]; last by case: E0.
   rewrite [is_left _]/=.
   apply: IH => //.
@@ -407,7 +444,7 @@ have Hler : uls e <= uls rho.
   case: Hdom => [rho0|Hd]; first by case: rhon0.
   by apply: Hd; [rewrite inE eqxx|exact: en0].
 have Huls_e_et : uls e <= uls et.
-  have H := @TwoSum_err_uls_ge p Hp2 choice choice_sym rho e Frho Fe rhon0 en0 Hler.
+  have H := TwoSum_err_uls_ge Frho Fe rhon0 en0 Hler.
   by move: H; rewrite E /=; apply.
 have H12u : 0 <= 1 - 2 * u.
   have -> : 2 * u = pow (1 - p) by rewrite /Fmore.u; lra.
@@ -540,14 +577,14 @@ case: m => [//|a m _]; elim: m a => [a aF|b m IH a abF].
   rewrite vecSumAux_cons.
   have E0 : vecSumAux [:: 0] = ([::], 0) by [].
   have Ea : vecSumAux [:: a] = ([::], a) by [].
-  rewrite E0 Ea; case E : (TwoSum p choice a 0) => [si ei1].
-  have := @dwh_TwoSum_r0 p choice a Fa; rewrite E /= => ->.
-  by have := @dwl_TwoSum_r0 p Hp2 choice choice_sym a Fa; rewrite E /= => ->.
+  rewrite E0 Ea; case E : (TwoSum a 0) => [si ei1].
+  have := dwh_TwoSum_r0 Fa; rewrite E /= => ->.
+  by have := dwl_TwoSum_r0 Fa; rewrite E /= => ->.
 have Hbm : {in b :: m, forall z, format z}.
   by move=> z zI; apply: abF; rewrite inE zI orbT.
 have IH' := IH b Hbm; rewrite rcons_cons in IH'.
 rewrite rcons_cons vecSumAux_cons rcons_cons vecSumAux_cons IH'.
-by case: (vecSumAux (b :: m)) => es s /=; case: (TwoSum p choice a s).
+by case: (vecSumAux (b :: m)) => es s /=; case: (TwoSum a s).
 Qed.
 
 (* VecSum carries a trailing zero through untouched: the running sum entering *)
@@ -571,23 +608,23 @@ Lemma vsebAux_rcons0 (l : seq R) (eps : R) :
 Proof.
 (* [vsebAux w [:: 0] = [:: w; 0]]: a trailing zero is an exact merge.         *)
 have vseb0 : forall w : R, format w -> vsebAux w [:: 0] = [:: w; 0].
-  move=> w wF; rewrite vsebAux_1; case Ew : (TwoSum p choice w 0) => [z0 z1].
-  have := @dwh_TwoSum_r0 p choice w wF; rewrite Ew /= => ->.
-  by have := @dwl_TwoSum_r0 p Hp2 choice choice_sym w wF; rewrite Ew /= => ->.
+  move=> w wF; rewrite vsebAux_1; case Ew : (TwoSum w 0) => [z0 z1].
+  have := dwh_TwoSum_r0 wF; rewrite Ew /= => ->.
+  by have := dwl_TwoSum_r0 wF; rewrite Ew /= => ->.
 elim: l eps => [|e l' IH] eps epsF lF.
   by right; rewrite (vseb0 _ epsF).
 have eF : format e by apply: lF; rewrite inE eqxx.
 have Fl' : {in l', forall z, format z}.
   by move=> z zI; apply: lF; rewrite inE zI orbT.
-have [rF etF] : format (dwh (TwoSum p choice eps e)) /\
-                format (dwl (TwoSum p choice eps e))
+have [rF etF] : format (dwh (TwoSum eps e)) /\
+                format (dwl (TwoSum eps e))
   by apply: format_TwoSum.
 rewrite rcons_cons.
 case: l' IH lF Fl' rF etF => [|e2 l2] IH lF Fl' rF etF.
   (* One remaining term: the trailing zero is either dropped or emitted last. *)
   have -> : e :: rcons [::] 0 = [:: e, 0 & [::]] by [].
   rewrite vsebAux_consS vsebAux_1.
-  case E : (TwoSum p choice eps e) => [r et].
+  case E : (TwoSum eps e) => [r et].
   have rF' : format r by move: rF; rewrite E.
   have etF' : format et by move: etF; rewrite E.
   case: (Req_EM_T et 0) => [et0|etn0].
@@ -596,7 +633,7 @@ case: l' IH lF Fl' rF etF => [|e2 l2] IH lF Fl' rF etF.
 (* Two or more terms: recurse, the zero travelling to the tail.               *)
 have -> : e :: rcons (e2 :: l2) 0 = [:: e, e2 & rcons l2 0] by rewrite rcons_cons.
 rewrite !vsebAux_consS.
-case E : (TwoSum p choice eps e) => [r et].
+case E : (TwoSum eps e) => [r et].
 have rF' : format r by move: rF; rewrite E.
 have etF' : format et by move: etF; rewrite E.
 case: (Req_EM_T et 0) => [et0|etn0]; rewrite [is_left _]/= -rcons_cons.

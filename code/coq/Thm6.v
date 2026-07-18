@@ -369,6 +369,14 @@ rewrite ulp_neq_0 //; apply: bpow_le.
 have := mag_le_bpow beta x _ xn0 Hlt; rewrite /cexp /FLX_exp; lia.
 Qed.
 
+(* Same for [ufp]: [|x| < pow m] gives [ufp x = pow(mag x - 1) <= pow(m - 1)]. *)
+Lemma ufp_le_of_abs_lt (x : R) (m : Z) :
+  x <> 0 -> Rabs x < pow m -> ufp x <= pow (m - 1).
+Proof.
+move=> xn0 Hlt; rewrite /ufp; apply: bpow_le.
+have := mag_le_bpow beta x _ xn0 Hlt; lia.
+Qed.
+
 (* Draft 5.2, first step: a violation forces the preceding running sum large. *)
 (* If a VecSum error [e_{i+1}] reaches [5/8 uls(e_j)] (with [uls(e_j) = pow k])*)
 (* then [|s_i| >= 2^p uls(e_j) = pow(k+p)] -- the draft's [|s_{i-1}| >= 1].     *)
@@ -546,6 +554,34 @@ have Hulp : ulp (nth 0 l m) <= pow k.
   by rewrite (_ : (k + p - p = k)%Z); last lia.
 have [Hz|Hlt2] := Hpair m Hmsz; first by rewrite Hz Rabs_R0; apply: bpow_gt_0.
 exact: Rlt_le_trans Hlt2 Hulp.
+Qed.
+
+(* Draft 5.2, "[|s_i| <= 2u]": with [|x_i| < u] and the *1 running-sum bound   *)
+(* [|s_i| <= 4 ufp(x_i)] we get [|s_i| <= 4 ufp(x_i) <= 4 pow(k-1) = pow(k+1)  *)
+(* = 2u].                                                                      *)
+Lemma vecSum_run_le_2u_of_violation (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  exists2 i', (i' < i)%N &
+    forall m, (i' <= m)%N -> (m.+2 < size l)%N ->
+      Rabs (vecSumAux (drop m.+2 l)).2 <= pow (k + 1).
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
+have [i' Hi'i Hxlt] :=
+  vecSum_inputs_lt_u_of_violation Hi Hf Hsort Hpair Hji Hej0 Huls Hviol.
+exists i' => // m Hm Hmsz.
+have Hxn0 : nth 0 l m.+2 <> 0 by apply: Hnz.
+have Hufp : ufp (nth 0 l m.+2) <= pow (k - 1)
+  by apply: ufp_le_of_abs_lt Hxn0 (Hxlt _ Hm Hmsz).
+have [Hrun _] := vecSum_run_ufp Heven Hf Hnz Hsort Hpair Hmsz.
+apply: Rle_trans Hrun _.
+have -> : pow (k + 1) = 4 * pow (k - 1).
+  have E4 : (4 : R) = pow 2 by rewrite /= /Z.pow_pos /=; lra.
+  by rewrite (_ : (k + 1 = 2 + (k - 1))%Z) ?bpow_plus -?E4; [|lia].
+by apply: Rmult_le_compat_l; [lra | exact: Hufp].
 Qed.
 
 (* ===========================================================================*)

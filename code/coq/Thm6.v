@@ -1824,6 +1824,54 @@ have H : Rabs (RND (r + e')) <= (1 - 1 * u) * ulp yj.
 by nra.
 Qed.
 
+
+(* ---- 5.3, "adding at most 3 of them" ------------------------------------*)
+
+(* The counting: a block of at most [n] further errors, each below [d],       *)
+(* adds at most [n * d] to the mass carried past the head.                    *)
+Lemma sumRabs_le_count (l : seq R) (n : nat) (d : R) :
+  (size l <= n)%N -> 0 <= d -> (forall z, z \in l -> Rabs z <= d) ->
+  sumRabs l <= INR n * d.
+Proof.
+elim: l n => [|a l IH] n Hsz Hd Hall /=.
+  by have := pos_INR n; nra.
+case: n Hsz => [//|n] Hsz.
+have Ha : Rabs a <= d by apply: Hall; rewrite inE eqxx.
+have Hrec : sumRabs l <= INR n * d.
+  by apply: IH => // z zl; apply: Hall; rewrite inE zl orbT.
+by rewrite S_INR; nra.
+Qed.
+
+(* Draft 5.3's block estimate, packaged: the emitted word [y_{j+1}] is the    *)
+(* head of the continued VSEB walk, and [VSEB.vsebAux_head_leB] bounds it     *)
+(* by any FLOAT [B] dominating [|eps_{i_0}|] plus the mass of the errors      *)
+(* still to come.  So a [B] strictly below [ulp(y_j)] closes the case --      *)
+(* this is the engine behind every "we are adding at most 3 of them".         *)
+Lemma vseb_head_lt_of_mass (yj eps B : R) (l : seq R) :
+  format eps -> {in l, forall z, format z} -> format B ->
+  Rabs eps + sumRabs l <= B -> B < ulp yj ->
+  Rabs (nth 0 (vsebAux eps l) 0) < ulp yj.
+Proof.
+move=> Feps Hl FB Hmass HB.
+by apply: Rle_lt_trans (vsebAux_head_leB Feps Hl FB Hmass) HB.
+Qed.
+
+(* The same with the draft's split of the mass: the first error               *)
+(* [e_{i_1}] is handled by the [(1+c)/2] estimate and the at-most-[n]         *)
+(* later ones by [d] each, so [B = ((1+c)/2 + n d) ulp(y_j)] serves.          *)
+Lemma vseb_head_lt_split (yj eps e B : R) (l : seq R) (n : nat) (d : R) :
+  format eps -> format e -> {in l, forall z, format z} -> format B ->
+  (size l <= n)%N -> 0 <= d -> (forall z, z \in l -> Rabs z <= d) ->
+  Rabs eps + Rabs e + INR n * d <= B -> B < ulp yj ->
+  Rabs (nth 0 (vsebAux eps (e :: l)) 0) < ulp yj.
+Proof.
+move=> Feps Fe Hl FB Hsz Hd Hall Hmass HB.
+apply: vseb_head_lt_of_mass Feps _ FB _ HB.
+  by move=> z; rewrite inE => /orP[/eqP->|zl]; [|apply: Hl].
+have Hrec := sumRabs_le_count Hsz Hd Hall.
+by rewrite /=; lra.
+Qed.
+
 (* ===========================================================================*)
 (*  Reduction of [vecSum_vsebMass] to two STATIC properties of the VecSum     *)
 (*  error sequence [E = vecSum l].  Both are verified true by exhaustive       *)

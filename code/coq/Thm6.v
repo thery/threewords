@@ -2081,6 +2081,53 @@ have Hb : Rabs et + sumRabs tail <= (1 - IZR 1 * u) * ulp r
 have Hhead := vsebAux_head_leB Fet Ftail FB Hb.
 by move: Hhead; rewrite /=; nra.
 Qed.
+
+(* ---- locating the draft's [i_1] ----------------------------------------*)
+
+(* An all-zero block carries no mass.                                         *)
+Lemma sumRabs_eq0 (l : seq R) :
+  (forall z, z \in l -> z = 0) -> sumRabs l = 0.
+Proof.
+elim: l => [//|a l IH] Hall /=.
+have -> : a = 0 by apply: Hall; rewrite inE eqxx.
+rewrite Rabs_R0 IH ?Rplus_0_l //.
+by move=> z zl; apply: Hall; rewrite inE zl orbT.
+Qed.
+
+(* If nothing is left but zeros the obligation is free: the walk emits        *)
+(* the remainder itself, and [|et| <= ulp r / 2 < ulp r].                     *)
+Lemma vsebBlock_obligation_zeros (r et : R) (tail : seq R) :
+  format et -> {in tail, forall z, format z} ->
+  et <> 0 -> 2 * Rabs et <= ulp r ->
+  (forall z, z \in tail -> z = 0) ->
+  Rabs (nth 0 (vsebAux et tail) 0) < ulp r.
+Proof.
+move=> Fet Ftail etn0 Hulp Hall.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu16 := u_le_inv16.
+have Het : 0 < Rabs et by apply: Rabs_pos_lt.
+apply: vsebBlock_obligation => //.
+by rewrite (sumRabs_eq0 Hall); nra.
+Qed.
+
+(* The walk skips a run of zeros: this is how the draft's "let i_1 be the     *)
+(* index of the first e_i after e_{i_0} that is non-zero" is realised.        *)
+(* Iterates [VSEB.vsebAux_cons0].                                             *)
+Lemma vsebAux_drop0s (eps : R) (l : seq R) (k : nat) :
+  format eps -> (k < size l)%N ->
+  (forall m, (m < k)%N -> nth 0 l m = 0) ->
+  vsebAux eps l = vsebAux eps (drop k l).
+Proof.
+elim: k l => [|k IH] l Feps Hk Hz; first by rewrite drop0.
+case: l Hk Hz => [//|a l'] Hk Hz.
+have Ha : a = 0 by have := Hz 0%N isT.
+have Hk' : (k < size l')%N by move: Hk; rewrite /= ltnS.
+have Hl' : (0 < size l')%N by apply: leq_ltn_trans (leq0n k) Hk'.
+case: l' Hl' Hk Hk' Hz => [//|b l''] _ Hk Hk' Hz.
+rewrite Ha vsebAux_cons0 //.
+rewrite (IH (b :: l'')) //.
+by move=> m Hm; have := Hz m.+1 Hm.
+Qed.
 (* THE remaining core: the VecSum error sequence satisfies the draft's        *)
 (* per-emit block bound.  This is exactly doc/thm6.md 5.2 + 5.3 -- the        *)
 (* *2 forcing (all of which is proved above) feeding the *3 case study        *)

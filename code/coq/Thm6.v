@@ -2007,6 +2007,46 @@ move=> [|i] /= Hi.
 by apply: (Hrec i); move: Hi; rewrite ltnS.
 Qed.
 
+
+(* A MERGE step costs nothing.  If the whole remaining block fits under       *)
+(* [(1-2u)|eps|] then, after absorbing the next term [a] exactly into the     *)
+(* remainder, what is left still fits under [(1-2u)|eps + a|]: the            *)
+(* remainder loses at most [|a|] while the block loses exactly [|a|].         *)
+(* So all the content of the draft's block estimate sits at the EMITS.        *)
+Lemma mass_merge_step (eps a : R) (tail : seq R) :
+  Rabs a + sumRabs tail <= (1 - 2 * u) * Rabs eps ->
+  sumRabs tail <= (1 - 2 * u) * Rabs (eps + a).
+Proof.
+move=> Hmass.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu16 := u_le_inv16.
+have Htri : Rabs eps - Rabs a <= Rabs (eps + a).
+  by have := Rabs_triang_inv eps (- a); rewrite Rabs_Ropp; split_Rabs; lra.
+have Ha : 0 <= Rabs a by apply: Rabs_pos.
+by nra.
+Qed.
+
+(* Discharging one [vsebBlock] obligation.  The draft's per-emit bound is     *)
+(* always of the form "the errors still to come are small next to the         *)
+(* remainder": with [sumRabs tail <= (1 - 2u) |et|] and the free              *)
+(* [2|et| <= ulp r] ([magnitude_TwoSum]), the block sits under                *)
+(* [(2 - 2u)|et| <= (1 - u) ulp r], which is a float strictly below           *)
+(* [ulp r].  So [B = (1 - u) ulp r] serves, as in every 5.3 case above.       *)
+Lemma vsebBlock_obligation (r et : R) (tail : seq R) :
+  et <> 0 -> 2 * Rabs et <= ulp r ->
+  sumRabs tail <= (1 - 2 * u) * Rabs et ->
+  exists B, [/\ format B, Rabs et + sumRabs tail <= B & B < ulp r].
+Proof.
+move=> etn0 Hulp Hmass.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Het : 0 < Rabs et by apply: Rabs_pos_lt.
+have HU : 0 < ulp r by lra.
+have Hu16 := u_le_inv16.
+exists ((1 - IZR 1 * u) * ulp r); split.
+- by apply: format_1_sub_ku_ulp; move: pow2_ge_16; lia.
+- by rewrite /=; nra.
+by rewrite /=; nra.
+Qed.
 (* THE remaining core: the VecSum error sequence satisfies the draft's        *)
 (* per-emit block bound.  This is exactly doc/thm6.md 5.2 + 5.3 -- the        *)
 (* *2 forcing (all of which is proved above) feeding the *3 case study        *)

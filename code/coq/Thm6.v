@@ -188,7 +188,8 @@ have [HM|HM] := Rle_lt_or_eq_dec _ _ Hae.
           by rewrite minus_IZR IZR_Zpower //; lia.
         by apply: IZR_le; lia.
       apply: Rmult_le_compat_l; last exact: Hcu.
-      by rewrite -(pow0E beta); have := bpow_le beta 0 p ltac:(lia); lra.
+      have h0p : (0 <= p)%Z by lia.
+      by rewrite -(pow0E beta); have := bpow_le beta 0 p h0p; lra.
     have -> : pow g = uls eps by rewrite Hg.
     nra.
   + by nra.
@@ -694,7 +695,8 @@ have Hpp : pow 4 <= pow p by apply: bpow_le.
 have Hp16 : (16 : R) <= pow p by move: Hpp; rewrite /= /Z.pow_pos /=; lra.
 have Hpn : 0 < pow (- p) by apply: bpow_gt_0.
 have Hpu : pow (- p) <= / 16.
-  have := bpow_le beta (- p) (-4) ltac:(lia); rewrite /= /Z.pow_pos /=; lra.
+  have hp4 : (- p <= -4)%Z by lia.
+  by have := bpow_le beta (- p) (-4) hp4; rewrite /= /Z.pow_pos /=; lra.
 have Ha_lt2A : Rabs a < 2 * pow (K + p).
   have Hchain : Rabs a <= pow (K + p) - pow K + pow (K + 1) + / 2 * ulp a.
     have := Rabs_triang (c + d) (- a); rewrite Rabs_Ropp.
@@ -753,17 +755,107 @@ have Haval : a = - pow (K + p)
 move: Haneg Haval; lra.
 Qed.
 
-(* Conclusions 2 & 3 -- [|c| = 1 - u] and [2u^2 | b] -- given [|a| = 1].  Still *)
-(* the signed interval + divisibility residue of the case study; ADMITTED.     *)
+(* Conclusion 2 -- [|c| = 1 - u] -- and the extra [|d| >= u], given [|a| = 1]. *)
+(* The rounding fact [a = RN(c+d)] makes [a] a NEAREST float to [c+d], so with *)
+(* [g = 1 - u] we get [-b <= u/2], hence (with the violation) [b in [5/8u, u]]; *)
+(* then [c] is a multiple of [u] trapped in [(1 - 11/8 u, 1 - u]], so [c = 1-u],*)
+(* and [d = b + u >= 13/8 u >= u].  ([2u^2 | e_i] is NOT provable here -- it     *)
+(* needs the 2Sum structure -- so it moves to [vecSum_pinning_of_violation].)   *)
 Lemma interval_pin_rest (a b c d : R) (K : Z) :
   ties_to_even choice ->
   format c -> a = RND (c + d) ->
   is_imul a (pow (K + 1)) -> Rabs a = pow (K + p) ->
   Rabs c <= pow (K + p) - pow K -> Rabs d <= pow (K + 1) ->
   a + b = c + d -> 5 / 8 * pow K <= Rabs b -> Rabs b <= / 2 * ulp a ->
-  Rabs c = pow (K + p) - pow K /\ is_imul b (pow (K - p + 1)).
+  Rabs c = pow (K + p) - pow K /\ pow K <= Rabs d.
 Proof.
-Admitted.
+move=> Heven Fc Hr Hai Hae Hcl Hdl Hi Hbl Hbh.
+have HG : 0 < pow K by apply: bpow_gt_0.
+have HA : 0 < pow (K + p) by apply: bpow_gt_0.
+have HAG : pow (K + p) = pow p * pow K by rewrite -bpow_plus; congr bpow; lia.
+have Hp16 : (16 : R) <= pow p.
+  have h4p : (4 <= p)%Z by lia.
+  by have := bpow_le beta 4 p h4p; rewrite /= /Z.pow_pos /=; lra.
+have an0 : a <> 0 by move=> a0; move: Hae; rewrite a0 Rabs_R0; lra.
+have Hmaga : mag beta a = (K + p + 1)%Z :> Z.
+  apply: mag_unique; rewrite Hae (_ : (K + p + 1 - 1 = K + p)%Z); last lia.
+  by split; [lra | apply: bpow_lt; lia].
+have HulpA : ulp a = 2 * pow K.
+  rewrite ulp_neq_0 // /cexp /FLX_exp Hmaga.
+  by rewrite (_ : (K + p + 1 - p = K + 1)%Z) ?bpow_plus ?bpow_1 /=; [lra|lia].
+have Hb_G : Rabs b <= pow K by move: Hbh; rewrite HulpA; lra.
+have [Fa Hnear] := round_N_pt beta fexp choice (c + d).
+rewrite -Hr in Fa Hnear.
+have HpredAG : pred beta fexp (pow (K + p)) = pow (K + p) - pow K
+  by rewrite pred_bpow /fexp /FLX_exp (_ : (K + p - p = K)%Z) //; lia.
+have FAG : format (pow (K + p) - pow K)
+  by rewrite -HpredAG; apply: generic_format_pred; apply: generic_format_bpow;
+     rewrite /FLX_exp; lia.
+have Hce : c = a + b - d by lra.
+have Hd2G : Rabs d <= 2 * pow K by move: Hdl; rewrite bpow_plus bpow_1 /=; lra.
+have Hc_lo : pow (K + p) - 3 * pow K <= Rabs c
+  by move: Hi Hae Hb_G Hd2G; split_Rabs; lra.
+have HKm1 : pow (K + p) = 2 * pow (K + p - 1)
+  by rewrite (_ : (K + p = K + p - 1 + 1)%Z) ?bpow_plus ?bpow_1 /=; [lra|lia].
+have HKpm1 : pow (K + p - 1) = pow K * pow (p - 1)
+  by rewrite -bpow_plus; congr bpow; lia.
+have Hpm1 : (8 : R) <= pow (p - 1).
+  have h3p : (3 <= p - 1)%Z by lia.
+  by have := bpow_le beta 3 (p - 1) h3p; rewrite /= /Z.pow_pos /=; lra.
+have cn0 : c <> 0 by move=> c0; move: Hc_lo; rewrite c0 Rabs_R0; nra.
+have Hmagc : mag beta c = (K + p)%Z :> Z.
+  apply: mag_unique; split; last by apply: Rle_lt_trans Hcl _; lra.
+  by apply: Rle_trans Hc_lo; nra.
+have Hcimul : is_imul c (pow K).
+  have := format_imul_cexp Fc; rewrite /cexp /FLX_exp Hmagc.
+  by rewrite (_ : (K + p - p = K)%Z) //; lia.
+have [mc Hmc] := Hcimul.
+have Hpp2 : pow p = IZR (2 ^ p) by rewrite -IZR_Zpower; [congr IZR|lia].
+case: (Rle_lt_dec 0 a) => Ha0.
+  have HaA : a = pow (K + p) by move: Hae; rewrite Rabs_pos_eq.
+  have Hnb := Hnear _ FAG.
+  have Hbge : - pow K / 2 <= b by move: Hnb; rewrite -Hi HaA; split_Rabs; lra.
+  have Hbpos : 5 / 8 * pow K <= b by move: Hbl Hbge Hb_G; split_Rabs; lra.
+  have Hcpos : 0 < c by rewrite Hce HaA; move: Hbpos Hd2G; split_Rabs; nra.
+  have Hc_up : c <= pow (K + p) - pow K by move: Hcl; rewrite Rabs_pos_eq //; lra.
+  have Hc_lo2 : pow (K + p) - 11 / 8 * pow K <= c
+    by rewrite Hce HaA; move: Hbpos Hd2G; split_Rabs; lra.
+  have Hmc_ge : (2 ^ p - 2 < mc)%Z.
+    apply: lt_IZR; rewrite minus_IZR -Hpp2.
+    by move: Hc_lo2; rewrite Hmc HAG; nra.
+  have Hmc_le : (mc <= 2 ^ p - 1)%Z.
+    apply: le_IZR; rewrite minus_IZR -Hpp2.
+    by move: Hc_up; rewrite Hmc HAG; nra.
+  have Hmceq : mc = (2 ^ p - 1)%Z by lia.
+  have Hcval : c = pow (K + p) - pow K
+    by rewrite Hmc Hmceq minus_IZR -Hpp2 HAG; ring.
+  have Hdval : d = b + pow K by lra.
+  split; first by rewrite Rabs_pos_eq //; lra.
+  by rewrite Rabs_pos_eq; rewrite Hdval; move: Hbpos; lra.
+have HaA : a = - pow (K + p) by move: Hae; rewrite (Rabs_left _ Ha0); lra.
+have FnAG : format (- (pow (K + p) - pow K)) by apply: generic_format_opp.
+have Hnb := Hnear _ FnAG.
+have Hble : b <= pow K / 2 by move: Hnb; rewrite -Hi HaA; split_Rabs; lra.
+have Hbneg : b <= - (5 / 8 * pow K) by move: Hbl Hble Hb_G; split_Rabs; lra.
+have Hcneg : c < 0 by rewrite Hce HaA; move: Hbneg Hd2G; split_Rabs; nra.
+have Hc_up : - (pow (K + p) - pow K) <= c
+  by move: Hcl; rewrite (Rabs_left _ Hcneg); lra.
+have Hc_lo2 : c <= - (pow (K + p) - 11 / 8 * pow K)
+  by rewrite Hce HaA; move: Hbneg Hd2G; split_Rabs; lra.
+have Hmc_le : (mc < - (2 ^ p - 2))%Z.
+  apply: lt_IZR; rewrite opp_IZR minus_IZR -Hpp2.
+  by move: Hc_lo2; rewrite Hmc HAG; nra.
+have Hmc_ge : (- (2 ^ p - 1) <= mc)%Z.
+  apply: le_IZR; rewrite opp_IZR minus_IZR -Hpp2.
+  by move: Hc_up; rewrite Hmc HAG; nra.
+have Hmceq : mc = (- (2 ^ p - 1))%Z by lia.
+have Hcval : c = - (pow (K + p) - pow K)
+  by rewrite Hmc Hmceq opp_IZR minus_IZR -Hpp2 HAG; ring.
+have Hdval : d = b - pow K by lra.
+split; first by rewrite (Rabs_left _ Hcneg) Hcval; lra.
+have Hdneg : d < 0 by rewrite Hdval; move: Hbneg; lra.
+by rewrite (Rabs_left _ Hdneg) Hdval; move: Hbneg; lra.
+Qed.
 
 Lemma interval_pin (a b c d : R) (K : Z) :
   ties_to_even choice ->
@@ -773,11 +865,11 @@ Lemma interval_pin (a b c d : R) (K : Z) :
   a + b = c + d -> 5 / 8 * pow K <= Rabs b -> Rabs b <= / 2 * ulp a ->
   [/\ Rabs a = pow (K + p),
       Rabs c = pow (K + p) - pow K &
-      is_imul b (pow (K - p + 1)) ].
+      pow K <= Rabs d ].
 Proof.
 move=> Heven Fc Hr Hai Hge Hcl Hdl Hi Hbl Hbh.
 have HRa := interval_pin_abs Heven Fc Hr Hai Hge Hcl Hdl Hi Hbl Hbh.
-have [HC HB] := interval_pin_rest Heven Fc Hr Hai HRa Hcl Hdl Hi Hbl Hbh.
+have [HC HD] := interval_pin_rest Heven Fc Hr Hai HRa Hcl Hdl Hi Hbl Hbh.
 by split.
 Qed.
 
@@ -832,7 +924,26 @@ have Hid : (vecSumAux (drop i l)).2 + nth 0 (vecSum l) i.+1 =
 have Ha_rnd : (vecSumAux (drop i l)).2 =
               RND (nth 0 l i + (vecSumAux (drop i.+1 l)).2)
   by rewrite Hsdwh TwoSum_hi.
-exact: (interval_pin Heven Fc Ha_rnd Ha_imul Ha_ge Hc_le Hd_le Hid Hviol Hb_hi).
+have [HRs HRc HDd] :=
+  interval_pin Heven Fc Ha_rnd Ha_imul Ha_ge Hc_le Hd_le Hid Hviol Hb_hi.
+split=> //.
+(* [2u^2 | e_{i+1}]: the 2Sum error is a multiple of                           *)
+(* [pow(min(cexp x_i, cexp s_{i+1}))], and both cexps are [>= k - p + 1]        *)
+(* -- [cexp x_i = k] (from [|x_i| = 1 - u]) and [cexp s_{i+1} >= k-p+1] (from   *)
+(* [|s_{i+1}| >= u]).                                                          *)
+have Hmx : mag beta (nth 0 l i) = (k + p)%Z :> Z.
+  apply: mag_unique; rewrite HRc; split; last by have := bpow_gt_0 beta k; lra.
+  have -> : pow (k + p) = 2 * pow (k + p - 1)
+    by rewrite (_ : (k + p = k + p - 1 + 1)%Z) ?bpow_plus ?bpow_1 /=; [lra|lia].
+  have : pow k <= pow (k + p - 1) by apply: bpow_le; lia.
+  lra.
+have Hms1 : (k + 1 <= mag beta (vecSumAux (drop i.+1 l)).2)%Z.
+  apply: mag_ge_bpow; have -> : (k + 1 - 1 = k)%Z by lia.
+  exact: HDd.
+rewrite He.
+apply: is_imul_pow_le
+  (@TwoSum_err_imul p Hp2 choice choice_sym _ _ Fc Fs1) _.
+apply: Z.min_glb; rewrite /cexp /FLX_exp; [rewrite Hmx | ]; lia.
 Qed.
 
 (* ===========================================================================*)
@@ -953,7 +1064,8 @@ have Huls_e_et : uls e <= uls et.
   by move: H; rewrite E /=; apply.
 have H12u : 0 <= 1 - 2 * u.
   have -> : 2 * u = pow (1 - p) by rewrite /Fmore.u; lra.
-  by have := bpow_le beta (1 - p) 0 ltac:(lia); rewrite (pow0E beta); lra.
+  have h1p : (1 - p <= 0)%Z by lia.
+  by have := bpow_le beta (1 - p) 0 h1p; rewrite (pow0E beta); lra.
 split; last first.
   apply: IH => //.
   right => z zI zn0.

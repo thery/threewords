@@ -1781,6 +1781,49 @@ have -> : (1 + (1 - 4 * u)) / 2 * ulp yj = (1 - IZR 2 * u) * ulp yj.
 by apply: format_1_sub_ku_ulp; move: pow2_ge_16; lia.
 Qed.
 
+
+(* ---- 5.3, case [i_1 >= 4] ----------------------------------------------*)
+
+(* Draft 5.3, case [i_1 >= 4], sub-case [|e_{i_1}| = u - 2u^2]: "then         *)
+(* y_{j+1} = r_{i_1-1} < ulp(y_j)".  The [(1-u)] bound already sits           *)
+(* strictly below [ulp(y_j)]; the [ulp] is positive because it dominates      *)
+(* [2|eps_{i_0}| >= 2t > 0].                                                  *)
+Lemma vseb_next_lt_of_1mu (yj eps e t : R) :
+  0 < t -> t <= Rabs eps -> 2 * Rabs eps <= ulp yj ->
+  Rabs e <= (1 - 2 * u) * t ->
+  Rabs (RND (eps + e)) < ulp yj.
+Proof.
+move=> Ht0 Ht Hulp He.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hulp0 : 0 < ulp yj by lra.
+have H := vseb_next_1mu Ht Hulp He.
+by nra.
+Qed.
+
+(* Draft 5.3, case [i_1 >= 4], sub-case [|e_{i_1}| <= u - 4u^2]: after the    *)
+(* [(1-2u)] estimate the draft absorbs one more error,                        *)
+(* [|e_{i_1+1}| <= u^2 <= u/2 ulp(y_j)], and concludes                        *)
+(* [|y_{j+1}| < ulp(y_j)].  The sum is at most [(1 - 3u/2) ulp(y_j)],         *)
+(* hence at most the FLOAT [(1-u) ulp(y_j)], which rounding cannot            *)
+(* escape -- and that is still strictly below [ulp(y_j)].                     *)
+Lemma vseb_merge_lt (yj r e' : R) :
+  0 < ulp yj ->
+  Rabs r <= (1 - 2 * u) * ulp yj ->
+  Rabs e' <= / 2 * u * ulp yj ->
+  Rabs (RND (r + e')) < ulp yj.
+Proof.
+move=> Hulp0 Hr He.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hsum : Rabs (r + e') <= (1 - IZR 1 * u) * ulp yj.
+  apply: Rle_trans (Rabs_triang _ _) _.
+  by rewrite /=; nra.
+have HF : format ((1 - IZR 1 * u) * ulp yj).
+  by apply: format_1_sub_ku_ulp; move: pow2_ge_16; lia.
+have H : Rabs (RND (r + e')) <= (1 - 1 * u) * ulp yj.
+  by apply: Rabs_round_le_r.
+by nra.
+Qed.
+
 (* ===========================================================================*)
 (*  Reduction of [vecSum_vsebMass] to two STATIC properties of the VecSum     *)
 (*  error sequence [E = vecSum l].  Both are verified true by exhaustive       *)

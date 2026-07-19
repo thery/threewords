@@ -1948,10 +1948,7 @@ Fixpoint vsebBlock (eps : R) (l : seq R) : Prop :=
   | e :: l' =>
       let: DWR r et := TwoSum eps e in
       if Req_EM_T et 0 then vsebBlock r l'
-      else (exists B, [/\ format B,
-                          Rabs et + sumRabs l' <= B &
-                          B < ulp r])
-           /\ vsebBlock et l'
+      else Rabs (nth 0 (vsebAux et l') 0) < ulp r /\ vsebBlock et l'
   end.
 
 (* One-step unfolding (by reflexivity), as for [vsebAux_consS].               *)
@@ -1959,9 +1956,7 @@ Lemma vsebBlock_consS eps e e2 l :
   vsebBlock eps [:: e, e2 & l] =
   (let: DWR r et := TwoSum eps e in
    if Req_EM_T et 0 then vsebBlock r (e2 :: l)
-   else (exists B, [/\ format B,
-                       Rabs et + sumRabs (e2 :: l) <= B &
-                       B < ulp r])
+   else Rabs (nth 0 (vsebAux et (e2 :: l)) 0) < ulp r
         /\ vsebBlock et (e2 :: l)).
 Proof. by []. Qed.
 
@@ -1997,13 +1992,10 @@ have Fet : format et
   by have H := format_TwoSum epsF Fe; rewrite E1 /= in H; case: H.
 have Fl' : {in e2 :: l'', forall z, format z}
   by move=> z zI; apply: lF; rewrite inE zI orbT.
-case: Hb => [[B [FB Hmass HB]] Hbrec].
+case: Hb => [Hnext Hbrec].
 have Hrec : Pnonoverlap (vsebAux et (e2 :: l'')) by apply: IH.
 move=> [|i] /= Hi.
-  right.
-  have Hnext : Rabs (nth 0 (vsebAux et (e2 :: l'')) 0) <= B
-    by apply: vsebAux_head_leB.
-  by apply: (Rle_lt_trans _ _ _ Hnext HB).
+  by right; exact: Hnext.
 by apply: (Hrec i); move: Hi; rewrite ltnS.
 Qed.
 
@@ -2065,26 +2057,29 @@ have Ha : 0 <= Rabs a by apply: Rabs_pos.
 by nra.
 Qed.
 
-(* Discharging one [vsebBlock] obligation.  The draft's per-emit bound is     *)
-(* always of the form "the errors still to come are small next to the         *)
-(* remainder": with [sumRabs tail <= (1 - 2u) |et|] and the free              *)
-(* [2|et| <= ulp r] ([magnitude_TwoSum]), the block sits under                *)
-(* [(2 - 2u)|et| <= (1 - u) ulp r], which is a float strictly below           *)
-(* [ulp r].  So [B = (1 - u) ulp r] serves, as in every 5.3 case above.       *)
+(* Discharging one [vsebBlock] obligation from a MASS bound.  The draft's     *)
+(* per-emit estimates are always of the form "the errors still to come are    *)
+(* small next to the remainder": with [sumRabs tail <= (1 - 2u)|et|] and      *)
+(* the free [2|et| <= ulp r] ([magnitude_TwoSum]), the block sits under       *)
+(* [(2 - 2u)|et| <= (1 - u) ulp r], a float strictly below [ulp r], so        *)
+(* [vsebAux_head_leB] puts the next emitted word there too.                   *)
 Lemma vsebBlock_obligation (r et : R) (tail : seq R) :
+  format et -> {in tail, forall z, format z} ->
   et <> 0 -> 2 * Rabs et <= ulp r ->
   sumRabs tail <= (1 - 2 * u) * Rabs et ->
-  exists B, [/\ format B, Rabs et + sumRabs tail <= B & B < ulp r].
+  Rabs (nth 0 (vsebAux et tail) 0) < ulp r.
 Proof.
-move=> etn0 Hulp Hmass.
+move=> Fet Ftail etn0 Hulp Hmass.
 have Hu0 : 0 < u by apply: u_gt_0.
+have Hu16 := u_le_inv16.
 have Het : 0 < Rabs et by apply: Rabs_pos_lt.
 have HU : 0 < ulp r by lra.
-have Hu16 := u_le_inv16.
-exists ((1 - IZR 1 * u) * ulp r); split.
-- by apply: format_1_sub_ku_ulp; move: pow2_ge_16; lia.
-- by rewrite /=; nra.
-by rewrite /=; nra.
+have FB : format ((1 - IZR 1 * u) * ulp r).
+  by apply: format_1_sub_ku_ulp; move: pow2_ge_16; lia.
+have Hb : Rabs et + sumRabs tail <= (1 - IZR 1 * u) * ulp r
+  by rewrite /=; nra.
+have Hhead := vsebAux_head_leB Fet Ftail FB Hb.
+by move: Hhead; rewrite /=; nra.
 Qed.
 (* THE remaining core: the VecSum error sequence satisfies the draft's        *)
 (* per-emit block bound.  This is exactly doc/thm6.md 5.2 + 5.3 -- the        *)

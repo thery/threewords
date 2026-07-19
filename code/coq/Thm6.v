@@ -1016,6 +1016,78 @@ rewrite Hee bpow_plus bpow_1 /= in Hulp.
 lra.
 Qed.
 
+
+(* Draft 5.2, "at the right of i", the CASE LIST.  There the violating        *)
+(* error satisfies [2u^2 | e_i] (the pinning) and [e_i <= u]                  *)
+(* ([vecSum_tail_le_uls]), and the proof splits on [e_i = u],                 *)
+(* [e_i = u - 2u^2], or [e_i <= u - 4u^2].  Scale-invariantly, with           *)
+(* [t = pow K] for [u] and [g = pow(K-p+1)] for [2u^2]: a multiple of         *)
+(* [g] bounded by [t] is [t], [t - g], or at most [t - 2g], because           *)
+(* [t / g = pow(p-1)] is an integer, so the multiples of [g] below [t]        *)
+(* step down by [g] from [t] itself.                                          *)
+Lemma imul_case_split (x : R) (K : Z) :
+  is_imul x (pow (K - p + 1)) -> Rabs x <= pow K ->
+  [\/ Rabs x = pow K,
+      Rabs x = pow K - pow (K - p + 1) |
+      Rabs x <= pow K - 2 * pow (K - p + 1) ].
+Proof.
+move=> [n Hn] Hle.
+have Hg := bpow_gt_0 beta (K - p + 1).
+(* [t = pow(p-1) * g]: the number of [g]-steps up to [t] is an integer        *)
+have Hpm : pow (p - 1) = IZR (2 ^ (p - 1))
+  by rewrite -IZR_Zpower; [congr IZR|lia].
+have Ht : pow K = IZR (2 ^ (p - 1)) * pow (K - p + 1).
+  by rewrite -Hpm -bpow_plus; congr bpow; lia.
+have HN : (0 < 2 ^ (p - 1))%Z by apply: Z.pow_pos_nonneg; lia.
+have Hgp : 0 <= pow (K - p + 1) by apply: bpow_ge_0.
+have Hxa : Rabs x = IZR (Z.abs n) * pow (K - p + 1).
+  by rewrite Hn Rabs_mult abs_IZR (Rabs_pos_eq _ Hgp).
+(* [|n| <= 2^(p-1)] from [|x| <= t]                                           *)
+have Hn_le : (Z.abs n <= 2 ^ (p - 1))%Z.
+  apply: le_IZR; apply: (Rmult_le_reg_r (pow (K - p + 1))) => //.
+  by rewrite -Hxa -Ht.
+(* three cases on how far [|n|] sits below [2^(p-1)]                          *)
+case: (Z.eq_dec (Z.abs n) (2 ^ (p - 1))) => [Heq|Hne].
+  by apply: Or31; rewrite Hxa Heq Ht.
+case: (Z.eq_dec (Z.abs n) (2 ^ (p - 1) - 1)) => [Heq1|Hne1].
+  apply: Or32; rewrite Hxa Heq1 Ht minus_IZR.
+  by rewrite Rmult_minus_distr_r Rmult_1_l.
+apply: Or33; rewrite Hxa Ht.
+have Hn2 : (Z.abs n <= 2 ^ (p - 1) - 2)%Z by lia.
+have := IZR_le _ _ Hn2; rewrite minus_IZR => Hle2.
+have -> : IZR (2 ^ (p - 1)) * pow (K - p + 1) -
+          2 * pow (K - p + 1) =
+          (IZR (2 ^ (p - 1)) - 2) * pow (K - p + 1) by lra.
+by apply: Rmult_le_compat_r; lra.
+Qed.
+
+
+(* Draft 5.2 "at the right of i", instantiated at a violation: the            *)
+(* violating error is [e_i = u], [e_i = u - 2u^2], or [e_i <= u - 4u^2].      *)
+(* The divisibility [2u^2 | e_i] comes from the pinning and the ceiling       *)
+(* [e_i <= u] from [vecSum_tail_le_uls]; [imul_case_split] then splits.       *)
+Lemma vecSum_err_case_of_violation (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  [\/ Rabs (nth 0 (vecSum l) i.+1) = pow k,
+      Rabs (nth 0 (vecSum l) i.+1) = pow k - pow (k - p + 1) |
+      Rabs (nth 0 (vecSum l) i.+1) <= pow k - 2 * pow (k - p + 1) ].
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
+have [_ _ Him] :=
+  vecSum_pinning_of_violation Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls
+                              Hviol.
+have H0 : (0 < size l)%N by case: (size l) Hi.
+have Hsz : (i.+1 < size (vecSum l))%N by rewrite size_vecSum prednK.
+have Hle := vecSum_tail_le_uls Heven Hf Hnz Hsort Hpair (leq_ltn_trans Hji
+                               (ltnSn i)) Hsz Hej0.
+rewrite Huls in Hle.
+exact: imul_case_split Him Hle.
+Qed.
+
 (* ===========================================================================*)
 (*  Reduction of [vecSum_vsebMass] to two STATIC properties of the VecSum     *)
 (*  error sequence [E = vecSum l].  Both are verified true by exhaustive       *)

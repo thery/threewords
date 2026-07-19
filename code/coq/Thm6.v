@@ -1322,6 +1322,233 @@ by move: HB; rewrite (vecSum_run_last Hszeq); lra.
 Qed.
 
 
+
+
+(* The MIRROR of [VecSum.RN_midpoint_even]: the tie just BELOW a power of     *)
+(* two.  [pow e - pow(e-p-1)] is halfway between [pow e - pow(e-p)]           *)
+(* (mantissa [2^p - 1], odd) and [pow e] (mantissa [2^p], even), so           *)
+(* ties-to-even sends it UP to [pow e].  This is what makes the draft's       *)
+(* "case x_{i-2} = 1-u ... s_{i-2} = 2" come out exact.                       *)
+Lemma RN_midpoint_even_lo (e : Z) : ties_to_even choice ->
+  RND (pow e - pow (e - p - 1)) = pow e.
+Proof.
+move=> Heven.
+have Hpe := bpow_gt_0 beta e.
+have Hpep := bpow_gt_0 beta (e - p - 1).
+have Hlt1 : pow (e - p - 1) < pow (e - 1) by apply: bpow_lt; lia.
+have Haux1 : pow ((e - 1) + 1)%Z = 2 * pow (e - 1).
+  by rewrite bpow_plus bpow_1 /=; lra.
+have He1 : pow e = 2 * pow (e - 1).
+  by rewrite -Haux1; congr bpow; lia.
+have Hx0 : 0 < pow e - pow (e - p - 1) by lra.
+have Hmagx : mag beta (pow e - pow (e - p - 1)) = e :> Z.
+  by apply: mag_unique_pos; split; lra.
+have Hcexp : cexp (pow e - pow (e - p - 1)) = (e - p)%Z.
+  by rewrite /cexp Hmagx /FLX_exp.
+have Hpm1 : pow (-1)%Z = / 2 by rewrite /= /Z.pow_pos /=; lra.
+have Hpp : pow p = IZR (2 ^ p).
+  have -> : (2 = radix2 :> Z)%Z by [].
+  by rewrite IZR_Zpower //; lia.
+have Hppg := bpow_gt_0 beta p.
+have Hsm : mant (pow e - pow (e - p - 1)) = pow p - / 2.
+  rewrite /scaled_mantissa Hcexp Rmult_minus_distr_r -!bpow_plus.
+  have -> : (e + - (e - p) = p)%Z by lia.
+  have -> : (e - p - 1 + - (e - p) = -1)%Z by lia.
+  by rewrite Hpm1.
+have Hfloor : Zfloor (mant (pow e - pow (e - p - 1))) = (2 ^ p - 1)%Z.
+  rewrite Hsm; apply: Zfloor_imp.
+  have -> : (2 ^ p - 1 + 1 = 2 ^ p)%Z by lia.
+  by rewrite minus_IZR -Hpp; lra.
+have Hceil : Zceil (mant (pow e - pow (e - p - 1))) = (2 ^ p)%Z.
+  rewrite Hsm; apply: Zceil_imp.
+  by rewrite minus_IZR -Hpp; lra.
+have HRD : round beta fexp Zfloor (pow e - pow (e - p - 1)) =
+           pow e - pow (e - p).
+  rewrite /round Hfloor Hcexp /F2R /= minus_IZR -Hpp Rmult_minus_distr_r.
+  by rewrite -bpow_plus Rmult_1_l; congr (_ - _); congr bpow; lia.
+have HRU : round beta fexp Zceil (pow e - pow (e - p - 1)) = pow e.
+  rewrite /round Hceil Hcexp /F2R /= -Hpp -bpow_plus.
+  by congr bpow; lia.
+have Haux2 : pow ((e - p - 1) + 1)%Z = 2 * pow (e - p - 1).
+  by rewrite bpow_plus bpow_1 /=; lra.
+have Hhalf : pow (e - p) = 2 * pow (e - p - 1).
+  by rewrite -Haux2; congr bpow; lia.
+have Hmid :
+  (pow e - pow (e - p - 1)) -
+    round beta fexp Zfloor (pow e - pow (e - p - 1)) =
+  round beta fexp Zceil (pow e - pow (e - p - 1)) -
+    (pow e - pow (e - p - 1)).
+  by rewrite HRD HRU Hhalf; lra.
+rewrite (@round_N_middle beta fexp choice _ Hmid) Hfloor.
+have Heven2p : Z.even (2 ^ p) = true.
+  have -> : (2 ^ p = 2 * 2 ^ (p - 1))%Z.
+    by rewrite -Z.pow_succ_r; [congr (_ ^ _)%Z; lia | lia].
+  by rewrite Z.even_mul.
+have -> : choice (2 ^ p - 1) = true.
+  by rewrite Heven Z.even_sub Heven2p.
+exact: HRU.
+Qed.
+
+(* ---- 5.2, "at the left of i" -------------------------------------------*)
+
+(* Draft 5.2: "we saw that x_{i-1} = 1-u and x_{i-2} < 1, so                  *)
+(* |x_{i-2}| = 1-u".  The pinning gives [|x_i| = A - G] (our index [i] is     *)
+(* the draft's [i-1]); [sorted_mag] pushes that up to the previous input,     *)
+(* while being a float below [A] pushes it back down -- so the previous       *)
+(* input has exactly the same magnitude.                                      *)
+Lemma vecSum_left_x_eq (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  Rabs (nth 0 l i.-1) = pow (k + p) - pow k.
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
+have iLl : (i < size l)%N by apply: ltn_trans (ltnSn i) Hi.
+have [_ HRc _ _ _] :=
+  vecSum_pinning_of_violation Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls
+                              Hviol.
+have [i' Hi'i Hlt] :=
+  vecSum_inputs_lt_of_violation Hi Hf Hsort Hji Hej0 Huls Hviol.
+have Hi0 : (0 < i)%N by apply: leq_ltn_trans (leq0n i') Hi'i.
+have Hi'le : (i' <= i.-1)%N by rewrite -ltnS prednK.
+have Hi1Ll : (i.-1 < size l)%N by apply: leq_ltn_trans (leq_pred i) iLl.
+(* a float strictly below [A] is at most its predecessor [A - G]              *)
+have Hup : Rabs (nth 0 l i.-1) <= pow (k + p) - pow k.
+  have Fx : format (nth 0 l i.-1) by apply: Hf; apply: mem_nth.
+  have H := abs_le_pred_of_lt Fx (Hlt i.-1 Hi'le Hi1Ll).
+  by rewrite (_ : (k + p - p = k)%Z) in H; [|lia].
+(* and isotony keeps it at least [|x_i| = A - G]                              *)
+have Hlo : Rabs (nth 0 l i) <= Rabs (nth 0 l i.-1).
+  by apply: sorted_mag_le_nth Hsort (leq_pred i) iLl.
+by move: Hlo; rewrite HRc; lra.
+Qed.
+
+
+(* Draft 5.2's split "case x_{i-2} = -1+u" / "case x_{i-2} = 1-u": with       *)
+(* [|x_{i-1}| = A - G] and [|s_i| = A], the pair either cancels (sum [G],     *)
+(* the draft's [-1+u] case) or reinforces (sum [2A - G], its [1-u]            *)
+(* case).  Stated on the SUM, so no sign bookkeeping leaks out.               *)
+Lemma vecSum_left_sum_cases (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  Rabs (nth 0 l i.-1 + (vecSumAux (drop i l)).2) = pow k \/
+  Rabs (nth 0 l i.-1 + (vecSumAux (drop i l)).2) =
+    2 * pow (k + p) - pow k.
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
+have HX :=
+  vecSum_left_x_eq Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
+have [HRs _ _ _ _] :=
+  vecSum_pinning_of_violation Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls
+                              Hviol.
+have HG := bpow_gt_0 beta k.
+have HA := bpow_gt_0 beta (k + p).
+have HGA : pow k < pow (k + p) by apply: bpow_lt; lia.
+have H1 : nth 0 l i.-1 = pow (k + p) - pow k \/
+          nth 0 l i.-1 = - (pow (k + p) - pow k).
+  by move: HX; split_Rabs; lra.
+have H2 : (vecSumAux (drop i l)).2 = pow (k + p) \/
+          (vecSumAux (drop i l)).2 = - pow (k + p).
+  by move: HRs; split_Rabs; lra.
+by case: H1 => ->; case: H2 => ->; [right|left|left|right];
+   split_Rabs; lra.
+Qed.
+
+(* Draft 5.2, case [x_{i-2} = -1+u]: "then e_{i-1} = 0 and s_{i-2} = u".      *)
+(* The cancelling sum is [+/- G], already a float, so the 2Sum at that        *)
+(* step is EXACT: the running sum takes the value and the error is [0].       *)
+Lemma vecSum_left_opp (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  Rabs (nth 0 l i.-1 + (vecSumAux (drop i l)).2) = pow k ->
+  Rabs (vecSumAux (drop i.-1 l)).2 = pow k /\ nth 0 (vecSum l) i = 0.
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol Hsum.
+have iLl : (i < size l)%N by apply: ltn_trans (ltnSn i) Hi.
+have [i' Hi'i _] :=
+  vecSum_inputs_lt_of_violation Hi Hf Hsort Hji Hej0 Huls Hviol.
+have Hi0 : (0 < i)%N by apply: leq_ltn_trans (leq0n i') Hi'i.
+have Hpk : (i.-1.+1 = i)%N by rewrite prednK.
+have Hsz : (i.-1.+1 < size l)%N by rewrite Hpk.
+(* the cancelling sum is a float, so the step rounds exactly                  *)
+have HG := bpow_gt_0 beta k.
+have Fsum : format (nth 0 l i.-1 + (vecSumAux (drop i l)).2).
+  have H : nth 0 l i.-1 + (vecSumAux (drop i l)).2 = pow k \/
+           nth 0 l i.-1 + (vecSumAux (drop i l)).2 = - pow k.
+    by move: Hsum; split_Rabs; lra.
+  case: H => ->; first by apply: format_pow.
+  by apply/generic_format_opp/format_pow.
+have Hrnd := vecSum_run_rnd Hsz.
+have Hstep := vecSum_run_step Hsz Hf.
+rewrite Hpk in Hrnd Hstep.
+have Hs : (vecSumAux (drop i.-1 l)).2 =
+          nth 0 l i.-1 + (vecSumAux (drop i l)).2.
+  by rewrite Hrnd round_generic.
+split; first by rewrite Hs.
+by move: Hstep; rewrite Hs; lra.
+Qed.
+
+
+(* Draft 5.2, case [x_{i-2} = 1-u]: "then e_{i-1} = -u and s_{i-2} = 2".      *)
+(* Here the pair reinforces, giving the sum [2A - G] -- exactly the tie       *)
+(* just below [2A], which ties-to-even sends UP to [2A]                       *)
+(* ([RN_midpoint_even_lo]).  The 2Sum error is then the discarded [G].        *)
+Lemma vecSum_left_same (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  Rabs (nth 0 l i.-1 + (vecSumAux (drop i l)).2) =
+    2 * pow (k + p) - pow k ->
+  Rabs (vecSumAux (drop i.-1 l)).2 = 2 * pow (k + p) /\
+  Rabs (nth 0 (vecSum l) i) = pow k.
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol Hsum.
+have iLl : (i < size l)%N by apply: ltn_trans (ltnSn i) Hi.
+have [i' Hi'i _] :=
+  vecSum_inputs_lt_of_violation Hi Hf Hsort Hji Hej0 Huls Hviol.
+have Hi0 : (0 < i)%N by apply: leq_ltn_trans (leq0n i') Hi'i.
+have Hpk : (i.-1.+1 = i)%N by rewrite prednK.
+have Hsz : (i.-1.+1 < size l)%N by rewrite Hpk.
+(* [2A = pow(k+p+1)] and [G = pow((k+p+1) - p - 1)]                           *)
+have H2A : 2 * pow (k + p) = pow (k + p + 1).
+  have -> : pow (k + p + 1) = pow (k + p) * pow 1.
+    by rewrite -bpow_plus; congr bpow; lia.
+  by rewrite bpow_1 /=; lra.
+have HG : pow k = pow (k + p + 1 - p - 1).
+  by congr bpow; lia.
+(* the tie rounds up, in either sign                                          *)
+have Hmid : RND (2 * pow (k + p) - pow k) = 2 * pow (k + p).
+  by rewrite H2A HG; apply: RN_midpoint_even_lo.
+have Hmidn : RND (- (2 * pow (k + p) - pow k)) = - (2 * pow (k + p)).
+  by rewrite (@RN_opp_sym p choice choice_sym) Hmid.
+have Hrnd := vecSum_run_rnd Hsz.
+have Hstep := vecSum_run_step Hsz Hf.
+rewrite Hpk in Hrnd Hstep.
+have HA := bpow_gt_0 beta (k + p).
+have HGp := bpow_gt_0 beta k.
+have H : nth 0 l i.-1 + (vecSumAux (drop i l)).2 =
+         2 * pow (k + p) - pow k \/
+         nth 0 l i.-1 + (vecSumAux (drop i l)).2 =
+         - (2 * pow (k + p) - pow k).
+  by move: Hsum; split_Rabs; lra.
+case: H => HE; rewrite HE in Hrnd Hstep.
+- rewrite Hmid in Hrnd; split; first by rewrite Hrnd Rabs_pos_eq; lra.
+  by move: Hstep; rewrite Hrnd; split_Rabs; lra.
+rewrite Hmidn in Hrnd; split.
+  by rewrite Hrnd Rabs_Ropp Rabs_pos_eq; lra.
+by move: Hstep; rewrite Hrnd; split_Rabs; lra.
+Qed.
+
 (* ===========================================================================*)
 (*  Step *3 (doc/thm6.md 5.3): the VSEB part.                                 *)
 (*                                                                            *)

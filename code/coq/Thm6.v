@@ -1162,6 +1162,165 @@ case: (vecSum_err_case_of_violation Heven Hi Hf Hnz Hsort Hpair Hji Hej0
 by apply: Or33.
 Qed.
 
+
+(* The VecSum step at index [i], as reusable facts: the exact 2Sum            *)
+(* identity [s_i + e_{i+1} = x_i + s_{i+1}] and [s_i = RND(x_i +              *)
+(* s_{i+1})].  Both were derived inline inside                                *)
+(* [vecSum_pinning_of_violation]; the counting argument needs them at         *)
+(* other indices, so they are factored out here.                              *)
+Lemma vecSum_run_dwh (l : seq R) (i : nat) :
+  (i.+1 < size l)%N ->
+  (vecSumAux (drop i l)).2 =
+    dwh (TwoSum (nth 0 l i) (vecSumAux (drop i.+1 l)).2).
+Proof.
+move=> Hi.
+have iLl : (i < size l)%N by apply: ltn_trans (ltnSn i) Hi.
+have Hdne : (0 < size (drop i.+1 l))%N by rewrite size_drop subn_gt0.
+rewrite (drop_nth 0 iLl).
+case Hd0 : (drop i.+1 l) Hdne => [//|b0 l0] _.
+rewrite vecSumAux_cons; case E : (vecSumAux (b0 :: l0)) => [es s].
+by case: (TwoSum (nth 0 l i) s).
+Qed.
+
+Lemma vecSum_run_dwl (l : seq R) (i : nat) :
+  (i.+1 < size l)%N ->
+  nth 0 (vecSum l) i.+1 =
+    dwl (TwoSum (nth 0 l i) (vecSumAux (drop i.+1 l)).2).
+Proof.
+by move=> Hi; rewrite -(vecSumAux_nth1 Hi) /vecSum; case: (vecSumAux l).
+Qed.
+
+Lemma vecSum_run_step (l : seq R) (i : nat) :
+  (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (vecSumAux (drop i l)).2 + nth 0 (vecSum l) i.+1 =
+    nth 0 l i + (vecSumAux (drop i.+1 l)).2.
+Proof.
+move=> Hi Hf.
+have iLl : (i < size l)%N by apply: ltn_trans (ltnSn i) Hi.
+have Fc : format (nth 0 l i) by apply: Hf; apply: mem_nth.
+have Fs1 : format (vecSumAux (drop i.+1 l)).2.
+  have Hdf : {in drop i.+1 l, forall z, format z}
+    by move=> z /mem_drop; apply: Hf.
+  by have [F _] := format_vecSumAux Hdf.
+have Hcorr := TwoSum_correct_loc Fc Fs1.
+by rewrite (vecSum_run_dwl Hi) (vecSum_run_dwh Hi).
+Qed.
+
+Lemma vecSum_run_rnd (l : seq R) (i : nat) :
+  (i.+1 < size l)%N ->
+  (vecSumAux (drop i l)).2 =
+    RND (nth 0 l i + (vecSumAux (drop i.+1 l)).2).
+Proof. by move=> Hi; rewrite (vecSum_run_dwh Hi) TwoSum_hi. Qed.
+
+(* A running sum past the end of the list is [0]; contrapositive: a           *)
+(* nonzero running sum pins its index inside the list.  This is how the       *)
+(* draft's "[s_{i+2} <> 0]" turns into "in particular [i <= 3]".              *)
+Lemma vecSum_run_nz_lt_size (l : seq R) (i : nat) :
+  (vecSumAux (drop i l)).2 <> 0 -> (i < size l)%N.
+Proof.
+move=> Hnz; case: (leqP (size l) i) => [Hle|//].
+by case: Hnz; rewrite (drop_oversize Hle).
+Qed.
+
+(* At the last index the running sum IS the input.                            *)
+Lemma vecSum_run_last (l : seq R) (i : nat) :
+  size l = i.+1 -> (vecSumAux (drop i l)).2 = nth 0 l i.
+Proof.
+move=> Hsz.
+have iLl : (i < size l)%N by rewrite Hsz ltnSn.
+rewrite (drop_nth 0 iLl).
+have -> : drop i.+1 l = [::] by apply: drop_oversize; rewrite Hsz.
+by [].
+Qed.
+
+(* Draft 5.2, "so we must have s_{i+1} >= u": from [|s_i| >= 2u], the         *)
+(* input bound [|x_i| <= u - u^2] and the tail error [|e_{i+1}| <= u^2],      *)
+(* the exact step identity [s_{i+1} = s_i + e_{i+1} - x_i] leaves at          *)
+(* least [2u - u^2 - (u - u^2) = u].                                          *)
+Lemma vecSum_run_ge_next (l : seq R) (i : nat) (k : Z) :
+  (i.+2 < size l)%N -> {in l, forall z, format z} ->
+  2 * pow k <= Rabs (vecSumAux (drop i.+1 l)).2 ->
+  Rabs (nth 0 l i.+1) <= pow k - pow (k - p) ->
+  Rabs (nth 0 (vecSum l) i.+2) <= pow (k - p) ->
+  pow k <= Rabs (vecSumAux (drop i.+2 l)).2.
+Proof.
+move=> Hsz Hf Hs Hx He.
+have Hst := vecSum_run_step Hsz Hf.
+by move: Hst Hs Hx He; split_Rabs; lra.
+Qed.
+
+
+Lemma leq6_of_gt2 (n : nat) : (2 < n)%N -> (6 <= n.+3)%N.
+Proof. by case: n => [|[|[|n]]]. Qed.
+
+(* Draft 5.2, case [e_i = u], THE COUNTING: "so we must have                  *)
+(* s_{i+1} >= u with x_{i+1} < u, so s_{i+2} <> 0.  In particular,            *)
+(* i <= 3."  (Our [i] is the draft's [i-1], so the conclusion reads           *)
+(* [i <= 2].)  The running sum two steps on is still at least [u],            *)
+(* while every input from there on is below [u]; a running sum that has       *)
+(* run off the end of the list is [0], and one sitting at the very last       *)
+(* index IS that input -- either way it cannot reach [u].  So the list        *)
+(* must extend at least to [i+3], and [size l <= 6] caps [i].                 *)
+Lemma vecSum_right_of_i_count (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (size l <= 6)%N -> (i.+1 < size l)%N ->
+  {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  Rabs (nth 0 (vecSum l) i.+1) = pow k ->
+  (i <= 2)%N.
+Proof.
+move=> Heven Hsz6 Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol Heq.
+have Hpk := bpow_gt_0 beta k.
+have Hpkp := bpow_gt_0 beta (k - p).
+have Hlt2 : Rabs (nth 0 (vecSum l) i.+1) < 2 * pow k by rewrite Heq; lra.
+(* the draft's [s_i = 2u]                                                     *)
+have Hs1 : Rabs (vecSumAux (drop i.+1 l)).2 = 2 * pow k.
+  rewrite (vecSum_run_val_of_violation Heven Hi Hf Hnz Hsort Hpair Hji
+                                       Hej0 Huls Hviol Hlt2) Heq.
+  by lra.
+have [ix Hix Hxlt] :=
+  vecSum_inputs_lt_u_of_violation Hi Hf Hsort Hpair Hji Hej0 Huls Hviol.
+have Hi0 : (0 < i)%N by apply: leq_ltn_trans (leq0n ix) Hix.
+have Hpred : (i.-1.+2 = i.+1)%N by rewrite prednK.
+have Hixle : (ix <= i.-1)%N by rewrite -ltnS prednK.
+(* the list must reach i+2: otherwise s_{i+1} would BE x_{i+1} < u            *)
+have HA : (i.+2 < size l)%N.
+  case: (ltnP i.+2 (size l)) => [//|Hge].
+  have Hszeq : size l = i.+2 by apply/eqP; rewrite eqn_leq Hge Hi.
+  have Hx1 : Rabs (nth 0 l i.+1) < pow k.
+    have H := Hxlt i.-1 Hixle; rewrite Hpred in H.
+    by apply: H; rewrite Hszeq.
+  by move: Hs1; rewrite (vecSum_run_last Hszeq) => H2; move: Hx1; lra.
+(* the draft's [x_{i+1} <= u - u^2] and [|e_{i+2}| <= u^2]                    *)
+have Hx1 : Rabs (nth 0 l i.+1) < pow k.
+  have H := Hxlt i.-1 Hixle; rewrite Hpred in H; exact: H Hi.
+have Hx1p : Rabs (nth 0 l i.+1) <= pow k - pow (k - p).
+  have Fx : format (nth 0 l i.+1) by apply: Hf; apply: mem_nth.
+  by have := abs_le_pred_of_lt Fx Hx1.
+have [ie Hie Hetail] :=
+  vecSum_tail_err_le_u2_of_violation Heven Hi Hf Hnz Hsort Hpair Hji Hej0
+                                     Huls Hviol.
+have Hiele : (ie <= i.-1)%N by rewrite -ltnS prednK.
+have He2 : Rabs (nth 0 (vecSum l) i.+2) <= pow (k - p).
+  have H := Hetail i.-1 Hiele.
+  rewrite (_ : (i.-1.+2.+1 = i.+2)%N) in H; last by rewrite prednK.
+  exact: H HA.
+(* the draft's [s_{i+1} >= u]                                                 *)
+have Hs1' : 2 * pow k <= Rabs (vecSumAux (drop i.+1 l)).2
+  by rewrite Hs1; lra.
+have HB := vecSum_run_ge_next HA Hf Hs1' Hx1p He2.
+(* [i >= 3] would strand that running sum at or past the last index           *)
+rewrite leqNgt; apply/negP => Hi3.
+have H36 := leq6_of_gt2 Hi3.
+have Hszeq : size l = i.+3.
+  by apply/eqP; rewrite eqn_leq HA andbT; apply: leq_trans Hsz6 H36.
+have Hx2 : Rabs (nth 0 l i.+2) < pow k.
+  by apply: (Hxlt i (ltnW Hix)); rewrite Hszeq.
+by move: HB; rewrite (vecSum_run_last Hszeq); lra.
+Qed.
+
 (* ===========================================================================*)
 (*  Reduction of [vecSum_vsebMass] to two STATIC properties of the VecSum     *)
 (*  error sequence [E = vecSum l].  Both are verified true by exhaustive       *)

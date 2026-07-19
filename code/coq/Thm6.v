@@ -217,92 +217,6 @@ exists (pred beta fexp (2 * Rabs eps)); split.
 + by apply: pred_lt_id; rewrite H2; have := bpow_gt_0 beta (g + 1); lra.
 Qed.
 
-(* ===========================================================================*)
-(*  The VSEB block-mass invariant.                                            *)
-(*                                                                            *)
-(*  The engine of Theorem 2 is [vsebAux_head_lt_massU]: the first term VSEB   *)
-(*  emits from a nonzero remainder [eps] over a tail [l] has [|.| < 2 |eps|],  *)
-(*  needing ONLY the mass bound [sum|l| <= uls(eps)(1 - 2u)] -- NOT            *)
-(*  F-nonoverlap, and NOT any block-length bound (a VecSum output can emit     *)
-(*  over a long, mostly-zero tail; e.g. at [p = 4] a size-6 output emits with  *)
-(*  a 4-term tail, so [|l| + 2 <= p + 1] genuinely fails).  Paired with the    *)
-(*  always-true [2 |et| <= ulp(r)] ([magnitude_TwoSum]), P-nonoverlap of each  *)
-(*  emitted step follows.  [vsebMass] records exactly this mass obligation at  *)
-(*  every VSEB emit along the walk, so that [vseb] of any list satisfying it   *)
-(*  is P-nonoverlapping (the [vsebAux_Pnonoverlap_mass] driver below).  This   *)
-(*  is the interface the draft's Theorem-7 proof feeds: it is weaker than      *)
-(*  F-nonoverlap (the VecSum output is not F-nonoverlapping).  The [<= 6]      *)
-(*  bound and [p >= 4] enter through the per-emit mass bound (draft 5.3: the   *)
-(*  emitted-tail errors are [<= u^2] and there are "at most 3 of them").       *)
-(* ===========================================================================*)
-Fixpoint vsebMass (eps : R) (l : seq R) : Prop :=
-  match l with
-  | [::]    => True
-  | [:: _]  => True
-  | e :: l' =>
-      let: DWR r et := TwoSum eps e in
-      if Req_EM_T et 0 then vsebMass r l'
-      else sumRabs l' <= uls et * (1 - 2 * u) /\ vsebMass et l'
-  end.
-
-(* One-step unfolding (by reflexivity), exposing [TwoSum eps e] the way        *)
-(* [vsebAux_consS] does, so a following [case] captures it.                     *)
-Lemma vsebMass_consS eps e e2 l :
-  vsebMass eps [:: e, e2 & l] =
-  (let: DWR r et := TwoSum eps e in
-   if Req_EM_T et 0 then vsebMass r (e2 :: l)
-   else sumRabs (e2 :: l) <= uls et * (1 - 2 * u) /\ vsebMass et (e2 :: l)).
-Proof. by []. Qed.
-
-(* The driver: [vseb] of a list carrying the block-mass invariant is           *)
-(* P-nonoverlapping.  Same induction as [VSEB.vsebAux_Pnonoverlap], but the    *)
-(* emitted-head bound comes from [vsebAux_head_lt_mass] (mass) instead of      *)
-(* F-nonoverlap, and the invariant transported to the recursion is [vsebMass]. *)
-Lemma vsebAux_Pnonoverlap_mass eps l :
-  format eps -> {in l, forall z, format z} ->
-  vsebMass eps l -> Pnonoverlap (vsebAux eps l).
-Proof.
-elim: l eps => [|e l' IH] eps epsF lF Hm.
-  by move=> i; rewrite /= ltnS ltn0.
-have Fe : format e by apply: lF; rewrite inE eqxx.
-case: l' IH lF Hm => [|e2 l''] IH lF Hm.
-  (* Last step: [vsebAux eps [:: e] = [:: y0; y1]], [|y1| < ulp y0].           *)
-  rewrite vsebAux_1; case E1 : (TwoSum eps e) => [y0 y1].
-  move=> [|i] /= Hi; last by move: Hi; rewrite ltnS ltnS ltn0.
-  have Hmag := magnitude_TwoSum epsF Fe; rewrite E1 /= in Hmag.
-  case: (Req_dec y1 0) => [y10|y1n0]; first by left.
-  right.
-  have y0n0 : y0 <> 0.
-    by move=> y00; apply: y1n0; move: Hmag;
-       rewrite y00 ulp_FLX_0; split_Rabs; lra.
-  have Hy : 0 < ulp y0 by rewrite ulp_neq_0 //; apply: bpow_gt_0.
-  by lra.
-(* General step: [2Sum(eps, e) = (r, et)].                                    *)
-rewrite vsebAux_consS; case E1 : (TwoSum eps e) => [r et].
-have Hr : r = RND (eps + e) by have := TwoSum_hi eps e; rewrite E1.
-move: Hm; rewrite vsebMass_consS E1.
-case: (Req_EM_T et 0) => [et0|etn0] Hm.
-  (* [et = 0]: nothing emitted; carry [r] and recurse.                        *)
-  apply: IH => //.
-  - by rewrite Hr; apply: generic_format_round.
-  by move=> z zI; apply: lF; rewrite inE zI orbT.
-(* [et <> 0]: emit [r], recurse on the new remainder [et].                    *)
-have Fet : format et
-  by have H := format_TwoSum epsF Fe; rewrite E1 /= in H; case: H.
-have Fl' : {in e2 :: l'', forall z, format z}
-  by move=> z zI; apply: lF; rewrite inE zI orbT.
-case: Hm => Hmass Hmrec.
-have Hrec : Pnonoverlap (vsebAux et (e2 :: l'')) by apply: IH.
-move=> [|i] /= Hi.
-  right.
-  have Hulp : 2 * Rabs et <= ulp r.
-    by have Hmag := magnitude_TwoSum epsF Fe; rewrite E1 /= in Hmag; lra.
-  have Hnext : Rabs (nth 0 (vsebAux et (e2 :: l'')) 0) < 2 * Rabs et.
-    by apply: vsebAux_head_lt_massU.
-  by apply: (Rlt_le_trans _ _ _ Hnext Hulp).
-by apply: (Hrec i); move: Hi; rewrite ltnS.
-Qed.
-
 (* Paper core tool (doc/thm6.md 5.4): each VecSum error is at most half an     *)
 (* ulp of the running high word it is dropped from, [|e_{i+1}| <= 1/2 ulp(s_i)]*)
 (* -- directly [magnitude_TwoSum] on the step [2Sum(x_i, s_{i+1}) = (s_i,      *)
@@ -649,7 +563,7 @@ Qed.
 (* |e_{i'}| <= u^2]".  Each later error [e = dwl(2Sum(x, s))] with a small      *)
 (* input [|x| < u = pow k] has [|e| <= 2u ufp(x) <= 2u pow(k-1) = pow(k-p) =    *)
 (* u^2] ([vecSum_err_ufp] + [ufp_le_of_abs_lt]).  This is the block-mass        *)
-(* content feeding [suffMass]; it does NOT need the pinning.                    *)
+(* content feeding the block bound; it does NOT need the pinning.             *)
 Lemma vecSum_tail_err_le_u2_of_violation (l : seq R) (i j : nat) (k : Z) :
   ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
   (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
@@ -2016,189 +1930,98 @@ by apply: vseb_subcase_mass_lt Feps Fe Hl Ht0 Ht Hulp _ He Hmass _; lra.
 Qed.
 
 (* ===========================================================================*)
-(*  Reduction of [vecSum_vsebMass] to two STATIC properties of the VecSum     *)
-(*  error sequence [E = vecSum l].  Both are verified true by exhaustive       *)
-(*  [p = 4, 5, 6] simulation; each isolates one half of draft 5.2-5.3.        *)
+(*  THE ASSEMBLY (doc/thm6.md 5.3): the draft's own route to the theorem.     *)
 (*                                                                            *)
-(*   (A) [suffMass E]: every error's [uls] dominates the total mass of all    *)
-(*       LATER errors, with the [(1 - 2u)] margin.  This is the block-mass     *)
-(*       estimate (draft 5.3: the emitted-tail errors are tiny, "at most 3").  *)
-(*   (C) [ulsMono E]: [uls] is non-increasing along the nonzero errors.  Via  *)
-(*       [TwoSum_err_uls_ge] this lifts the tail-mass bound from [uls(e_k)] to *)
-(*       [uls(et)], the actual VSEB remainder.                                 *)
+(*  The draft proves P-nonoverlap by showing, at every emit of the VSEB walk, *)
+(*  that the NEXT emitted word falls below [ulp] of the one just emitted --   *)
+(*  and it gets there by bounding [|eps| + (mass of the errors still to come)]*)
+(*  by a float under that [ulp].  [vsebBlock] records exactly that per-emit   *)
+(*  obligation along the walk, and [vsebAux_Pnonoverlap_block] turns it into  *)
+(*  the conclusion.  Every 5.3 case lemma above produces such a bound, with   *)
+(*  [B = (1 - u) ulp(y_j)].                                                   *)
 (* ===========================================================================*)
 
-(* Each nonzero entry's [uls] bounds the mass of the strict suffix after it.  *)
-Definition suffMass (L : seq R) : Prop :=
-  forall k, (k < size L)%N -> nth 0 L k <> 0 ->
-    sumRabs (drop k.+1 L) <= uls (nth 0 L k) * (1 - 2 * u).
+Fixpoint vsebBlock (eps : R) (l : seq R) : Prop :=
+  match l with
+  | [::]    => True
+  | [:: _]  => True
+  | e :: l' =>
+      let: DWR r et := TwoSum eps e in
+      if Req_EM_T et 0 then vsebBlock r l'
+      else (exists B, [/\ format B,
+                          Rabs et + sumRabs l' <= B &
+                          B < ulp r])
+           /\ vsebBlock et l'
+  end.
 
-(* [uls] is non-increasing on the nonzero entries.                            *)
-Definition ulsMono (L : seq R) : Prop :=
-  forall i j, (i < j)%N -> (j < size L)%N ->
-    nth 0 L i <> 0 -> nth 0 L j <> 0 -> uls (nth 0 L j) <= uls (nth 0 L i).
+(* One-step unfolding (by reflexivity), as for [vsebAux_consS].               *)
+Lemma vsebBlock_consS eps e e2 l :
+  vsebBlock eps [:: e, e2 & l] =
+  (let: DWR r et := TwoSum eps e in
+   if Req_EM_T et 0 then vsebBlock r (e2 :: l)
+   else (exists B, [/\ format B,
+                       Rabs et + sumRabs (e2 :: l) <= B &
+                       B < ulp r])
+        /\ vsebBlock et (e2 :: l)).
+Proof. by []. Qed.
 
-(* A remainder [rho] whose [uls] dominates every nonzero entry of [L].        *)
-Definition dominates (rho : R) (L : seq R) : Prop :=
-  forall z, z \in L -> z <> 0 -> uls z <= uls rho.
-
-Lemma suffMass_cons e L :
-  suffMass (e :: L) -> (e <> 0 -> sumRabs L <= uls e * (1 - 2 * u)) /\ suffMass L.
+(* The driver: the per-emit float bound gives P-nonoverlap.  Same walk        *)
+(* induction as [vsebAux_Pnonoverlap_mass], with [vsebAux_head_leB]           *)
+(* supplying the emitted head bound instead of the mass machinery.            *)
+Lemma vsebAux_Pnonoverlap_block eps l :
+  format eps -> {in l, forall z, format z} ->
+  vsebBlock eps l -> Pnonoverlap (vsebAux eps l).
 Proof.
-move=> Hs; split=> [en0|k Hk kn0].
-  by have := Hs 0%N isT en0; rewrite drop1.
-by have := Hs k.+1 Hk kn0; rewrite -[drop _ (e :: L)]/(drop k.+1 L).
+elim: l eps => [|e l' IH] eps epsF lF Hb.
+  by move=> i; rewrite /= ltnS ltn0.
+have Fe : format e by apply: lF; rewrite inE eqxx.
+case: l' IH lF Hb => [|e2 l''] IH lF Hb.
+  rewrite vsebAux_1; case E1 : (TwoSum eps e) => [y0 y1].
+  move=> [|i] /= Hi; last by move: Hi; rewrite ltnS ltnS ltn0.
+  have Hmag := magnitude_TwoSum epsF Fe; rewrite E1 /= in Hmag.
+  case: (Req_dec y1 0) => [y10|y1n0]; first by left.
+  right.
+  have y0n0 : y0 <> 0.
+    by move=> y00; apply: y1n0; move: Hmag;
+       rewrite y00 ulp_FLX_0; split_Rabs; lra.
+  have Hy : 0 < ulp y0 by rewrite ulp_neq_0 //; apply: bpow_gt_0.
+  by lra.
+rewrite vsebAux_consS; case E1 : (TwoSum eps e) => [r et].
+have Hr : r = RND (eps + e) by have := TwoSum_hi eps e; rewrite E1.
+move: Hb; rewrite vsebBlock_consS E1.
+case: (Req_EM_T et 0) => [et0|etn0] Hb.
+  apply: IH => //.
+  - by rewrite Hr; apply: generic_format_round.
+  by move=> z zI; apply: lF; rewrite inE zI orbT.
+have Fet : format et
+  by have H := format_TwoSum epsF Fe; rewrite E1 /= in H; case: H.
+have Fl' : {in e2 :: l'', forall z, format z}
+  by move=> z zI; apply: lF; rewrite inE zI orbT.
+case: Hb => [[B [FB Hmass HB]] Hbrec].
+have Hrec : Pnonoverlap (vsebAux et (e2 :: l'')) by apply: IH.
+move=> [|i] /= Hi.
+  right.
+  have Hnext : Rabs (nth 0 (vsebAux et (e2 :: l'')) 0) <= B
+    by apply: vsebAux_head_leB.
+  by apply: (Rle_lt_trans _ _ _ Hnext HB).
+by apply: (Hrec i); move: Hi; rewrite ltnS.
 Qed.
 
-Lemma ulsMono_cons e L :
-  ulsMono (e :: L) -> ulsMono L /\ (e <> 0 -> dominates e L).
-Proof.
-move=> Hm; split=> [i j Hij Hj ni nj|en0 z /(nthP 0)[j Hj <-] nj].
-  by have := Hm i.+1 j.+1 Hij Hj ni nj.
-by have := Hm 0%N j.+1 isT Hj en0 nj.
-Qed.
-
-Lemma dominates_cons rho e L : dominates rho (e :: L) -> dominates rho L.
-Proof. by move=> Hd z zL; apply: Hd; rewrite inE zL orbT. Qed.
-
-(* The walk induction: [vsebMass rho L] follows from the two static facts on   *)
-(* [L] plus the running [uls]-domination invariant.  At an emit the tail mass  *)
-(* bound comes from [suffMass] and is lifted to [uls et] by                    *)
-(* [TwoSum_err_uls_ge] (needs [uls e <= uls rho], the invariant); the          *)
-(* invariant is transported to the new remainder by [ulsMono].                 *)
-Lemma vsebMass_gen rho L :
-  format rho -> {in L, forall z, format z} ->
-  (rho = 0 \/ dominates rho L) -> ulsMono L -> suffMass L ->
-  vsebMass rho L.
-Proof.
-elim: L rho => [|e L' IH] rho Frho FL Hdom HM HS; first by [].
-case: L' IH FL Hdom HM HS => [|e2 L''] IH FL Hdom HM HS; first by [].
-have Fe : format e by apply: FL; rewrite inE eqxx.
-have FL' : {in e2 :: L'', forall z, format z}
-  by move=> z zI; apply: FL; rewrite inE zI orbT.
-have [rF etF] : format (dwh (TwoSum rho e)) /\
-                format (dwl (TwoSum rho e)) by apply: format_TwoSum.
-have [HSe HSL'] := suffMass_cons HS.
-have [HML' Hdome] := ulsMono_cons HM.
-rewrite vsebMass_consS; case E : (TwoSum rho e) => [r et].
-rewrite E /= in rF etF.
-have Hc : dwh (TwoSum rho e) + dwl (TwoSum rho e) = rho + e
-  by exact: TwoSum_correct_loc Frho Fe.
-rewrite E /= in Hc.
-have Hr : r = RND (rho + e) by have := TwoSum_hi rho e; rewrite E.
-case: (Req_dec e 0) => [e0|en0].
-  have Eet : et = 0.
-    by have := dwl_TwoSum_r0 Frho; rewrite -e0 E /=.
-  have Er : r = rho.
-    by have := dwh_TwoSum_r0 Frho; rewrite -e0 E /=.
-  rewrite Eet Er; move: (Req_EM_T (0:R) 0); case=> [E0|E0]; last by case: E0.
-  rewrite [is_left _]/=.
-  apply: IH => //.
-  case: Hdom => [rho0|Hd]; [by left | by right; apply: dominates_cons Hd].
-move: (Req_EM_T et 0); case=> [et0|etn0]; rewrite [is_left _]/=.
-  have Hre : r = rho + e by move: Hc; rewrite et0 Rplus_0_r.
-  apply: IH => //.
-  case: (Req_dec r 0) => [r0|rn0]; first by left.
-  right => z zI zn0.
-  have Hze : uls z <= uls e by apply: Hdome.
-  have Hg_e : uls e = pow (cexp e + Z.of_nat (trZ (Ztrunc (mant e)))).
-    by rewrite /uls; case: Req_bool_spec => // e_0; case: en0.
-  have Him_e : is_imul e (uls e) by apply: uls_imul.
-  have Him_rho : is_imul rho (uls e).
-    case: (Req_dec rho 0) => [rho0|rhon0].
-      by rewrite rho0; exists 0%Z; rewrite Rmult_0_l.
-    have Hler : uls e <= uls rho.
-      case: Hdom => [rho0|Hd]; first by case: rhon0.
-      by apply: Hd; [rewrite inE eqxx | exact: en0].
-    have Hg_rho : uls rho = pow (cexp rho + Z.of_nat (trZ (Ztrunc (mant rho)))).
-      by rewrite /uls; case: Req_bool_spec => // rho_0; case: rhon0.
-    have Hle_exp : (cexp e + Z.of_nat (trZ (Ztrunc (mant e))) <=
-                    cexp rho + Z.of_nat (trZ (Ztrunc (mant rho))))%Z.
-      by apply: (le_bpow beta); rewrite -Hg_e -Hg_rho.
-    have := uls_imul Frho; rewrite Hg_rho => Him_rho0.
-    by rewrite Hg_e; apply: is_imul_pow_le Him_rho0 Hle_exp.
-  have Him_r : is_imul r (uls e) by rewrite Hre; apply: is_imul_add.
-  have Her : uls e <= uls r.
-    by rewrite Hg_e; apply: is_imul_uls_ge => //; rewrite -Hg_e; exact: Him_r.
-  apply: Rle_trans Hze Her.
-have rhon0 : rho <> 0.
-  move=> rho0; apply: etn0.
-  have Hre0 : r = e by rewrite Hr rho0 Rplus_0_l round_generic.
-  by move: Hc; rewrite Hre0 rho0 Rplus_0_l; lra.
-have Hler : uls e <= uls rho.
-  case: Hdom => [rho0|Hd]; first by case: rhon0.
-  by apply: Hd; [rewrite inE eqxx|exact: en0].
-have Huls_e_et : uls e <= uls et.
-  have H := TwoSum_err_uls_ge Frho Fe rhon0 en0 Hler.
-  by move: H; rewrite E /=; apply.
-have H12u : 0 <= 1 - 2 * u.
-  have -> : 2 * u = pow (1 - p) by rewrite /Fmore.u; lra.
-  have h1p : (1 - p <= 0)%Z by lia.
-  by have := bpow_le beta (1 - p) 0 h1p; rewrite (pow0E beta); lra.
-split; last first.
-  apply: IH => //.
-  right => z zI zn0.
-  apply: Rle_trans Huls_e_et.
-  by apply: (Hdome en0).
-apply: Rle_trans (HSe en0) _.
-by apply: Rmult_le_compat_r.
-Qed.
-
-(* (A) -- draft 5.3 block-mass estimate.  SIMULATION-verified (p = 4, 5, 6).  *)
-Lemma vecSum_suffMass (l : seq R) :
+(* THE remaining core: the VecSum error sequence satisfies the draft's        *)
+(* per-emit block bound.  This is exactly doc/thm6.md 5.2 + 5.3 -- the        *)
+(* *2 forcing (all of which is proved above) feeding the *3 case study        *)
+(* (whose four sub-cases and the [i_1 >= 4] case are proved above too;        *)
+(* what is missing is the [i_1 <= 3] case, the [|e_4| = |e_3|] index          *)
+(* argument, and the identification of [i_0] / [i_1] along the walk).         *)
+Lemma vecSum_vsebBlock (l : seq R) :
   ties_to_even choice ->
   (size l <= 6)%N ->
   {in l, forall z, format z} ->
   (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
   sorted_mag l -> pairwise_ulp l ->
-  suffMass (vecSum l).
+  vsebBlock (head 0 (vecSum l)) (behead (vecSum l)).
 Proof.
 Admitted.
-
-(* (C) -- [uls] non-increasing on the nonzero errors.  Immediate from         *)
-(* [vecSum_tail_le_uls] composed with [uls z <= |z|]: a later error is        *)
-(* bounded by [uls] of an earlier one, hence so is its own [uls].             *)
-Lemma vecSum_ulsMono (l : seq R) :
-  ties_to_even choice ->
-  (size l <= 6)%N ->
-  {in l, forall z, format z} ->
-  (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
-  sorted_mag l -> pairwise_ulp l ->
-  ulsMono (vecSum l).
-Proof.
-move=> Heven Hsz Hfmt Hnz Hsort Hpair i m Him Hm Hni Hnm.
-have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
-apply: Rle_trans (uls_le_abs _ Hnm) _; first by apply/HfV/mem_nth.
-exact: vecSum_tail_le_uls Heven Hfmt Hnz Hsort Hpair Him Hm Hni.
-Qed.
-
-(* ===========================================================================*)
-(*  THE HARD CORE (the draft's Theorem 7 proof, doc/thm6.md 5.2-5.3): the      *)
-(*  VecSum output supplies the block-mass invariant.  This is where steps      *)
-(*  *2 (the conditions forced by a violation) and *3 (the VSEB case study)     *)
-(*  live, and where the [<= 6] bound and [p >= 4] are consumed.                *)
-(* ===========================================================================*)
-Lemma vecSum_vsebMass (l : seq R) :
-  ties_to_even choice ->
-  (size l <= 6)%N ->
-  {in l, forall z, format z} ->
-  (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
-  sorted_mag l -> pairwise_ulp l ->
-  vsebMass (head 0 (vecSum l)) (behead (vecSum l)).
-Proof.
-move=> Heven Hsz Hfmt Hnz Hsort Hpair.
-have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
-have HA := vecSum_suffMass Heven Hsz Hfmt Hnz Hsort Hpair.
-have HC := vecSum_ulsMono Heven Hsz Hfmt Hnz Hsort Hpair.
-case E : (vecSum l) HfV HA HC => [|e0 L] HfV HA HC; first by [].
-have [_ HAL] := suffMass_cons HA.
-have [HCL Hdom] := ulsMono_cons HC.
-apply: vsebMass_gen => //.
-- by apply: HfV; rewrite inE eqxx.
-- by move=> z zL; apply: HfV; rewrite inE zL orbT.
-case: (Req_dec e0 0) => [->|e0n0]; first by left.
-by right; apply: Hdom.
-Qed.
 
 (* ===========================================================================*)
 (*  LAYER 2 (the draft's Theorem 7 proper): the ZERO-FREE case.               *)
@@ -2218,10 +2041,10 @@ Lemma vecSum_vseb_Pnonoverlap_nz (l : seq R) :
 Proof.
 move=> Heven Hsz Hfmt Hnz Hsort Hpair.
 have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
-have HM := vecSum_vsebMass Heven Hsz Hfmt Hnz Hsort Hpair.
+have HM := vecSum_vsebBlock Heven Hsz Hfmt Hnz Hsort Hpair.
 rewrite /vseb; case E : (vecSum l) HfV HM => [|e0 tl] HfV HM.
   by move=> i; rewrite /= ltn0.
-apply: vsebAux_Pnonoverlap_mass => //.
+apply: vsebAux_Pnonoverlap_block => //.
 - by apply: HfV; rewrite inE eqxx.
 by move=> z zI; apply: HfV; rewrite inE zI orbT.
 Qed.

@@ -1321,6 +1321,54 @@ have Hx2 : Rabs (nth 0 l i.+2) < pow k.
 by move: HB; rewrite (vecSum_run_last Hszeq); lra.
 Qed.
 
+
+(* ===========================================================================*)
+(*  Step *3 (doc/thm6.md 5.3): the VSEB part.                                 *)
+(*                                                                            *)
+(*  The draft fixes [i_0] with [y_j = r_{i_0-1}] (so [eps_{i_0} <> 0]), lets  *)
+(*  [i_1] the index of the first nonzero [e_i] after [e_{i_0}], normalises    *)
+(*  [uls(e_{i_0}) = u], and records the two opening facts                     *)
+(*  [|eps_{i_0}| >= u] and [ulp(y_j) >= 2 |eps_{i_0}|].  Every subsequent     *)
+(*  estimate then has the SAME shape: bound [|e_{i_1}|] by a multiple of      *)
+(*  [|eps_{i_0}|], add, and round.                                            *)
+(* ===========================================================================*)
+
+(* Rounding to nearest cannot escape a FORMAT bound: this is the step         *)
+(* left implicit in every 5.3 estimate ("so |r_{i_1-1}| <= 13/16              *)
+(* ulp(y_j)").  Monotonicity plus [RND] fixing [B] and [-B].                  *)
+Lemma abs_round_le (x B : R) :
+  format B -> Rabs x <= B -> Rabs (RND x) <= B.
+Proof.
+move=> FB Hx.
+have FnB : format (- B) by apply: generic_format_opp.
+have H1 : RND x <= B.
+  by rewrite -(round_generic beta fexp rnd _ FB); apply: round_le;
+     move: Hx; split_Rabs; lra.
+have H2 : - B <= RND x.
+  by rewrite -(round_generic beta fexp rnd _ FnB); apply: round_le;
+     move: Hx; split_Rabs; lra.
+by split_Rabs; lra.
+Qed.
+
+(* Draft 5.3, the recurring estimate.  With [ulp(y_j) >= 2|eps|] (the         *)
+(* opening fact) and [|e| <= c * |eps|], the next emitted word                *)
+(* [r = RND(eps + e)] obeys [|r| <= (1+c)/2 * ulp(y_j)].  Instantiating       *)
+(* [c] reproduces the draft's constants: [c = 5/8] gives the 13/16            *)
+(* bound, [c = 1/2] gives 3/4, [c = 1/4] gives 5/8.                           *)
+Lemma vseb_next_le (yj eps e : R) (c : R) :
+  2 * Rabs eps <= ulp yj ->
+  Rabs e <= c * Rabs eps ->
+  0 <= c ->
+  format ((1 + c) / 2 * ulp yj) ->
+  Rabs (RND (eps + e)) <= (1 + c) / 2 * ulp yj.
+Proof.
+move=> Hulp He Hc FB.
+apply: abs_round_le => //.
+have Habs : Rabs (eps + e) <= Rabs eps + Rabs e by apply: Rabs_triang.
+have Hpe : 0 <= Rabs eps by apply: Rabs_pos.
+by nra.
+Qed.
+
 (* ===========================================================================*)
 (*  Reduction of [vecSum_vsebMass] to two STATIC properties of the VecSum     *)
 (*  error sequence [E = vecSum l].  Both are verified true by exhaustive       *)

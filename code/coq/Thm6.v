@@ -1872,6 +1872,110 @@ have Hrec := sumRabs_le_count Hsz Hd Hall.
 by rewrite /=; lra.
 Qed.
 
+
+(* ---- 5.3, case [0 < e_{i_1} < 5/8 u] -----------------------------------*)
+
+(* [u] as a power of two, and the [p >= 4] consequence [u <= 1/16] that       *)
+(* every sub-case below needs.                                                *)
+Lemma uE_pow : u = pow (- p).
+Proof.
+have H2u : 2 * u = pow (1 - p) by rewrite /Fmore.u; lra.
+have H1p : pow (1 - p) = 2 * pow (- p).
+  have -> : (1 - p = 1 + - p)%Z by lia.
+  by rewrite bpow_plus bpow_1 /=; lra.
+by lra.
+Qed.
+
+Lemma u_le_inv16 : u <= / 16.
+Proof.
+have H16 : pow 4 = 16 by rewrite /= /Z.pow_pos /=; lra.
+have Hle : pow (- p) <= pow (-4) by apply: bpow_le; lia.
+have Hmul : pow 4 * pow (-4) = 1.
+  by rewrite -bpow_plus (_ : (4 + -4 = 0)%Z) ?(pow0E beta); [|lia].
+have H4 : 0 < pow (-4) by apply: bpow_gt_0.
+rewrite uE_pow; nra.
+Qed.
+
+(* The shape shared by the sub-cases of [0 < e_{i_1} < 5/8 u]: the head       *)
+(* pair contributes [(1+c)/2 ulp(y_j)] and the at most 3 later errors [d]     *)
+(* each, so as soon as [(1+c)/2 + 3d <= 1 - u] the FLOAT [(1-u) ulp(y_j)]     *)
+(* dominates the whole block and the emitted word lands below                 *)
+(* [ulp(y_j)].  Instantiating [c] and [d] reproduces the draft's cases.       *)
+Lemma vseb_subcase_lt (yj eps e : R) (l : seq R) (t c d : R) :
+  format eps -> format e -> {in l, forall z, format z} ->
+  0 < t -> t <= Rabs eps -> 2 * Rabs eps <= ulp yj ->
+  0 <= c -> Rabs e <= c * t ->
+  (size l <= 3)%N -> 0 <= d ->
+  (forall z, z \in l -> Rabs z <= d * ulp yj) ->
+  (1 + c) / 2 + 3 * d <= 1 - u ->
+  Rabs (nth 0 (vsebAux eps (e :: l)) 0) < ulp yj.
+Proof.
+move=> Feps Fe Hl Ht0 Ht Hulp Hc He Hsz Hd Hall Hbound.
+have Hu0 : 0 < u by apply: u_gt_0.
+have HU : 0 < ulp yj by lra.
+have HB : format ((1 - IZR 1 * u) * ulp yj).
+  by apply: format_1_sub_ku_ulp; move: pow2_ge_16; lia.
+apply: (vseb_head_lt_of_mass Feps _ HB).
+- by move=> z; rewrite inE => /orP[/eqP->|zl]; [|apply: Hl].
+- have Hd0 : 0 <= d * ulp yj by nra.
+  have Htail := sumRabs_le_count Hsz Hd0 Hall.
+  have H3 : INR 3 = 3 by rewrite /=; lra.
+  rewrite H3 in Htail.
+  have Hec : Rabs e <= c * Rabs eps by apply: Rle_trans He _; nra.
+  by rewrite /=; nra.
+by nra.
+Qed.
+
+(* Draft 5.3, sub-case [|e_{i_1}| > 1/2 u]: the tail errors are               *)
+(* [<= u^2 <= u/2 ulp(y_j)], and "we are adding at most 3 of them".           *)
+Lemma vseb_subcase_gt_half (yj eps e : R) (l : seq R) (t : R) :
+  format eps -> format e -> {in l, forall z, format z} ->
+  0 < t -> t <= Rabs eps -> 2 * Rabs eps <= ulp yj ->
+  Rabs e <= 5 / 8 * t ->
+  (size l <= 3)%N ->
+  (forall z, z \in l -> Rabs z <= / 2 * u * ulp yj) ->
+  Rabs (nth 0 (vsebAux eps (e :: l)) 0) < ulp yj.
+Proof.
+move=> Feps Fe Hl Ht0 Ht Hulp He Hsz Hall.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu16 := u_le_inv16.
+apply: vseb_subcase_lt Feps Fe Hl Ht0 Ht Hulp _ He Hsz _ Hall _; try lra.
+Qed.
+
+(* Draft 5.3, sub-case [|e_{i_1}| = 1/2 u]: same tail bound, one notch        *)
+(* tighter on the head pair.                                                  *)
+Lemma vseb_subcase_half (yj eps e : R) (l : seq R) (t : R) :
+  format eps -> format e -> {in l, forall z, format z} ->
+  0 < t -> t <= Rabs eps -> 2 * Rabs eps <= ulp yj ->
+  Rabs e <= / 2 * t ->
+  (size l <= 3)%N ->
+  (forall z, z \in l -> Rabs z <= / 2 * u * ulp yj) ->
+  Rabs (nth 0 (vsebAux eps (e :: l)) 0) < ulp yj.
+Proof.
+move=> Feps Fe Hl Ht0 Ht Hulp He Hsz Hall.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu16 := u_le_inv16.
+apply: vseb_subcase_lt Feps Fe Hl Ht0 Ht Hulp _ He Hsz _ Hall _; try lra.
+Qed.
+
+(* Draft 5.3, sub-case [1/2 u > |e_{i_1}|] and [|e_{i_1}| <> 1/4 u]: there    *)
+(* [uls(e_{i_1}) <= 1/8 u], so the tail errors are [<= 1/8 u <= 1/16          *)
+(* ulp(y_j)].  The count is exactly [3/4 + 3/16 = 15/16 <= 1 - u], tight      *)
+(* at [p = 4].                                                                *)
+Lemma vseb_subcase_lt_half (yj eps e : R) (l : seq R) (t : R) :
+  format eps -> format e -> {in l, forall z, format z} ->
+  0 < t -> t <= Rabs eps -> 2 * Rabs eps <= ulp yj ->
+  Rabs e <= / 2 * t ->
+  (size l <= 3)%N ->
+  (forall z, z \in l -> Rabs z <= / 16 * ulp yj) ->
+  Rabs (nth 0 (vsebAux eps (e :: l)) 0) < ulp yj.
+Proof.
+move=> Feps Fe Hl Ht0 Ht Hulp He Hsz Hall.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu16 := u_le_inv16.
+apply: vseb_subcase_lt Feps Fe Hl Ht0 Ht Hulp _ He Hsz _ Hall _; try lra.
+Qed.
+
 (* ===========================================================================*)
 (*  Reduction of [vecSum_vsebMass] to two STATIC properties of the VecSum     *)
 (*  error sequence [E = vecSum l].  Both are verified true by exhaustive       *)

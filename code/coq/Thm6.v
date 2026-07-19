@@ -2140,6 +2140,36 @@ apply: vsebBlock_obligation => //.
 by rewrite (sumRabs_eq0 Hall); nra.
 Qed.
 
+
+(* When the next step is EXACT the walk merges, and the block bound may       *)
+(* be taken on the COMBINED value [eps + e] rather than on                    *)
+(* [|eps| + |e|].  The draft needs exactly this in its [i_1 <= 3] case,       *)
+(* where [eps_{i_0} = -u] and [e_{i_1} >= 5/8 u] cancel down to               *)
+(* [|eps_{i_0} + e_{i_1}| <= 3/8 u] -- a bound the triangle inequality        *)
+(* cannot see.                                                                *)
+Lemma vsebAux_head_leB_merge (B eps e : R) (l : seq R) :
+  format eps -> format e -> {in l, forall z, format z} -> format B ->
+  dwl (TwoSum eps e) = 0 -> (0 < size l)%N ->
+  Rabs (eps + e) + sumRabs l <= B ->
+  Rabs (nth 0 (vsebAux eps (e :: l)) 0) <= B.
+Proof.
+move=> Feps Fe Hl FB Het0 Hl0 Hmass.
+case: l Hl0 Hl Hmass => [//|b l'] _ Hl Hmass.
+have Hc := TwoSum_correct_loc Feps Fe.
+have HF := format_TwoSum Feps Fe.
+rewrite vsebAux_consS.
+case E : (TwoSum eps e) => [r et].
+have Het : et = 0 by move: Het0; rewrite E.
+have Hc2 : r + et = eps + e by move: Hc; case: E => <- <-.
+have Fr : format r by move: HF; rewrite E; case.
+have Hr : r = eps + e by lra.
+rewrite Het.
+have Htrue : is_left (Req_EM_T (0:R) 0) = true.
+  by case: (Req_EM_T (0:R) 0) => [//|H]; case: (H erefl).
+rewrite Htrue.
+apply: vsebAux_head_leB => //.
+by rewrite Hr.
+Qed.
 (* The walk skips a run of zeros: this is how the draft's "let i_1 be the     *)
 (* index of the first e_i after e_{i_0} that is non-zero" is realised.        *)
 (* Iterates [VSEB.vsebAux_cons0].                                             *)

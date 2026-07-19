@@ -974,6 +974,48 @@ apply: is_imul_pow_le
 apply: Z.min_glb; rewrite /cexp /FLX_exp; [rewrite Hmx | ]; lia.
 Qed.
 
+
+(* Draft 5.2/5.3 workhorse: EVERY later error is bounded by the [uls]         *)
+(* of any earlier nonzero one.  This is the paper's repeated step             *)
+(* "[uls(e_i1)] <= 1/8 u, so [|e_{i1+1}|, ..., |e_5|] <= 1/8 u".              *)
+(* Proof: with [uls(e_j) = pow K], either [|e_m| < 5/8 pow K] and there       *)
+(* is nothing to do, or [|e_m|] reaches the violation threshold, the *2       *)
+(* pinning applies and fixes [|s_{m-1}| = pow(K+p)], so                       *)
+(* [ulp(s_{m-1}) = pow(K+1)] and the core tool                                *)
+(* [|e_m| <= 1/2 ulp(s_{m-1})] gives exactly [|e_m| <= pow K].  Note          *)
+(* [e_m] is NOT required to be nonzero, and no [size l <= 6] is needed.       *)
+Lemma vecSum_tail_le_uls (l : seq R) (j m : nat) :
+  ties_to_even choice ->
+  {in l, forall z, format z} ->
+  (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
+  sorted_mag l -> pairwise_ulp l ->
+  (j < m)%N -> (m < size (vecSum l))%N ->
+  nth 0 (vecSum l) j <> 0 ->
+  Rabs (nth 0 (vecSum l) m) <= uls (nth 0 (vecSum l) j).
+Proof.
+move=> Heven Hfmt Hnz Hsort Hpair Hjm Hm Hnj.
+have [K HK] := uls_pow Hnj.
+have HpK := bpow_gt_0 beta K.
+rewrite HK.
+case: m Hjm Hm => [//|m'] Hjm Hm.
+case: (Rle_lt_dec (5 / 8 * pow K) (Rabs (nth 0 (vecSum l) m'.+1))) =>
+      [Hviol|Hsmall]; last by lra.
+(* the violation case: the pinning fixes [ulp(s_{m-1})] exactly               *)
+have Hszl : (m'.+1 < size l)%N.
+  move: Hm; rewrite size_vecSum ltnS => Hm'.
+  have H0 : (0 < size l)%N by case: (size l) Hm'.
+  by rewrite -(prednK H0) ltnS.
+have Hji : (j <= m')%N by rewrite -ltnS.
+have [HRs _ _] :=
+  vecSum_pinning_of_violation Heven Hszl Hfmt Hnz Hsort Hpair Hji Hnj HK
+                              Hviol.
+have Hulp := vecSum_err_le_half_ulp_run Hszl Hfmt.
+rewrite (ulp_of_abs_pow HRs) in Hulp.
+have Hee : (K + p - p + 1 = K + 1)%Z by lia.
+rewrite Hee bpow_plus bpow_1 /= in Hulp.
+lra.
+Qed.
+
 (* ===========================================================================*)
 (*  Reduction of [vecSum_vsebMass] to two STATIC properties of the VecSum     *)
 (*  error sequence [E = vecSum l].  Both are verified true by exhaustive       *)
@@ -1114,16 +1156,9 @@ Lemma vecSum_suffMass (l : seq R) :
 Proof.
 Admitted.
 
-(* (C) -- [uls] non-increasing on the nonzero errors.  This does NOT          *)
-(* need the *3 case study: a FAILURE of [ulsMono] is itself a                 *)
-(* violation, which the *2 pinning then refutes.  If [uls(e_i) = pow k]       *)
-(* but [uls(e_m) > uls(e_i)] for some [i < m], then                           *)
-(* [uls(e_m) >= pow(k+1)], so [|e_m| >= uls(e_m) >= 2 pow k], well past       *)
-(* the [5/8 pow k] violation threshold.  So                                   *)
-(* [vecSum_pinning_of_violation] applies and pins [|s_{m-1}| =                *)
-(* pow(k+p)], whence [ulp(s_{m-1}) = pow(k+1) = 2 pow k]; but the core        *)
-(* tool [|e_m| <= 1/2 ulp(s_{m-1})] then caps [|e_m| <= pow k],               *)
-(* contradicting [|e_m| >= 2 pow k].                                          *)
+(* (C) -- [uls] non-increasing on the nonzero errors.  Immediate from         *)
+(* [vecSum_tail_le_uls] composed with [uls z <= |z|]: a later error is        *)
+(* bounded by [uls] of an earlier one, hence so is its own [uls].             *)
 Lemma vecSum_ulsMono (l : seq R) :
   ties_to_even choice ->
   (size l <= 6)%N ->
@@ -1134,33 +1169,8 @@ Lemma vecSum_ulsMono (l : seq R) :
 Proof.
 move=> Heven Hsz Hfmt Hnz Hsort Hpair i m Him Hm Hni Hnm.
 have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
-case: m Him Hm Hnm => [//|m'] Him Hm Hnm.
-(* the error index [m'.+1] sits inside [l] as well as [vecSum l]              *)
-have Hszl : (m'.+1 < size l)%N.
-  move: Hm; rewrite size_vecSum ltnS => Hm'.
-  have H0 : (0 < size l)%N by case: (size l) Hm'.
-  by rewrite -(prednK H0) ltnS.
-have [k Hk] := uls_pow Hni.
-apply: Rnot_lt_le => Hlt.
-have [k2 Hk2] := uls_pow Hnm.
-have Hkk : (k < k2)%Z by apply: (lt_bpow beta); rewrite -Hk -Hk2.
-have Fm : format (nth 0 (vecSum l) m'.+1) by apply/HfV/mem_nth.
-have Hpk := bpow_gt_0 beta k.
-have H2 : pow (k + 1) = 2 * pow k by rewrite bpow_plus bpow_1 /=; lra.
-(* the failure is a violation, with room to spare                             *)
-have Habs : pow (k + 1) <= Rabs (nth 0 (vecSum l) m'.+1).
-  apply: Rle_trans (uls_le_abs Fm Hnm).
-  by rewrite Hk2; apply: bpow_le; lia.
-have Hviol : 5 / 8 * pow k <= Rabs (nth 0 (vecSum l) m'.+1) by lra.
-have Hji : (i <= m')%N by rewrite -ltnS.
-have [HRs _ _] :=
-  vecSum_pinning_of_violation Heven Hszl Hfmt Hnz Hsort Hpair Hji Hni Hk
-                              Hviol.
-(* the pinned running sum has an exactly known [ulp], capping [|e_m|]         *)
-have Hulp := vecSum_err_le_half_ulp_run Hszl Hfmt.
-rewrite (ulp_of_abs_pow HRs) in Hulp.
-have Hee : (k + p - p + 1 = k + 1)%Z by lia.
-by rewrite Hee in Hulp; lra.
+apply: Rle_trans (uls_le_abs _ Hnm) _; first by apply/HfV/mem_nth.
+exact: vecSum_tail_le_uls Heven Hfmt Hnz Hsort Hpair Him Hm Hni.
 Qed.
 
 (* ===========================================================================*)

@@ -1392,6 +1392,168 @@ have H2 := vseb_emit_ulp_ge Feps Fe.
 by lra.
 Qed.
 
+
+(* [p >= 4] in the form the constant bounds need it: 13, 5 and 3 all fit      *)
+(* in [p] bits because [2^p >= 16].                                           *)
+Lemma pow2_ge_16 : (16 <= 2 ^ p)%Z.
+Proof.
+have -> : (16 = 2 ^ 4)%Z by [].
+by apply: Z.pow_le_mono_r; lia.
+Qed.
+
+(* A scaled integer with fewer than [p] bits is a float.                      *)
+Lemma format_mult_pow (m e : Z) :
+  (Z.abs m < 2 ^ p)%Z -> format (IZR m * pow e).
+Proof.
+move=> Hm.
+have Hp2p : pow p = IZR (2 ^ p) by rewrite -IZR_Zpower; [congr IZR|lia].
+apply: (@imul_format beta p Hp2 (IZR m * pow e) e (pow (p + e))).
+- by exists m.
+- rewrite Rabs_mult (Rabs_pos_eq (pow e)); last by apply: bpow_ge_0.
+  rewrite bpow_plus; apply: Rmult_le_compat_r; first by apply: bpow_ge_0.
+  by rewrite -abs_IZR Hp2p; apply: IZR_le; lia.
+by apply: Rle_refl.
+Qed.
+
+(* The draft's constants (13/16, 3/4, 5/8, 1-u, 1-2u) times an [ulp] are      *)
+(* floats: each is a short integer scaled by a power of two.                  *)
+Lemma format_frac_ulp (m e : Z) (y : R) :
+  (Z.abs m < 2 ^ p)%Z -> format (IZR m * pow e * ulp y).
+Proof.
+move=> Hm.
+case: (Req_dec y 0) => [->|yn0].
+  by rewrite ulp_FLX_0 Rmult_0_r; apply: generic_format_0.
+rewrite ulp_neq_0 // Rmult_assoc -bpow_plus.
+exact: format_mult_pow.
+Qed.
+
+(* Draft 5.3, the estimate in the form the case study actually uses: the      *)
+(* draft always bounds [|e_{i_1}|] by a multiple of [u] and then leans on     *)
+(* the opening fact [|eps_{i_0}| >= u].  Here [t] plays [u] (kept             *)
+(* symbolic), so [|e| <= c t <= c |eps|] and [vseb_next_le] applies.          *)
+Lemma vseb_next_le_uls (yj eps e t c : R) :
+  0 <= c -> t <= Rabs eps ->
+  2 * Rabs eps <= ulp yj ->
+  Rabs e <= c * t ->
+  format ((1 + c) / 2 * ulp yj) ->
+  Rabs (RND (eps + e)) <= (1 + c) / 2 * ulp yj.
+Proof.
+move=> Hc Ht Hulp He FB.
+apply: vseb_next_le => //.
+by apply: Rle_trans He _; apply: Rmult_le_compat_l.
+Qed.
+
+(* ---- the draft's five constants, instantiated ---------------------------*)
+
+(* "|eps_{i_0}| + |e_{i_1}| <= (1 + 5/8)|eps_{i_0}|, so                       *)
+(* |r_{i_1-1}| <= 13/16 ulp(y_j)"  (case 0 < e_{i_1} < 5/8 u).                *)
+Lemma vseb_next_13_16 (yj eps e t : R) :
+  t <= Rabs eps -> 2 * Rabs eps <= ulp yj -> Rabs e <= 5 / 8 * t ->
+  Rabs (RND (eps + e)) <= 13 / 16 * ulp yj.
+Proof.
+move=> Ht Hulp He.
+have -> : 13 / 16 * ulp yj = (1 + 5 / 8) / 2 * ulp yj by lra.
+apply: vseb_next_le_uls Ht Hulp He _; first by lra.
+have -> : (1 + 5 / 8) / 2 * ulp yj = IZR 13 * pow (- 4) * ulp yj.
+  by rewrite /= /Z.pow_pos /=; lra.
+by apply: format_frac_ulp; move: pow2_ge_16; rewrite /=; lia.
+Qed.
+
+(* "Case |e_{i_1}| = 1/2 u ... |r_{i_1-1}| <= 3/4 ulp(y_j)".                  *)
+Lemma vseb_next_3_4 (yj eps e t : R) :
+  t <= Rabs eps -> 2 * Rabs eps <= ulp yj -> Rabs e <= / 2 * t ->
+  Rabs (RND (eps + e)) <= 3 / 4 * ulp yj.
+Proof.
+move=> Ht Hulp He.
+have -> : 3 / 4 * ulp yj = (1 + / 2) / 2 * ulp yj by lra.
+apply: vseb_next_le_uls Ht Hulp He _; first by lra.
+have -> : (1 + / 2) / 2 * ulp yj = IZR 3 * pow (- 2) * ulp yj.
+  by rewrite /= /Z.pow_pos /=; lra.
+by apply: format_frac_ulp; move: pow2_ge_16; rewrite /=; lia.
+Qed.
+
+(* "Case |e_{i_1}| = 1/4 u.  Then |r_{i_1-1}| <= 5/8 ulp(y_j)".               *)
+Lemma vseb_next_5_8 (yj eps e t : R) :
+  t <= Rabs eps -> 2 * Rabs eps <= ulp yj -> Rabs e <= / 4 * t ->
+  Rabs (RND (eps + e)) <= 5 / 8 * ulp yj.
+Proof.
+move=> Ht Hulp He.
+have -> : 5 / 8 * ulp yj = (1 + / 4) / 2 * ulp yj by lra.
+apply: vseb_next_le_uls Ht Hulp He _; first by lra.
+have -> : (1 + / 4) / 2 * ulp yj = IZR 5 * pow (- 3) * ulp yj.
+  by rewrite /= /Z.pow_pos /=; lra.
+by apply: format_frac_ulp; move: pow2_ge_16; rewrite /=; lia.
+Qed.
+
+
+(* [1 - k u] times an [ulp] is a float ([= (2^p - k) * pow(-p) * ulp]);       *)
+(* this covers the draft's [1 - u] and [1 - 2u] bounds.                       *)
+Lemma format_1_sub_ku_ulp (k : Z) (y : R) :
+  (1 <= k)%Z -> (k < 2 ^ p)%Z -> format ((1 - IZR k * u) * ulp y).
+Proof.
+move=> Hk1 Hk2.
+have Hpp2 : pow p = IZR (2 ^ p) by rewrite -IZR_Zpower; [congr IZR|lia].
+have Hu : u = pow (- p).
+  have H2u : 2 * u = pow (1 - p) by rewrite /Fmore.u; lra.
+  have H1p : pow (1 - p) = 2 * pow (- p).
+    have -> : (1 - p = 1 + - p)%Z by lia.
+    by rewrite bpow_plus bpow_1 /=; lra.
+  by lra.
+have Hpm : pow p * pow (- p) = 1.
+  by rewrite -bpow_plus (_ : (p + - p = 0)%Z) ?(pow0E beta); [|lia].
+have -> : (1 - IZR k * u) * ulp y = IZR (2 ^ p - k) * pow (- p) * ulp y.
+  rewrite minus_IZR -Hpp2 Hu.
+  by rewrite -{1}Hpm; ring.
+by apply: format_frac_ulp; rewrite Z.abs_eq; lia.
+Qed.
+
+(* Draft 5.3, case [i_1 >= 4]: "[|eps_{i_0}| + |e_{i_1}| <=                   *)
+(* |eps_{i_0}| + (u - 2u^2) <= (2 - 2u)|eps_{i_0}|], so                       *)
+(* [|r_{i_1-1}| <= (1 - u) ulp(y_j)]".                                        *)
+Lemma vseb_next_1mu (yj eps e t : R) :
+  t <= Rabs eps -> 2 * Rabs eps <= ulp yj ->
+  Rabs e <= (1 - 2 * u) * t ->
+  Rabs (RND (eps + e)) <= (1 - u) * ulp yj.
+Proof.
+move=> Ht Hulp He.
+have Hu0 : 0 < u by apply: u_gt_0.
+have H12u : 0 <= 1 - 2 * u.
+  have -> : 2 * u = pow (1 - p) by rewrite /Fmore.u; lra.
+  have h1p : (1 - p <= 0)%Z by lia.
+  by have := bpow_le beta (1 - p) 0 h1p; rewrite (pow0E beta); lra.
+have -> : (1 - u) * ulp yj = (1 + (1 - 2 * u)) / 2 * ulp yj by lra.
+apply: vseb_next_le_uls Ht Hulp He _; first by lra.
+have -> : (1 + (1 - 2 * u)) / 2 * ulp yj = (1 - IZR 1 * u) * ulp yj.
+  by rewrite /=; lra.
+by apply: format_1_sub_ku_ulp; move: pow2_ge_16; lia.
+Qed.
+
+(* Draft 5.3, case [i_1 >= 4], sub-case [|e_{i_1}| <= u - 4u^2]: "then we     *)
+(* have the stronger estimate [|r_{i_1-1}| <= (1 - 2u) ulp(y_j)]".            *)
+Lemma vseb_next_1m2u (yj eps e t : R) :
+  t <= Rabs eps -> 2 * Rabs eps <= ulp yj ->
+  Rabs e <= (1 - 4 * u) * t ->
+  Rabs (RND (eps + e)) <= (1 - 2 * u) * ulp yj.
+Proof.
+move=> Ht Hulp He.
+have Hu0 : 0 < u by apply: u_gt_0.
+have H14u : 0 <= 1 - 4 * u.
+  have H4u : 4 * u = pow (2 - p).
+    have H2u : 2 * u = pow (1 - p) by rewrite /Fmore.u; lra.
+    have Hsp : pow (2 - p) = 2 * pow (1 - p).
+      have -> : (2 - p = 1 + (1 - p))%Z by lia.
+      by rewrite bpow_plus bpow_1 /=; lra.
+    by rewrite Hsp; lra.
+  rewrite H4u.
+  have h2p : (2 - p <= 0)%Z by lia.
+  by have := bpow_le beta (2 - p) 0 h2p; rewrite (pow0E beta); lra.
+have -> : (1 - 2 * u) * ulp yj = (1 + (1 - 4 * u)) / 2 * ulp yj by lra.
+apply: vseb_next_le_uls Ht Hulp He _; first by lra.
+have -> : (1 + (1 - 4 * u)) / 2 * ulp yj = (1 - IZR 2 * u) * ulp yj.
+  by rewrite /=; lra.
+by apply: format_1_sub_ku_ulp; move: pow2_ge_16; lia.
+Qed.
+
 (* ===========================================================================*)
 (*  Reduction of [vecSum_vsebMass] to two STATIC properties of the VecSum     *)
 (*  error sequence [E = vecSum l].  Both are verified true by exhaustive       *)

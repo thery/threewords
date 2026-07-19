@@ -391,6 +391,34 @@ have Hpg : Rabs x <= pred beta fexp (pow m) by apply: pred_ge_gt.
 by rewrite pred_bpow in Hpg; exact: Hpg.
 Qed.
 
+(* [uls] of a nonzero number is a power of two -- the form its                *)
+(* definition takes off the zero branch.  Lets a [uls] be named as            *)
+(* [pow k], which is how the whole *2 chain is parameterised.                 *)
+Lemma uls_pow (x : R) : x <> 0 -> exists k : Z, uls x = pow k.
+Proof.
+move=> xn0; rewrite /uls; case: Req_bool_spec => [x0|_]; first by case: xn0.
+by exists (cexp x + Z.of_nat (trZ (Ztrunc (mant x))))%Z.
+Qed.
+
+(* When [|x|] is exactly a power of two its [ulp] is pinned:                  *)
+(* [mag x = e + 1] so [cexp x = e - p + 1].  Turns the pinning                *)
+(* conclusion [|s_i| = pow(k+p)] into the exact [ulp(s_i) = pow(k+1)].        *)
+Lemma ulp_of_abs_pow (x : R) (e : Z) :
+  Rabs x = pow e -> ulp x = pow (e - p + 1).
+Proof.
+move=> Hx.
+have xn0 : x <> 0.
+  move=> x0; move: Hx; rewrite x0 Rabs_R0 => H.
+  by have := bpow_gt_0 beta e; lra.
+have Hmag : mag beta x = (e + 1)%Z :> Z.
+  apply: mag_unique; rewrite Hx; split.
+    have -> : (e + 1 - 1 = e)%Z by lia.
+    lra.
+  by apply: bpow_lt; lia.
+rewrite ulp_neq_0 // /cexp /FLX_exp Hmag.
+by congr bpow; lia.
+Qed.
+
 (* Draft 5.2, first step: a violation forces the preceding running sum large. *)
 (* If a VecSum error [e_{i+1}] reaches [5/8 uls(e_j)] (with [uls(e_j) = pow k])*)
 (* then [|s_i| >= 2^p uls(e_j) = pow(k+p)] -- the draft's [|s_{i-1}| >= 1].     *)
@@ -1086,7 +1114,16 @@ Lemma vecSum_suffMass (l : seq R) :
 Proof.
 Admitted.
 
-(* (C) -- [uls] non-increasing on the nonzero errors.  SIMULATION-verified.   *)
+(* (C) -- [uls] non-increasing on the nonzero errors.  This does NOT          *)
+(* need the *3 case study: a FAILURE of [ulsMono] is itself a                 *)
+(* violation, which the *2 pinning then refutes.  If [uls(e_i) = pow k]       *)
+(* but [uls(e_m) > uls(e_i)] for some [i < m], then                           *)
+(* [uls(e_m) >= pow(k+1)], so [|e_m| >= uls(e_m) >= 2 pow k], well past       *)
+(* the [5/8 pow k] violation threshold.  So                                   *)
+(* [vecSum_pinning_of_violation] applies and pins [|s_{m-1}| =                *)
+(* pow(k+p)], whence [ulp(s_{m-1}) = pow(k+1) = 2 pow k]; but the core        *)
+(* tool [|e_m| <= 1/2 ulp(s_{m-1})] then caps [|e_m| <= pow k],               *)
+(* contradicting [|e_m| >= 2 pow k].                                          *)
 Lemma vecSum_ulsMono (l : seq R) :
   ties_to_even choice ->
   (size l <= 6)%N ->
@@ -1095,7 +1132,36 @@ Lemma vecSum_ulsMono (l : seq R) :
   sorted_mag l -> pairwise_ulp l ->
   ulsMono (vecSum l).
 Proof.
-Admitted.
+move=> Heven Hsz Hfmt Hnz Hsort Hpair i m Him Hm Hni Hnm.
+have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
+case: m Him Hm Hnm => [//|m'] Him Hm Hnm.
+(* the error index [m'.+1] sits inside [l] as well as [vecSum l]              *)
+have Hszl : (m'.+1 < size l)%N.
+  move: Hm; rewrite size_vecSum ltnS => Hm'.
+  have H0 : (0 < size l)%N by case: (size l) Hm'.
+  by rewrite -(prednK H0) ltnS.
+have [k Hk] := uls_pow Hni.
+apply: Rnot_lt_le => Hlt.
+have [k2 Hk2] := uls_pow Hnm.
+have Hkk : (k < k2)%Z by apply: (lt_bpow beta); rewrite -Hk -Hk2.
+have Fm : format (nth 0 (vecSum l) m'.+1) by apply/HfV/mem_nth.
+have Hpk := bpow_gt_0 beta k.
+have H2 : pow (k + 1) = 2 * pow k by rewrite bpow_plus bpow_1 /=; lra.
+(* the failure is a violation, with room to spare                             *)
+have Habs : pow (k + 1) <= Rabs (nth 0 (vecSum l) m'.+1).
+  apply: Rle_trans (uls_le_abs Fm Hnm).
+  by rewrite Hk2; apply: bpow_le; lia.
+have Hviol : 5 / 8 * pow k <= Rabs (nth 0 (vecSum l) m'.+1) by lra.
+have Hji : (i <= m')%N by rewrite -ltnS.
+have [HRs _ _] :=
+  vecSum_pinning_of_violation Heven Hszl Hfmt Hnz Hsort Hpair Hji Hni Hk
+                              Hviol.
+(* the pinned running sum has an exactly known [ulp], capping [|e_m|]         *)
+have Hulp := vecSum_err_le_half_ulp_run Hszl Hfmt.
+rewrite (ulp_of_abs_pow HRs) in Hulp.
+have Hee : (k + p - p + 1 = k + 1)%Z by lia.
+by rewrite Hee in Hulp; lra.
+Qed.
 
 (* ===========================================================================*)
 (*  THE HARD CORE (the draft's Theorem 7 proof, doc/thm6.md 5.2-5.3): the      *)

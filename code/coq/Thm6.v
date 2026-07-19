@@ -1333,23 +1333,6 @@ Qed.
 (*  [|eps_{i_0}|], add, and round.                                            *)
 (* ===========================================================================*)
 
-(* Rounding to nearest cannot escape a FORMAT bound: this is the step         *)
-(* left implicit in every 5.3 estimate ("so |r_{i_1-1}| <= 13/16              *)
-(* ulp(y_j)").  Monotonicity plus [RND] fixing [B] and [-B].                  *)
-Lemma abs_round_le (x B : R) :
-  format B -> Rabs x <= B -> Rabs (RND x) <= B.
-Proof.
-move=> FB Hx.
-have FnB : format (- B) by apply: generic_format_opp.
-have H1 : RND x <= B.
-  by rewrite -(round_generic beta fexp rnd _ FB); apply: round_le;
-     move: Hx; split_Rabs; lra.
-have H2 : - B <= RND x.
-  by rewrite -(round_generic beta fexp rnd _ FnB); apply: round_le;
-     move: Hx; split_Rabs; lra.
-by split_Rabs; lra.
-Qed.
-
 (* Draft 5.3, the recurring estimate.  With [ulp(y_j) >= 2|eps|] (the         *)
 (* opening fact) and [|e| <= c * |eps|], the next emitted word                *)
 (* [r = RND(eps + e)] obeys [|r| <= (1+c)/2 * ulp(y_j)].  Instantiating       *)
@@ -1363,10 +1346,50 @@ Lemma vseb_next_le (yj eps e : R) (c : R) :
   Rabs (RND (eps + e)) <= (1 + c) / 2 * ulp yj.
 Proof.
 move=> Hulp He Hc FB.
-apply: abs_round_le => //.
+apply: Rabs_round_le_r => //.
 have Habs : Rabs (eps + e) <= Rabs eps + Rabs e by apply: Rabs_triang.
 have Hpe : 0 <= Rabs eps by apply: Rabs_pos.
 by nra.
+Qed.
+
+
+(* Draft 5.3 opening, first fact: "[|eps_{i_0}| >= u]".  Scale-free, with     *)
+(* the draft's normalisation [uls(e_{i_0}) = u] kept symbolic: the emitted    *)
+(* remainder has [uls] at least that of the error consumed                    *)
+(* ([TwoSum_err_uls_ge]), and [uls] is below the absolute value.              *)
+Lemma vseb_emit_abs_ge (eps e : R) :
+  format eps -> format e -> eps <> 0 -> e <> 0 ->
+  uls e <= uls eps -> dwl (TwoSum eps e) <> 0 ->
+  uls e <= Rabs (dwl (TwoSum eps e)).
+Proof.
+move=> Feps Fe epsn0 en0 Hle Hn0.
+apply: Rle_trans (TwoSum_err_uls_ge Feps Fe epsn0 en0 Hle Hn0) _.
+apply: uls_le_abs; last exact: Hn0.
+have := format_TwoSum Feps Fe.
+by case: (TwoSum eps e) => r et /= [_ Fet].
+Qed.
+
+(* Draft 5.3 opening, second fact: "[ulp(y_j) >= 2 |eps_{i_0}|]".  This is    *)
+(* just the 2Sum magnitude property [|err| <= ulp(hi)/2].                     *)
+Lemma vseb_emit_ulp_ge (eps e : R) :
+  format eps -> format e ->
+  2 * Rabs (dwl (TwoSum eps e)) <= ulp (dwh (TwoSum eps e)).
+Proof.
+move=> Feps Fe.
+have := magnitude_TwoSum Feps Fe.
+by case: (TwoSum eps e) => r et /=; lra.
+Qed.
+
+(* Draft 5.3 opening, combined: "[ulp(y_j) >= 2|eps_{i_0}| >= 2u]".           *)
+Lemma vseb_emit_ulp_ge_uls (eps e : R) :
+  format eps -> format e -> eps <> 0 -> e <> 0 ->
+  uls e <= uls eps -> dwl (TwoSum eps e) <> 0 ->
+  2 * uls e <= ulp (dwh (TwoSum eps e)).
+Proof.
+move=> Feps Fe epsn0 en0 Hle Hn0.
+have H1 := vseb_emit_abs_ge Feps Fe epsn0 en0 Hle Hn0.
+have H2 := vseb_emit_ulp_ge Feps Fe.
+by lra.
 Qed.
 
 (* ===========================================================================*)

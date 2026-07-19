@@ -1896,6 +1896,30 @@ have H4 : 0 < pow (-4) by apply: bpow_gt_0.
 rewrite uE_pow; nra.
 Qed.
 
+(* The sub-case shape at the level the draft actually argues at: what         *)
+(* matters is the total MASS [M ulp(y_j)] of the errors after                 *)
+(* [e_{i_1}], however it was obtained.  Three of the four sub-cases get       *)
+(* it by counting ([M = 3d]); the [1/4 u] one needs the draft's sharper       *)
+(* [|e_5| <= uls(e_4)] step, which only changes [M].                          *)
+Lemma vseb_subcase_mass_lt (yj eps e : R) (l : seq R) (t c M : R) :
+  format eps -> format e -> {in l, forall z, format z} ->
+  0 < t -> t <= Rabs eps -> 2 * Rabs eps <= ulp yj ->
+  0 <= c -> Rabs e <= c * t ->
+  sumRabs l <= M * ulp yj ->
+  (1 + c) / 2 + M <= 1 - u ->
+  Rabs (nth 0 (vsebAux eps (e :: l)) 0) < ulp yj.
+Proof.
+move=> Feps Fe Hl Ht0 Ht Hulp Hc He Hmass Hbound.
+have Hu0 : 0 < u by apply: u_gt_0.
+have HU : 0 < ulp yj by lra.
+have HB : format ((1 - IZR 1 * u) * ulp yj).
+  by apply: format_1_sub_ku_ulp; move: pow2_ge_16; lia.
+apply: (vseb_head_lt_of_mass Feps _ HB).
+- by move=> z; rewrite inE => /orP[/eqP->|zl]; [|apply: Hl].
+- have Hec : Rabs e <= c * Rabs eps by apply: Rle_trans He _; nra.
+  by rewrite /=; nra.
+by nra.
+Qed.
 (* The shape shared by the sub-cases of [0 < e_{i_1} < 5/8 u]: the head       *)
 (* pair contributes [(1+c)/2 ulp(y_j)] and the at most 3 later errors [d]     *)
 (* each, so as soon as [(1+c)/2 + 3d <= 1 - u] the FLOAT [(1-u) ulp(y_j)]     *)
@@ -1911,19 +1935,14 @@ Lemma vseb_subcase_lt (yj eps e : R) (l : seq R) (t c d : R) :
   Rabs (nth 0 (vsebAux eps (e :: l)) 0) < ulp yj.
 Proof.
 move=> Feps Fe Hl Ht0 Ht Hulp Hc He Hsz Hd Hall Hbound.
-have Hu0 : 0 < u by apply: u_gt_0.
 have HU : 0 < ulp yj by lra.
-have HB : format ((1 - IZR 1 * u) * ulp yj).
-  by apply: format_1_sub_ku_ulp; move: pow2_ge_16; lia.
-apply: (vseb_head_lt_of_mass Feps _ HB).
-- by move=> z; rewrite inE => /orP[/eqP->|zl]; [|apply: Hl].
-- have Hd0 : 0 <= d * ulp yj by nra.
-  have Htail := sumRabs_le_count Hsz Hd0 Hall.
-  have H3 : INR 3 = 3 by rewrite /=; lra.
-  rewrite H3 in Htail.
-  have Hec : Rabs e <= c * Rabs eps by apply: Rle_trans He _; nra.
-  by rewrite /=; nra.
-by nra.
+have Hd0 : 0 <= d * ulp yj by nra.
+have Htail := sumRabs_le_count Hsz Hd0 Hall.
+have H3 : INR 3 = 3 by rewrite /=; lra.
+rewrite H3 in Htail.
+have Hmass : sumRabs l <= (3 * d) * ulp yj by lra.
+apply: (vseb_subcase_mass_lt Feps Fe Hl Ht0 Ht Hulp Hc He Hmass).
+by lra.
 Qed.
 
 (* Draft 5.3, sub-case [|e_{i_1}| > 1/2 u]: the tail errors are               *)
@@ -1974,6 +1993,26 @@ move=> Feps Fe Hl Ht0 Ht Hulp He Hsz Hall.
 have Hu0 : 0 < u by apply: u_gt_0.
 have Hu16 := u_le_inv16.
 apply: vseb_subcase_lt Feps Fe Hl Ht0 Ht Hulp _ He Hsz _ Hall _; try lra.
+Qed.
+
+
+(* Draft 5.3, sub-case [|e_{i_1}| = 1/4 u].  Counting alone does NOT          *)
+(* close here: [5/8 + 3*(1/8) = 1] exactly.  The draft repairs it with        *)
+(* "we can not have |e_4| = |e_3| ... so |e_5| <= uls(e_4) <= 1/16            *)
+(* ulp(y_j)", i.e. the last of the three is half the size, giving a tail      *)
+(* mass of [1/8 + 1/8 + 1/16 = 5/16] and the total [5/8 + 5/16 = 15/16].      *)
+(* The refined tail mass is taken as a hypothesis: establishing it is         *)
+(* the draft's index-level argument about positions 3, 4 and 5.               *)
+Lemma vseb_subcase_quarter (yj eps e : R) (l : seq R) (t : R) :
+  format eps -> format e -> {in l, forall z, format z} ->
+  0 < t -> t <= Rabs eps -> 2 * Rabs eps <= ulp yj ->
+  Rabs e <= / 4 * t ->
+  sumRabs l <= 5 / 16 * ulp yj ->
+  Rabs (nth 0 (vsebAux eps (e :: l)) 0) < ulp yj.
+Proof.
+move=> Feps Fe Hl Ht0 Ht Hulp He Hmass.
+have Hu16 := u_le_inv16.
+by apply: vseb_subcase_mass_lt Feps Fe Hl Ht0 Ht Hulp _ He Hmass _; lra.
 Qed.
 
 (* ===========================================================================*)

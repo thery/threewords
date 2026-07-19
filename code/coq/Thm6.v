@@ -795,7 +795,9 @@ Lemma interval_pin_rest (a b c d : R) (K : Z) :
   is_imul a (pow (K + 1)) -> Rabs a = pow (K + p) ->
   Rabs c <= pow (K + p) - pow K -> Rabs d <= pow (K + 1) ->
   a + b = c + d -> 5 / 8 * pow K <= Rabs b -> Rabs b <= / 2 * ulp a ->
-  Rabs c = pow (K + p) - pow K /\ pow K <= Rabs d.
+  [/\ Rabs c = pow (K + p) - pow K,
+      pow K <= Rabs d &
+      Rabs (d - b) = pow K ].
 Proof.
 move=> Heven Fc Hr Hai Hae Hcl Hdl Hi Hbl Hbh.
 have HG : 0 < pow K by apply: bpow_gt_0.
@@ -858,8 +860,11 @@ case: (Rle_lt_dec 0 a) => Ha0.
   have Hcval : c = pow (K + p) - pow K
     by rewrite Hmc Hmceq minus_IZR -Hpp2 HAG; ring.
   have Hdval : d = b + pow K by lra.
-  split; first by rewrite Rabs_pos_eq //; lra.
-  by rewrite Rabs_pos_eq; rewrite Hdval; move: Hbpos; lra.
+  have Hdb : d - b = pow K by rewrite Hdval; ring.
+  split.
+  - by rewrite Rabs_pos_eq //; lra.
+  - by rewrite Rabs_pos_eq; rewrite Hdval; move: Hbpos; lra.
+  by rewrite Hdb Rabs_pos_eq //; lra.
 have HaA : a = - pow (K + p) by move: Hae; rewrite (Rabs_left _ Ha0); lra.
 have FnAG : format (- (pow (K + p) - pow K)) by apply: generic_format_opp.
 have Hnb := Hnear _ FnAG.
@@ -880,9 +885,12 @@ have Hmceq : mc = (- (2 ^ p - 1))%Z by lia.
 have Hcval : c = - (pow (K + p) - pow K)
   by rewrite Hmc Hmceq opp_IZR minus_IZR -Hpp2 HAG; ring.
 have Hdval : d = b - pow K by lra.
-split; first by rewrite (Rabs_left _ Hcneg) Hcval; lra.
+have Hdb : d - b = - pow K by rewrite Hdval; ring.
 have Hdneg : d < 0 by rewrite Hdval; move: Hbneg; lra.
-by rewrite (Rabs_left _ Hdneg) Hdval; move: Hbneg; lra.
+split.
+- by rewrite (Rabs_left _ Hcneg) Hcval; lra.
+- by rewrite (Rabs_left _ Hdneg) Hdval; move: Hbneg; lra.
+by rewrite Hdb Rabs_Ropp Rabs_pos_eq //; lra.
 Qed.
 
 Lemma interval_pin (a b c d : R) (K : Z) :
@@ -892,12 +900,13 @@ Lemma interval_pin (a b c d : R) (K : Z) :
   Rabs c <= pow (K + p) - pow K -> Rabs d <= pow (K + 1) ->
   a + b = c + d -> 5 / 8 * pow K <= Rabs b -> Rabs b <= / 2 * ulp a ->
   [/\ Rabs a = pow (K + p),
-      Rabs c = pow (K + p) - pow K &
-      pow K <= Rabs d ].
+      Rabs c = pow (K + p) - pow K,
+      pow K <= Rabs d &
+      Rabs (d - b) = pow K ].
 Proof.
 move=> Heven Fc Hr Hai Hge Hcl Hdl Hi Hbl Hbh.
 have HRa := interval_pin_abs Heven Fc Hr Hai Hge Hcl Hdl Hi Hbl Hbh.
-have [HC HD] := interval_pin_rest Heven Fc Hr Hai HRa Hcl Hdl Hi Hbl Hbh.
+have [HC HD HDB] := interval_pin_rest Heven Fc Hr Hai HRa Hcl Hdl Hi Hbl Hbh.
 by split.
 Qed.
 
@@ -908,8 +917,11 @@ Lemma vecSum_pinning_of_violation (l : seq R) (i j : nat) (k : Z) :
   nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
   5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
   [/\ Rabs (vecSumAux (drop i l)).2 = pow (k + p),
-      Rabs (nth 0 l i) = pow (k + p) - pow k &
-      is_imul (nth 0 (vecSum l) i.+1) (pow (k - p + 1)) ].
+      Rabs (nth 0 l i) = pow (k + p) - pow k,
+      is_imul (nth 0 (vecSum l) i.+1) (pow (k - p + 1)),
+      pow k <= Rabs (vecSumAux (drop i.+1 l)).2 &
+      (* the draft's "[s_i = u + e_i]", in signed form                        *)
+      Rabs ((vecSumAux (drop i.+1 l)).2 - nth 0 (vecSum l) i.+1) = pow k ].
 Proof.
 move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
 have iLl : (i < size l)%N by apply: ltn_trans (ltnSn i) Hi.
@@ -952,7 +964,7 @@ have Hid : (vecSumAux (drop i l)).2 + nth 0 (vecSum l) i.+1 =
 have Ha_rnd : (vecSumAux (drop i l)).2 =
               RND (nth 0 l i + (vecSumAux (drop i.+1 l)).2)
   by rewrite Hsdwh TwoSum_hi.
-have [HRs HRc HDd] :=
+have [HRs HRc HDd HDB] :=
   interval_pin Heven Fc Ha_rnd Ha_imul Ha_ge Hc_le Hd_le Hid Hviol Hb_hi.
 split=> //.
 (* [2u^2 | e_{i+1}]: the 2Sum error is a multiple of                           *)
@@ -1077,7 +1089,7 @@ Lemma vecSum_err_case_of_violation (l : seq R) (i j : nat) (k : Z) :
       Rabs (nth 0 (vecSum l) i.+1) <= pow k - 2 * pow (k - p + 1) ].
 Proof.
 move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
-have [_ _ Him] :=
+have [_ _ Him _ _] :=
   vecSum_pinning_of_violation Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls
                               Hviol.
 have H0 : (0 < size l)%N by case: (size l) Hi.
@@ -1086,6 +1098,68 @@ have Hle := vecSum_tail_le_uls Heven Hf Hnz Hsort Hpair (leq_ltn_trans Hji
                                (ltnSn i)) Hsz Hej0.
 rewrite Huls in Hle.
 exact: imul_case_split Him Hle.
+Qed.
+
+
+(* If [s] sits at signed distance exactly [G] from [e], is itself at          *)
+(* least [G] away from 0, and [e] is smaller than [2G], then [s] lies on      *)
+(* the FAR side of [e]: [|s| = |e| + G].  (The near side would put [s]        *)
+(* strictly inside [(-G, G)], contradicting [G <= |s|].)  This is what        *)
+(* turns the draft's [s_i = u + e_i] into its per-case values.                *)
+Lemma abs_pin_add (s e G : R) :
+  Rabs (s - e) = G -> G <= Rabs s -> 0 < Rabs e -> Rabs e < 2 * G ->
+  Rabs s = Rabs e + G.
+Proof. by move=> Hse Hsg He0 He2; move: Hse Hsg He0 He2; split_Rabs; lra. Qed.
+
+(* Draft 5.2, "[s_i = u + e_i]": at a violation, as soon as the error         *)
+(* stays below [2u] the running sum is pushed to [|e_i| + u].  Both of        *)
+(* the draft's named cases ([e_i = u] and [e_i = u - 2u^2]) satisfy that      *)
+(* bound, so this one lemma yields both of their [s_i] values.                *)
+Lemma vecSum_run_val_of_violation (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  Rabs (nth 0 (vecSum l) i.+1) < 2 * pow k ->
+  Rabs (vecSumAux (drop i.+1 l)).2 =
+    Rabs (nth 0 (vecSum l) i.+1) + pow k.
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol Hlt.
+have Hpk := bpow_gt_0 beta k.
+have [_ _ _ HDd HDB] :=
+  vecSum_pinning_of_violation Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls
+                              Hviol.
+by apply: abs_pin_add HDB HDd _ Hlt; lra.
+Qed.
+
+(* Draft 5.2 "at the right of i", COMPLETE: the three cases together          *)
+(* with the running-sum value each forces.  Cases 1 and 2 are the             *)
+(* draft's [e_i = u, s_i = 2u] and [e_i = u - 2u^2, s_i = 2u - 2u^2];         *)
+(* case 3 is its [e_i <= u - 4u^2] remainder.                                 *)
+Lemma vecSum_right_of_i_cases (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  [\/ Rabs (nth 0 (vecSum l) i.+1) = pow k /\
+      Rabs (vecSumAux (drop i.+1 l)).2 = 2 * pow k,
+      Rabs (nth 0 (vecSum l) i.+1) = pow k - pow (k - p + 1) /\
+      Rabs (vecSumAux (drop i.+1 l)).2 = 2 * pow k - pow (k - p + 1) |
+      Rabs (nth 0 (vecSum l) i.+1) <= pow k - 2 * pow (k - p + 1) ].
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
+have Hpk := bpow_gt_0 beta k.
+have Hg : pow (k - p + 1) < pow k by apply: bpow_lt; lia.
+have Hgp := bpow_gt_0 beta (k - p + 1).
+have Hval := vecSum_run_val_of_violation Heven Hi Hf Hnz Hsort Hpair Hji
+                                         Hej0 Huls Hviol.
+case: (vecSum_err_case_of_violation Heven Hi Hf Hnz Hsort Hpair Hji Hej0
+                                    Huls Hviol) => [He|He|He].
+- by apply: Or31; split=> //; rewrite Hval ?He; lra.
+- by apply: Or32; split=> //; rewrite Hval ?He; lra.
+by apply: Or33.
 Qed.
 
 (* ===========================================================================*)

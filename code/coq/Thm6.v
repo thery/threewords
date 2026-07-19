@@ -2008,6 +2008,45 @@ by apply: (Hrec i); move: Hi; rewrite ltnS.
 Qed.
 
 
+
+(* ---- carrying the draft's normalisation along the walk -----------------*)
+
+(* [uls] is non-increasing along the nonzero VecSum errors.  (I had this      *)
+(* as [vecSum_ulsMono] and deleted it with the scaffolding in PR #97 --       *)
+(* wrongly: it is not scaffolding, it is what lets the draft's                *)
+(* normalisation [uls(e_{i_0}) = u] survive from one emit to the next.)       *)
+(* Immediate from [vecSum_tail_le_uls] and [uls z <= |z|].                    *)
+Lemma vecSum_uls_le (l : seq R) (i m : nat) :
+  ties_to_even choice -> {in l, forall z, format z} ->
+  (forall k, (k < size l)%N -> nth 0 l k <> 0) ->
+  sorted_mag l -> pairwise_ulp l ->
+  (i < m)%N -> (m < size (vecSum l))%N ->
+  nth 0 (vecSum l) i <> 0 -> nth 0 (vecSum l) m <> 0 ->
+  uls (nth 0 (vecSum l) m) <= uls (nth 0 (vecSum l) i).
+Proof.
+move=> Heven Hfmt Hnz Hsort Hpair Him Hm Hni Hnm.
+have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
+apply: Rle_trans (uls_le_abs _ Hnm) _; first by apply/HfV/mem_nth.
+exact: vecSum_tail_le_uls Heven Hfmt Hnz Hsort Hpair Him Hm Hni.
+Qed.
+
+(* An emit carries the domination forward: if every error still to come       *)
+(* is no coarser than the one just consumed, then it is no coarser than       *)
+(* the new remainder either, because the 2Sum error inherits the [uls] of     *)
+(* what it came from ([TwoSum_err_uls_ge]).  This is what keeps               *)
+(* [vseb_emit_abs_ge]'s hypothesis available at every emit of the walk,       *)
+(* hence the [t <= |eps|] that all the 5.3 case lemmas need.                  *)
+Lemma vseb_emit_dom (eps e : R) (l : seq R) :
+  format eps -> format e -> eps <> 0 -> e <> 0 ->
+  uls e <= uls eps ->
+  (forall z, z \in l -> z <> 0 -> uls z <= uls e) ->
+  dwl (TwoSum eps e) <> 0 ->
+  forall z, z \in l -> z <> 0 -> uls z <= uls (dwl (TwoSum eps e)).
+Proof.
+move=> Feps Fe epsn0 en0 Hle Hdom Hn0 z zl zn0.
+apply: Rle_trans (Hdom z zl zn0) _.
+exact: TwoSum_err_uls_ge Feps Fe epsn0 en0 Hle Hn0.
+Qed.
 (* A MERGE step costs nothing.  If the whole remaining block fits under       *)
 (* [(1-2u)|eps|] then, after absorbing the next term [a] exactly into the     *)
 (* remainder, what is left still fits under [(1-2u)|eps + a|]: the            *)

@@ -1151,6 +1151,19 @@ Qed.
 (* input bound [|x_i| <= u - u^2] and the tail error [|e_{i+1}| <= u^2],      *)
 (* the exact step identity [s_{i+1} = s_i + e_{i+1} - x_i] leaves at          *)
 (* least [2u - u^2 - (u - u^2) = u].                                          *)
+Lemma vecSum_run_ge_next_gen (l : seq R) (i : nat) (k : Z) (S : R) :
+  (i.+2 < size l)%N -> {in l, forall z, format z} ->
+  S <= Rabs (vecSumAux (drop i.+1 l)).2 ->
+  Rabs (nth 0 l i.+1) <= pow k - pow (k - p) ->
+  Rabs (nth 0 (vecSum l) i.+2) <= pow (k - p) ->
+  S - pow k <= Rabs (vecSumAux (drop i.+2 l)).2.
+Proof.
+move=> Hsz Hf Hs Hx He.
+have Hst := vecSum_run_step Hsz Hf.
+by move: Hst Hs Hx He; split_Rabs; lra.
+Qed.
+
+(* The draft's [e_i = u] instance: [s_i = 2u] leaves [s_{i+1} >= u].          *)
 Lemma vecSum_run_ge_next (l : seq R) (i : nat) (k : Z) :
   (i.+2 < size l)%N -> {in l, forall z, format z} ->
   2 * pow k <= Rabs (vecSumAux (drop i.+1 l)).2 ->
@@ -1159,8 +1172,25 @@ Lemma vecSum_run_ge_next (l : seq R) (i : nat) (k : Z) :
   pow k <= Rabs (vecSumAux (drop i.+2 l)).2.
 Proof.
 move=> Hsz Hf Hs Hx He.
-have Hst := vecSum_run_step Hsz Hf.
-by move: Hst Hs Hx He; split_Rabs; lra.
+have H := vecSum_run_ge_next_gen Hsz Hf Hs Hx He.
+by lra.
+Qed.
+
+(* The draft's [e_i = u - 2u^2] instance: [s_i = 2u - 2u^2] leaves only       *)
+(* [s_{i+1} >= u - 2u^2].  That is BELOW the [u - u^2] ceiling on the next    *)
+(* input, which is exactly why the draft's conclusion in this case is the     *)
+(* weaker "either there is no more non-zero e_{i'} or i <= 3" rather than     *)
+(* the outright [i <= 3] of the [e_i = u] case.                               *)
+Lemma vecSum_run_ge_next_1m2u (l : seq R) (i : nat) (k : Z) :
+  (i.+2 < size l)%N -> {in l, forall z, format z} ->
+  2 * pow k - pow (k - p + 1) <= Rabs (vecSumAux (drop i.+1 l)).2 ->
+  Rabs (nth 0 l i.+1) <= pow k - pow (k - p) ->
+  Rabs (nth 0 (vecSum l) i.+2) <= pow (k - p) ->
+  pow k - pow (k - p + 1) <= Rabs (vecSumAux (drop i.+2 l)).2.
+Proof.
+move=> Hsz Hf Hs Hx He.
+have H := vecSum_run_ge_next_gen Hsz Hf Hs Hx He.
+by lra.
 Qed.
 
 

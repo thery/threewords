@@ -137,6 +137,10 @@ case: (IH ll1 d) => // [z2 z2Icl|].
 by move=> ll1F dF; apply: ll1F.
 Qed.
 
+(* The head of the output IS the final running sum [s_0].                     *)
+Lemma vecSum_nth0 l : nth 0 (vecSum l) 0 = (vecSumAux l).2.
+Proof. by rewrite /vecSum; case: (vecSumAux l). Qed.
+
 Lemma vecSumAux_cons a b l :
   vecSumAux [::a, b & l] =
   let '(es, s) := vecSumAux (b :: l) in 

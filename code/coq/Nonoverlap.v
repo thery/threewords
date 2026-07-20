@@ -3,7 +3,7 @@
 (* split out of [addition.v]: P-nonoverlapping (Priest, Def. 1), magnitude    *)
 (* order [sorted_mag], and the pairwise-ulp separation, with their head/tail  *)
 (* manipulation lemmas.  Generic over the precision [p] and minimal exponent  *)
-(* [emin]; binary64 is fixed only in [addition.v].                            *)
+(* binary64 is fixed only in [addition.v].                                   *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -575,7 +575,7 @@ lra.
 Qed.
 
 (* A P-nonoverlap list whose head is 0 sums to 0: a zero limb forces its      *)
-(* nonzero-float successors below [2^emin], hence to 0.                       *)
+(* nonzero-float successors below [ulp 0 = 0], hence to 0.                   *)
 Lemma small_head_zero l : Pnonoverlap l -> {in l, forall z, format z} ->
   nth 0 l 0 = 0 -> sumR l = 0.
 Proof.
@@ -631,7 +631,7 @@ apply: Rle_trans (Rabs_triang _ _) _.
 nra.
 Qed.
 
-(* A zero limb propagates: its successor is below [2^emin], hence 0.          *)
+(* A zero limb propagates: its successor is below [ulp 0 = 0], hence 0.      *)
 Lemma nth_step_zero l i : Pnonoverlap l -> {in l, forall z, format z} ->
   nth 0 l i = 0 -> nth 0 l i.+1 = 0.
 Proof.
@@ -641,50 +641,6 @@ have := Pl i Hlt => -[//|Hb].
 by move: Hb; rewrite Hi ulp_FLX_0; split_Rabs; lra.
 Qed.
 
-(* 
-(* VSEB block sum bound (Theorem 2): the terms after the remainder [prev]     *)
-(* contribute at most [uls prev] in total, decaying geometrically.  Each      *)
-(* nonzero head [x] has [|x| <= 1/2 uls prev] and [uls x <= |x|], so          *)
-(* [|x| + (tail bound relative to uls x)] telescopes to [uls prev(1 - 2^-s)]. *)
-(* Every FLT float is an integer multiple of the smallest quantum [pow emin]  *)
-(* ([cexp z >= emin]).                                                        *)
-Lemma is_imul_pow_emin z : format z -> is_imul z (pow emin).
-Proof.
-move=> zF; apply: (is_imul_pow_le (format_imul_cexp zF)).
-by rewrite /cexp /FLT_exp; lia.
-Qed.
-
-(* Hence a sum of absolute values is a multiple of [pow emin].                *)
-Lemma sumRabs_imul l :
-  {in l, forall z, format z} -> is_imul (sumRabs l) (pow emin).
-Proof.
-elim: l => /= [_|a l IH lF]; first by exists 0%Z; rewrite Rmult_0_l.
-apply: is_imul_add; last by apply: IH => z zl; apply: lF; rewrite inE zl orbT.
-have Fa : format a by apply: lF; rewrite inE eqxx.
-have [az|az] := Rle_dec 0 a.
-  by rewrite Rabs_pos_eq //; apply: is_imul_pow_emin.
-by rewrite Rabs_left; [apply/is_imul_opp/is_imul_pow_emin|lra].
-Qed.
-
-(* A nonnegative multiple of [pow emin] that is [< pow N] is [<= pow N - pow  *)
-(* emin] (the largest such multiple): the near-underflow block bound.         *)
-Lemma sumRabs_lt_le N l :
-  {in l, forall z, format z} -> (emin <= N)%Z -> sumRabs l < pow N ->
-  sumRabs l <= pow N - pow emin.
-Proof.
-move=> lF HN Hlt; have [k Hk] := sumRabs_imul lF; rewrite Hk in Hlt *.
-have He : 0 < pow emin by apply: bpow_gt_0.
-have HNe : pow N = IZR (2 ^ (N - emin)) * pow emin.
-  have -> : (2 = radix2 :> Z)%Z by [].
-  by rewrite IZR_Zpower; [rewrite -bpow_plus; congr bpow; lia | lia].
-have Hklt : IZR k < IZR (2 ^ (N - emin)).
-  by apply: (Rmult_lt_reg_r (pow emin)); [exact: He | rewrite -HNe].
-have Hkle : (k <= 2 ^ (N - emin) - 1)%Z by have := lt_IZR _ _ Hklt; lia.
-rewrite HNe; apply: Rle_trans (_ : IZR (2 ^ (N - emin) - 1) * pow emin <= _).
-  by apply: Rmult_le_compat_r; [lra | apply: IZR_le].
-by rewrite minus_IZR; lra.
-Qed.
-*)
 
 Lemma Fnonoverlap_aux_sumRabs prev l :
   Fnonoverlap_aux prev l -> {in l, forall z, format z} ->
@@ -738,27 +694,11 @@ Qed.
 (* ===========================================================================*)
 
 (* Paper representation: [x = M * 2^(k-p+1)] with [|M| < 2^p], [M] an integer *)
-(* and the exponent [k] chosen (not necessarily canonical).  We also require  *)
-(* [emin <= k - p + 1] so that [x] genuinely lands on the FLT grid -- without *)
-(* it [x = 2^(emin-1)] (M = 1, k = emin+p-2) satisfies the equation but is not*)
-(* a float.  The paper's x_i are floats, so this is the intended reading.     *)
+(* and the exponent [k] chosen (not necessarily canonical).  Under FLX every *)
+(* such [M * 2^(k-p+1)] with [|M| < 2^p] IS a float, so no side condition on  *)
+(* the exponent is needed -- the FLT reading had to require [emin <= k-p+1].  *)
 
 
-(* 
-(* A nonzero P-nonoverlap successor forces the predecessor from underflow:    *)
-(* [|y| < ulp x] with [y] a nonzero float gives [emin <= mag x - p] (otherwise*)
-(* [ulp x = 2^emin], and [|y| < 2^emin] would force [y = 0]).                 *)
-Lemma nu_of_lt_ulp x y : format y -> y <> 0 -> Rabs y < ulp x ->
-  (emin <= mag beta x - p)%Z.
-Proof.
-move=> Fy yn0 Hlt.
-have Hemin : bpow beta emin <= Rabs y := alpha_lB Fy yn0.
-have xn0 : x <> 0 by move=> xz; move: Hlt; rewrite xz ulp_FLT_0; lra.
-move: Hlt; rewrite ulp_neq_0 // /cexp /FLT_exp => Hlt.
-have Hb : bpow beta emin < bpow beta (Z.max (mag beta x - p) emin) by lra.
-by move: (lt_bpow _ _ _ Hb); lia.
-Qed.
-*)
 
 
 

@@ -1,7 +1,7 @@
 (* ---------------------------------------------------------------------------*)
 (* Algorithm 5 (VecSumErrBranch, VSEB) and the paper's Theorem 2 (its output  *)
 (* is P-nonoverlapping).  A general round-to-nearest building block, generic  *)
-(* over the precision [p] and minimal exponent [emin] (binary64 is fixed      *)
+(* over the precision [p] alone -- FLX (binary64 is fixed only in            *)
 (* only in [addition.v]); built on [TwoSum] and [Nonoverlap].                 *)
 (* ---------------------------------------------------------------------------*)
 
@@ -342,7 +342,7 @@ have [HM|HM] := Rle_lt_or_eq_dec _ _ Hae.
        rewrite /FLX_exp; lia.
   + rewrite H2 pred_bpow.
     have Hlow : pow (fexp (g + 1)) <= Rabs eps - sumRabs l.
-      rewrite -HM /fexp /FLT_exp.
+      rewrite -HM /fexp /FLX_exp.
       have Hle : pow (g + 1 - p) <= pow (g - Z.of_nat (size l)).
         by apply: bpow_le; lia.
       have Hs2 : sumRabs l <= uls eps - pow (g - Z.of_nat (size l)).

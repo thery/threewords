@@ -21,9 +21,9 @@ Unset Printing Implicit Defensive.
 
 Section Uls.
 
-(* Generic over the precision [p] and minimal exponent [emin]: the specific   *)
-(* binary64 values (p = 53, emin = -1074) are fixed only in [addition.v], so  *)
-(* these lemmas are reusable at any FLT format.  Radix is binary ([trP]/[trZ] *)
+(* Generic over the precision [p]: the binary64 value (p = 53) is fixed only  *)
+(* in [addition.v], so these lemmas are reusable at any FLX format.  Radix is *)
+(* binary ([trP]/[trZ]                                                       *)
 (* are 2-adic valuations).                                                    *)
 Variable p : Z.
 Context { prec_gt_0 : Prec_gt_0 p }.

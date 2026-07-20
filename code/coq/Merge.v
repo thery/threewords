@@ -3,7 +3,7 @@
 (* properties: it preserves format, size and exact sum, and (for [Merge] of   *)
 (* the six triple-word limbs) yields a magnitude-sorted, pairwise-ulp         *)
 (* separated sequence -- the two preconditions of paper Theorem 6.  Generic   *)
-(* over [p]/[emin]; built on [Nonoverlap].                                    *)
+(* over [p]; built on [Nonoverlap].                                          *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.

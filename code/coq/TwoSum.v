@@ -3,7 +3,7 @@
 (* exactness, the format and half-ulp magnitude of its two words, and that    *)
 (* its low word (the error) lands on the coarse input grid ([is_imul]).  A    *)
 (* general round-to-nearest building block, generic over the precision [p]    *)
-(* and minimal exponent [emin] (binary64 is fixed only in [addition.v]);      *)
+(* (binary64 is fixed only in [addition.v]);                                 *)
 (* built on [Uls] and imported by the triple-word development.                *)
 (* ---------------------------------------------------------------------------*)
 
@@ -24,8 +24,8 @@ Unset Printing Implicit Defensive.
 
 Section Sec2Sum.
 
-(* Generic over precision [p] and minimal exponent [emin]; [2Sum] needs       *)
-(* [1 < p] and [emin <= 0] (for Flocq's [TwoSum_correct]).                    *)
+(* Generic over the precision [p]; [2Sum] needs [1 < p] (for Flocq's         *)
+(* [TwoSum_correct]).                                                        *)
 Variable p : Z.
 Hypothesis Hp2 : (1 < p)%Z.
 
@@ -242,7 +242,7 @@ apply: generic_format_F2R => _.
 exact: Hce.
 Qed.
 
-(* [cexp] is monotone on the nonnegatives ([mag] is, and [FLT_exp] is).       *)
+(* [cexp] is monotone on the nonnegatives ([mag] is, and [FLX_exp] is).       *)
 Lemma cexp_le_pos x y : 0 < x -> x <= y -> (cexp x <= cexp y)%Z.
 Proof.
 move=> x_gt0 xLy.

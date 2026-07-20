@@ -1,7 +1,7 @@
 (* ---------------------------------------------------------------------------*)
 (* Algorithm 4 (VecSum) and the paper's Theorem 1 (its output is              *)
 (* F-nonoverlapping).  A general round-to-nearest building block, generic     *)
-(* over the precision [p] and minimal exponent [emin] (binary64 is fixed      *)
+(* over the precision [p] alone -- FLX (binary64 is fixed only in            *)
 (* only in [addition.v]); built on [TwoSum] and [Nonoverlap].                 *)
 (* ---------------------------------------------------------------------------*)
 
@@ -267,9 +267,9 @@ Qed.
 Definition repr (k : Z) (x : R) : Prop :=
   exists2 M : Z, (Z.abs M < 2 ^ p)%Z & x = IZR M * pow (k - p + 1)%Z.
 
-(* Being [repr]-esentable at [k] makes [x] an FLT float: it is [F2R] of the   *)
-(* integer float [Float M (k-p+1)], whose mantissa is < 2^p and whose exponent*)
-(* is >= emin.                                                                *)
+(* Being [repr]-esentable at [k] makes [x] a float: it is [F2R] of the       *)
+(* integer float [Float M (k-p+1)], whose mantissa is < 2^p (under FLX there  *)
+(* is no constraint on the exponent).                                        *)
 Lemma repr_format k x : repr k x -> format x.
 Proof.
 move=> [M Mlt ->].
@@ -455,7 +455,7 @@ have Hz : Rabs (x + s) < pow (e0 + 2).
 have Hulp : ulp (x + s) <= pow (e0 + 2 - p).
   have [z0|z0] := Req_dec (x + s) 0.
     by rewrite z0 ulp_FLX_0; apply: bpow_ge_0.
-  rewrite ulp_neq_0 //; apply: bpow_le; rewrite /cexp /FLT_exp.
+  rewrite ulp_neq_0 //; apply: bpow_le; rewrite /cexp /FLX_exp.
   have Hm : (mag beta (x + s) <= e0 + 2)%Z by apply: mag_le_bpow.
   by rewrite /fexp; lia.
 apply: (Rle_trans _ (/ 2 * ulp (x + s))).
@@ -737,8 +737,8 @@ Qed.
 (* never two in a row.  This is what [sorted_mag] + [pairwise_ulp] provide and*)
 (* what [Merge] guarantees on the six merged terms.  The two-step strict drop *)
 (* is only required at nonzero entries: in a [sorted_mag] list the zeros are  *)
-(* trailing, and near the underflow floor a strict drop through a zero cannot *)
-(* be met (e.g. [[2^emin; 0; 0]]), so the guard keeps the hypothesis true.    *)
+(* trailing, and a strict drop through a zero cannot be met at all under FLX  *)
+(* ([ulp 0 = 0]), so the guard keeps the hypothesis true.                    *)
 Definition Thm1_hyp_wk (k : nat -> Z) (l : seq R) : Prop :=
   [/\ (forall i, (i < size l)%N -> repr (k i) (nth 0 l i)),
       (forall i, (i.+1 < size l)%N -> (k i.+1 <= k i)%Z) &
@@ -749,7 +749,7 @@ Definition Thm1_hyp_wk (k : nat -> Z) (l : seq R) : Prop :=
 
 (* Converse of [repr_format] at the canonical exponent: a nonzero float is    *)
 (* [repr] at [cexp x + p - 1] (so [k - p + 1 = cexp x]), with mantissa        *)
-(* [Ztrunc (mant x)] (bounded by [2^p] and [>= emin] by the FLT format).      *)
+(* [Ztrunc (mant x)] (bounded by [2^p] by the format).                       *)
 Lemma repr_canonical x : format x -> x <> 0 -> repr (cexp x + p - 1) x.
 Proof.
 move=> xF xn0.
@@ -774,8 +774,7 @@ by apply/Rabs_eq_R0; have := Rabs_pos (nth 0 l i.+1); lra.
 Qed.
 
 (* If [y] is nonzero and strictly below [ulp x], then its canonical exponent  *)
-(* is strictly below [x]'s.  (When [cexp x = emin], [|y| < ulp x = 2^emin] is *)
-(* impossible for a nonzero float, by [alpha_lB].)                            *)
+(* is strictly below [x]'s.                                                  *)
 Lemma cexp_lt_ulp {x y : R} : format y -> x <> 0 -> y <> 0 ->
   Rabs y < ulp x -> (cexp y < cexp x)%Z.
 Proof.
@@ -826,7 +825,7 @@ Qed.
 
 (* PIECE 1: build the relaxed exponent map from the concrete hypotheses.  Take*)
 (* [k i := cexp (nth 0 l i) + p - 1] on nonzero entries (so [repr] holds via  *)
-(* [repr_canonical]) and [k i := emin + p - 1] on zeros.  [sorted_mag] gives  *)
+(* [repr_canonical]) and any fixed value on zeros.  [sorted_mag] gives       *)
 (* [cexp] non-increasing ([cexp_le]) hence [k i.+1 <= k i]; [pairwise_ulp]    *)
 (* gives [cexp (nth i.+2) < cexp (nth i)] ([cexp_lt_ulp]) hence the two-step  *)
 (* strict drop.  The two-step drop is only claimed at nonzero entries (zeros  *)

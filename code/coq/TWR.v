@@ -3,7 +3,7 @@
 (* P-nonoverlapping.  The record, its projectors [tw0]/[tw1]/[tw2] and value  *)
 (* [TWval], the predicate [isTW], the list view [TW2l], and that an [isTW] is *)
 (* magnitude-sorted / P-nonoverlapping / made of floats.  Generic over the    *)
-(* precision [p] and minimal exponent [emin]; built on [Nonoverlap].          *)
+(* precision [p]; built on [Nonoverlap].                                     *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.

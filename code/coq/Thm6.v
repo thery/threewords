@@ -2533,6 +2533,55 @@ Qed.
 
 (* ---- the three branches doc/thm6.md 5.3 still owes ---------------------*)
 
+(* Ties-to-even, in the form the draft's "[2u | s_{i_1-1}]" needs: a rounding *)
+(* whose error is EXACTLY [1/2 pow K] lands on the [pow (K+1)] grid.  Write   *)
+(* [c] for [cexp v]; the error is [|m - Znearest m| pow c] with               *)
+(* [|m - Znearest m| <= 1/2], so [pow K <= pow c].  If [K < c] the result is  *)
+(* a multiple of [pow c] already.  If [K = c] the error is exactly half a     *)
+(* unit, so by [Znearest_N_strict] the scaled mantissa sits at [.5] -- a TIE  *)
+(* -- and ties-to-even returns [Zfloor] when that is even and [Zceil =        *)
+(* Zfloor + 1] when it is odd: EITHER WAY an even integer, i.e. a multiple    *)
+(* of [2 pow c = pow (K+1)].                                                  *)
+Lemma RN_err_half_imul (v : R) (K : Z) :
+  ties_to_even choice ->
+  Rabs (v - RND v) = / 2 * pow K -> is_imul (RND v) (pow (K + 1)).
+Proof.
+move=> Heven Herr.
+set c := cexp v.
+set m := scaled_mantissa beta (FLX_exp p) v.
+have Hv : m * pow c = v by apply: scaled_mantissa_mult_bpow.
+have HR : RND v = IZR (Znearest choice m) * pow c by rewrite /round /F2R /=.
+have Hpc := bpow_gt_0 beta c.
+have Hpk := bpow_gt_0 beta K.
+have Herr' : Rabs (m - IZR (rnd m)) * pow c = / 2 * pow K.
+  rewrite -Herr -{1}Hv HR -(Rabs_pos_eq (pow c) (Rlt_le _ _ Hpc)) -Rabs_mult.
+  by rewrite (Rabs_pos_eq (pow c) (Rlt_le _ _ Hpc)); congr Rabs; ring.
+case: (Req_EM_T (m - IZR (Zfloor m)) (/ 2)) => [Htie|Hntie]; last first.
+  (* not a tie: the error is STRICTLY under half a unit, so [K < c] and the  *)
+  (* result already sits on the [pow c] grid                                 *)
+  have Hlt := Znearest_N_strict choice m Hntie.
+  have HKc : pow K < pow c by nra.
+  have HKc' : (K + 1 <= c)%Z by have := lt_bpow beta _ _ HKc; lia.
+  apply: (is_imul_pow_le _ HKc').
+  by exists (rnd m); rewrite HR.
+(* a tie: ties-to-even returns [Zfloor] when even and [Zfloor + 1] when odd  *)
+have Hnint : IZR (Zfloor m) <> m by lra.
+have Hceil : Zceil m = (Zfloor m + 1)%Z by apply: Zceil_floor_neq.
+have Hrnd : rnd m = (if choice (Zfloor m) then Zceil m else Zfloor m)
+  by rewrite /Znearest (Rcompare_Eq _ _ Htie).
+have Habs : Rabs (m - IZR (rnd m)) = / 2.
+  case: (Znearest_DN_or_UP choice m) => ->; first by split_Rabs; lra.
+  by rewrite Hceil plus_IZR; split_Rabs; lra.
+have HcK : c = K by apply: (bpow_inj beta); move: Herr'; rewrite Habs; lra.
+have Hev : Z.even (rnd m).
+  rewrite Hrnd Heven; case E : (Z.even (Zfloor m)) => //=.
+  by rewrite Hceil Z.even_add E.
+have /Z.even_spec [n Hn] := Hev.
+exists n; rewrite HR Hn HcK mult_IZR.
+have -> : pow (K + 1) = pow K * 2 by rewrite bpow_plus bpow_1 /=; lra.
+by lra.
+Qed.
+
 (* Draft 5.3, sub-case [|e_{i_1}| = 1/2 u]: "thanks to ties-to-even,          *)
 (* [2u | s_{i_1-1}]".  Here [|e| = 1/2 u] and [|e| <= 1/2 ulp(s)] give        *)
 (* [ulp(s) >= u]; if [ulp(s) >= 2u] the divisibility is free, and if          *)
@@ -2545,7 +2594,15 @@ Lemma vecSum_run_imul_of_half (l : seq R) (i : nat) (K : Z) :
   Rabs (nth 0 (vecSum l) i.+1) = / 2 * pow K ->
   is_imul (vecSumAux (drop i l)).2 (pow (K + 1)).
 Proof.
-Admitted.
+move=> Heven Hi Hf Herr.
+set v := (nth 0 l i + (vecSumAux (drop i.+1 l)).2).
+have Hrnd : (vecSumAux (drop i l)).2 = RND v by apply: vecSum_run_rnd.
+have Hstep := vecSum_run_step Hi Hf.
+rewrite Hrnd; apply: RN_err_half_imul => //.
+have Heq : v - RND v = nth 0 (vecSum l) i.+1
+  by move: Hstep; rewrite Hrnd /v; lra.
+by rewrite Heq.
+Qed.
 
 (* Draft 5.3, sub-case [|e_{i_1}| = 1/4 u].  Counting alone gives exactly     *)
 (* [5/8 + 3*(1/8) = 1], which does NOT close; the draft repairs it with "we   *)

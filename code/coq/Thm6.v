@@ -2188,12 +2188,193 @@ rewrite Ha vsebAux_cons0 //.
 rewrite (IH (b :: l'')) //.
 by move=> m Hm; have := Hz m.+1 Hm.
 Qed.
-(* THE remaining core: the VecSum error sequence satisfies the draft's        *)
-(* per-emit block bound.  This is exactly doc/thm6.md 5.2 + 5.3 -- the        *)
-(* *2 forcing (all of which is proved above) feeding the *3 case study        *)
-(* (whose four sub-cases and the [i_1 >= 4] case are proved above too;        *)
-(* what is missing is the [i_1 <= 3] case, the [|e_4| = |e_3|] index          *)
-(* argument, and the identification of [i_0] / [i_1] along the walk).         *)
+(* ---- the walk position, as an INDEX of the VecSum output ------------------*)
+(*                                                                            *)
+(*  The draft's whole case study (5.2 and 5.3 alike) is keyed on INDICES of   *)
+(*  the error sequence: [i_0] is the index of the error consumed at the emit  *)
+(*  under study, [i_1] the index of the first non-zero error after it.  The   *)
+(*  VSEB walk, on the other hand, is a fold that has forgotten where it is.   *)
+(*  The bridge is to run the walk on the SUFFIX [drop k (vecSum l)] and to    *)
+(*  carry [k] through the induction: then the element consumed at that step   *)
+(*  is literally [nth 0 (vecSum l) k], and [j := k] is the [i_0] the *2       *)
+(*  lemmas ask for.                                                           *)
+(* ===========================================================================*)
+
+(* The list is [uls]-decreasing along its non-zero entries.                   *)
+Definition ulsChain (V : seq R) : Prop :=
+  forall i m, (i < m)%N -> (m < size V)%N ->
+    nth 0 V i <> 0 -> nth 0 V m <> 0 ->
+    uls (nth 0 V m) <= uls (nth 0 V i).
+
+Lemma vecSum_ulsChain (l : seq R) :
+  ties_to_even choice -> {in l, forall z, format z} ->
+  (forall k, (k < size l)%N -> nth (0:R) l k <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> ulsChain (vecSum l).
+Proof.
+move=> Heven Hfmt Hnz Hsort Hpair i m Him Hm Hni Hnm.
+exact: vecSum_uls_le Heven Hfmt Hnz Hsort Hpair Him Hm Hni Hnm.
+Qed.
+
+(* The walk invariant.  The remainder [eps] is at least as COARSE as every    *)
+(* error still to be consumed -- this is the draft's normalisation            *)
+(* "[uls(e_{i_0}) = u]" read symbolically, and it is what keeps               *)
+(* [vseb_emit_abs_ge] applicable at every emit.  A remainder of [0] carries   *)
+(* no grid at all and is allowed: the walk can cancel completely, and the     *)
+(* next merge restores the invariant.                                         *)
+Definition vsebDom (V : seq R) (k : nat) (eps : R) : Prop :=
+  eps = 0 \/
+  (forall m, (k <= m)%N -> (m < size V)%N -> nth 0 V m <> 0 ->
+             uls (nth 0 V m) <= uls eps).
+
+Lemma vsebDom_wk (V : seq R) (k1 k2 : nat) (eps : R) :
+  (k1 <= k2)%N -> vsebDom V k1 eps -> vsebDom V k2 eps.
+Proof.
+move=> Hk [->|H]; first by left.
+by right=> m Hm; apply: H; apply: leq_trans Hk Hm.
+Qed.
+
+(* An EMIT carries the invariant: the 2Sum error inherits the grid of the     *)
+(* term just consumed ([TwoSum_err_uls_ge]), and that term dominates all      *)
+(* the later ones ([ulsChain]).                                               *)
+Lemma vsebDom_emit (V : seq R) (k : nat) (eps r et : R) :
+  {in V, forall z, format z} -> ulsChain V ->
+  format eps -> eps <> 0 -> (k < size V)%N -> vsebDom V k eps ->
+  TwoSum eps (nth 0 V k) = DWR r et -> et <> 0 ->
+  vsebDom V k.+1 et.
+Proof.
+move=> HfV Hch Feps epsn0 Hk Hdom E etn0.
+have Fe : format (nth 0 V k) by apply: HfV; apply: mem_nth.
+have en0 : nth 0 V k <> 0.
+  move=> H0; apply: etn0.
+  by have := dwl_TwoSum_r0 Feps; rewrite -H0 E.
+have Hle : uls (nth 0 V k) <= uls eps.
+  by case: Hdom => [H0|H]; [case: epsn0|apply: H].
+have Hetn0 : dwl (TwoSum eps (nth 0 V k)) <> 0 by rewrite E.
+have Hinh := TwoSum_err_uls_ge Feps Fe epsn0 en0 Hle Hetn0.
+rewrite E /= in Hinh.
+right=> m Hm Hmsz Hnm.
+by apply: Rle_trans Hinh; apply: Hch.
+Qed.
+
+(* A MERGE carries the invariant too.  The new remainder is the EXACT sum     *)
+(* [eps + e], which lies on the grid of [e] (both summands do), so its [uls]  *)
+(* is at least [uls e] ([is_imul_uls_ge]) -- unless it cancels to [0], the    *)
+(* case the invariant explicitly allows.                                      *)
+Lemma vsebDom_merge (V : seq R) (k : nat) (eps r : R) :
+  {in V, forall z, format z} -> ulsChain V ->
+  format eps -> (k < size V)%N -> vsebDom V k eps ->
+  TwoSum eps (nth 0 V k) = DWR r 0 ->
+  vsebDom V k.+1 r.
+Proof.
+move=> HfV Hch Feps Hk Hdom E.
+have Fe : format (nth 0 V k) by apply: HfV; apply: mem_nth.
+have Hc : r + 0 = eps + nth 0 V k.
+  move: E (TwoSum_correct_loc Feps Fe).
+  by case: (TwoSum eps (nth 0 V k)) => s e [-> ->] /= H; lra.
+have Hr : r = eps + nth 0 V k by lra.
+case: (Req_EM_T (nth 0 V k) 0) => [Hz|en0].
+  have -> : r = eps by rewrite Hr Hz; lra.
+  by apply: vsebDom_wk Hdom.
+case: (Req_EM_T r 0) => [->|rn0]; first by left.
+have Hulse : uls (nth 0 V k) <= uls r.
+  have [K HK] := uls_pow en0.
+  have Hie : is_imul (nth 0 V k) (pow K) by rewrite -HK; apply: uls_imul.
+  have Hieps : is_imul eps (pow K).
+    case: Hdom => [H0|H].
+      by exists 0%Z; rewrite H0; lra.
+    have Hle : pow K <= uls eps by rewrite -HK; apply: H.
+    have Feps' : is_imul eps (pow (cexp eps)) by apply: format_imul_cexp.
+    case: (Req_EM_T eps 0) => [->|epsn0]; first by exists 0%Z; lra.
+    have [K' HK'] := uls_pow epsn0.
+    have HKK' : (K <= K')%Z by apply: (le_bpow beta); rewrite -HK'.
+    by apply: (is_imul_pow_le _ HKK'); rewrite -HK'; apply: uls_imul.
+  have Fr : format r.
+    by have := format_TwoSum Feps Fe; rewrite E; case.
+  by rewrite HK; apply: is_imul_uls_ge => //; rewrite Hr; apply: is_imul_add.
+right=> m Hm Hmsz Hnm.
+by apply: Rle_trans Hulse; apply: Hch.
+Qed.
+
+(* THE remaining core, at ONE emit: the draft's 5.3 case study.  [k] is the   *)
+(* draft's [i_0] -- the index of the error just consumed -- and the tail      *)
+(* [drop k.+1 (vecSum l)] is what the draft's [i_1] is looked for in.  Every  *)
+(* case lemma above discharges one branch; what is admitted here is the       *)
+(* dispatch plus the two branches doc/thm6.md still owes ([i_1 <= 3] and      *)
+(* the [|e_4| = |e_3|] index argument).                                       *)
+Lemma vecSum_emit_obligation (l : seq R) (k : nat) (eps r et : R) :
+  ties_to_even choice ->
+  (size l <= 6)%N ->
+  {in l, forall z, format z} ->
+  (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
+  sorted_mag l -> pairwise_ulp l ->
+  format eps -> eps <> 0 -> (0 < k)%N -> (k < size (vecSum l))%N ->
+  vsebDom (vecSum l) k eps ->
+  TwoSum eps (nth 0 (vecSum l) k) = DWR r et -> et <> 0 ->
+  Rabs (nth 0 (vsebAux et (drop k.+1 (vecSum l))) 0) < ulp r.
+Proof.
+Admitted.
+
+(* The walk, by induction on the SUFFIX.  Merges are handled by               *)
+(* [vsebDom_merge] and recursion; emits split into the draft's per-emit       *)
+(* obligation ([vecSum_emit_obligation]) and the recursion.                   *)
+Lemma vecSum_vsebBlock_gen (l : seq R) (n k : nat) (eps : R) :
+  ties_to_even choice ->
+  (size l <= 6)%N ->
+  {in l, forall z, format z} ->
+  (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
+  sorted_mag l -> pairwise_ulp l ->
+  (size (vecSum l) - k <= n)%N -> format eps -> (0 < k)%N ->
+  vsebDom (vecSum l) k eps ->
+  vsebBlock eps (drop k (vecSum l)).
+Proof.
+move=> Heven Hsz6 Hfmt Hnz Hsort Hpair.
+have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
+have Hch := vecSum_ulsChain Heven Hfmt Hnz Hsort Hpair.
+elim: n k eps => [|n IH] k eps Hn Feps Hk Hdom.
+  have Hge : (size (vecSum l) <= k)%N.
+    by rewrite -subn_eq0; apply/eqP; case: (size (vecSum l) - k)%N Hn.
+  by rewrite drop_oversize.
+case: (ltnP k.+1 (size (vecSum l))) => [Hk1|Hk1]; last first.
+  have Hsz1 : (size (drop k (vecSum l)) <= 1)%N
+    by rewrite size_drop leq_subLR addnC.
+  by case: (drop k (vecSum l)) Hsz1 => [|a [|b tl]].
+have Hk0 : (k < size (vecSum l))%N by apply: ltn_trans (ltnSn k) Hk1.
+have Hn' : (size (vecSum l) - k.+1 <= n)%N
+  by rewrite subnS; move: Hn; case: (size (vecSum l) - k)%N => [|m] //=.
+rewrite (drop_nth 0 Hk0).
+have Hdrop : (0 < size (drop k.+1 (vecSum l)))%N by rewrite size_drop subn_gt0.
+have [e2 [tl Hdr]] : exists e2 tl, drop k.+1 (vecSum l) = e2 :: tl.
+  by case: (drop k.+1 (vecSum l)) Hdrop => [//|a s] _; exists a, s.
+rewrite Hdr vsebBlock_consS.
+have Fe : format (nth 0 (vecSum l) k) by apply: HfV; apply: mem_nth.
+case E : (TwoSum eps (nth 0 (vecSum l) k)) => [r et].
+have [Fr Fet] : format r /\ format et
+  by have := format_TwoSum Feps Fe; rewrite E.
+case: (Req_EM_T et 0) => [Het0|Hetn0].
+  change (vsebBlock r (e2 :: tl)); rewrite -Hdr; apply: IH => //.
+  by apply: (vsebDom_merge HfV Hch Feps Hk0 Hdom); rewrite E Het0.
+change (Rabs (nth 0 (vsebAux et (e2 :: tl)) 0) < ulp r
+        /\ vsebBlock et (e2 :: tl)).
+(* [eps = 0] would make the step EXACT, so this emit forces [eps <> 0] --     *)
+(* the draft's "[eps_{i_0} <> 0]".                                            *)
+have epsn0 : eps <> 0.
+  move=> Heps0; apply: Hetn0.
+  have Hhi : r = nth 0 (vecSum l) k.
+    have := TwoSum_hi eps (nth 0 (vecSum l) k).
+    by rewrite E /= Heps0 Rplus_0_l round_generic.
+  move: E (TwoSum_correct_loc Feps Fe).
+  case: (TwoSum eps (nth 0 (vecSum l) k)) => s e [-> ->] /= H.
+  by move: H Hhi; rewrite Heps0; lra.
+have Hdom' : vsebDom (vecSum l) k.+1 et
+  by apply: (vsebDom_emit HfV Hch Feps epsn0 Hk0 Hdom E Hetn0).
+split; last by rewrite -Hdr; apply: IH.
+rewrite -Hdr.
+by apply: (vecSum_emit_obligation Heven Hsz6 Hfmt Hnz Hsort Hpair Feps
+                                  epsn0 Hk Hk0 Hdom E Hetn0).
+Qed.
+
+(* THE remaining core, assembled: the VecSum error sequence satisfies the     *)
+(* draft's per-emit block bound.                                              *)
 Lemma vecSum_vsebBlock (l : seq R) :
   ties_to_even choice ->
   (size l <= 6)%N ->
@@ -2202,7 +2383,20 @@ Lemma vecSum_vsebBlock (l : seq R) :
   sorted_mag l -> pairwise_ulp l ->
   vsebBlock (head 0 (vecSum l)) (behead (vecSum l)).
 Proof.
-Admitted.
+move=> Heven Hsz6 Hfmt Hnz Hsort Hpair.
+have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
+have Hch := vecSum_ulsChain Heven Hfmt Hnz Hsort Hpair.
+have Hhd : head 0 (vecSum l) = nth 0 (vecSum l) 0 by case: (vecSum l).
+have -> : behead (vecSum l) = drop 1 (vecSum l) by rewrite drop1.
+apply: (vecSum_vsebBlock_gen (n := size (vecSum l))) => //.
+- exact: leq_subr.
+- rewrite Hhd; case: (vecSum l) HfV => [|a tl] HfV;
+    first by apply: generic_format_0.
+  by apply: HfV; rewrite inE eqxx.
+rewrite Hhd.
+case: (Req_EM_T (nth 0 (vecSum l) 0) 0) => [Hz|Hn0]; first by left.
+by right=> m Hm Hmsz Hnm; apply: Hch.
+Qed.
 
 (* ===========================================================================*)
 (*  LAYER 2 (the draft's Theorem 7 proper): the ZERO-FREE case.               *)

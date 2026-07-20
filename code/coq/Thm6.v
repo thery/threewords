@@ -85,6 +85,7 @@ Local Notation dwl_TwoSum_r0 := (@dwl_TwoSum_r0 p Hp2 choice choice_sym).
 Local Notation TwoSum_err_uls_ge := (@TwoSum_err_uls_ge p Hp2 choice choice_sym).
 Local Notation TwoSum_hi := (@TwoSum_hi p choice).
 Local Notation TwoSum_correct_loc := (TwoSum_correct_loc Hp2 choice_sym).
+Local Notation TwoSum_err_le_r := (@TwoSum_err_le_r p Hp2 choice choice_sym).
 Local Notation format_TwoSum := (@format_TwoSum p Hp2 choice).
 Local Notation magnitude_TwoSum := (magnitude_TwoSum Hp2 choice_sym).
 Local Notation vsebAux_head_lt_mass := (vsebAux_head_lt_mass Hp2 choice_sym).
@@ -93,6 +94,7 @@ Local Notation uls_gt_0 := (@uls_gt_0 p).
 Local Notation uls_le_abs := (@uls_le_abs p).
 Local Notation format_vecSum := (format_vecSum Hp2).
 Local Notation size_vecSum := (@size_vecSum p choice).
+Local Notation vecSum_nth0 := (@vecSum_nth0 p choice).
 Local Notation vecSumAux_imul := (@vecSumAux_imul p Hp2 choice choice_sym).
 Local Notation vecSumAux_split := (@vecSumAux_split p choice).
 
@@ -2838,6 +2840,193 @@ apply: (vseb_subcase_mass_lt (t := pow K) (c := / 4) (M := / 4)) => //;
   try lra.
 Qed.
 
+(* Draft 5.3, case [i_1 <= 3], sub-case [x_{i_1-2} = -1+u].  The cancelling  *)
+(* pair kills [e_{i_1-1}], so [i_0 < i_1 - 1] forces [i_1 = 3] and           *)
+(* [i_0 = 1]: this emit is the FIRST one of the walk, so [eps] is [s_0]      *)
+(* itself.  The draft's "[|y_j| = |s_0| >= 1/2 u^{-1}]" is [pairwise_ulp]    *)
+(* at [(x_0, x_2)]: [|s_2| = 1] pushes [|x_2|] up to [1/4] (5.1's            *)
+(* [|s_i| <= 4 ufp(x_i)]), so [ulp(x_0) > 1/4] and [|x_0| >= 2^{p-2}] --     *)
+(* whence [ulp(y_j) >= 4u], while the whole remaining mass                   *)
+(* [|eps_{i_0}| + |e_3| + |e_4| + |e_5|] is at most [2u + 2u^2].             *)
+Lemma vseb_emit_viol_le3_opp (l : seq R) (k q : nat) (eps r et : R) (K : Z) :
+  ties_to_even choice ->
+  (size l <= 6)%N ->
+  {in l, forall z, format z} ->
+  (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
+  sorted_mag l -> pairwise_ulp l ->
+  format eps -> TwoSum eps (nth 0 (vecSum l) k) = DWR r et ->
+  ((k = 1)%N -> eps = nth 0 (vecSum l) 0) ->
+  format et -> (0 < k)%N -> (k < q)%N -> (q <= 3)%N ->
+  (q < size (vecSum l))%N ->
+  nth 0 (vecSum l) k <> 0 -> nth 0 (vecSum l) q <> 0 ->
+  uls (nth 0 (vecSum l) k) = pow K ->
+  pow K <= Rabs et -> 2 * Rabs et <= ulp r ->
+  5 / 8 * pow K <= Rabs (nth 0 (vecSum l) q) ->
+  nth 0 (vecSum l) q.-1 = 0 ->
+  Rabs (vecSumAux (drop q.-1.-1 l)).2 = pow K ->
+  Rabs (nth 0 (vsebAux et (nth 0 (vecSum l) q :: drop q.+1 (vecSum l))) 0)
+    < ulp r.
+Proof.
+move=> Heven Hsz6 Hfmt Hnz Hsort Hpair Feps HE Hhd Fet Hk Hkq Hq3 Hq en0 Hqn0
+       HK Ht Hulp Hviol Hz Hs1.
+have Hpk := bpow_gt_0 beta K.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu16 := u_le_inv16.
+have Hulp0 : 0 < ulp r by have := Rabs_pos et; lra.
+have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
+have Hq2 : (1 < q)%N by apply: leq_ltn_trans Hk Hkq.
+have Hl0 : (0 < size l)%N.
+  move: Hq Hq2; rewrite size_vecSum.
+  by case: (size l) => [|n] //= H1 H2; have := leq_ltn_trans H2 H1.
+have Hszl : size (vecSum l) = size l by rewrite size_vecSum prednK.
+have Hpred : (q.-1.+1 = q)%N by rewrite prednK //; apply: ltnW.
+have Hqsz : (q.-1.+1 < size l)%N by rewrite Hpred -Hszl.
+have Hkq' : (k <= q.-1)%N by rewrite -ltnS Hpred.
+have Hviol' : 5 / 8 * pow K <= Rabs (nth 0 (vecSum l) q.-1.+1) by rewrite Hpred.
+(* [e_{i_1-1} = 0] puts [i_0] STRICTLY left of [i_1-1], which with            *)
+(* [1 <= i_0] and [i_1 <= 3] pins [i_1 = 3] and [i_0 = 1].                    *)
+have Hkq1 : (k < q.-1)%N.
+  rewrite ltn_neqAle Hkq' andbT; apply/eqP => Hkeq.
+  by apply: en0; rewrite Hkeq.
+have Hq3' : (3 <= q)%N.
+  have H2 : (1 < q.-1)%N by apply: leq_ltn_trans Hk Hkq1.
+  by move: H2; case: (q) => [|q'].
+have Heqq : q = 3%N by apply/eqP; rewrite eqn_leq Hq3 Hq3'.
+have Heqk : k = 1%N.
+  by move: Hk Hkq1; rewrite Heqq /=; case: (k) => [|[|k']].
+rewrite Heqq /= in Hs1.
+have Hsz4 : (3 < size l)%N by rewrite -Hszl -Heqq.
+(* [e_1] is the 2Sum error of [x_0] against [s_1], so [|e_1| <= |s_1| = u];   *)
+(* [eps_{i_0}] is the 2Sum error of [s_0] against [e_1], so it is smaller     *)
+(* still -- and it is [>= u].  Everything collapses to [= u].                 *)
+have F0 : format (nth 0 l 0) by apply: Hfmt; apply: mem_nth.
+have Fs1 : format (vecSumAux (drop 1 l)).2.
+  have Hdf : {in drop 1 l, forall z, format z}
+    by move=> z /mem_drop; apply: Hfmt.
+  by have [F _] := format_vecSumAux Hdf.
+have Hsz1 : (0.+1 < size l)%N by apply: leq_trans Hsz4.
+have Fe1 : format (nth 0 (vecSum l) 1)
+  by apply: HfV; apply: mem_nth; rewrite Hszl; apply: leq_trans Hsz4.
+have He1 : nth 0 (vecSum l) 1 =
+           dwl (TwoSum (nth 0 l 0) (vecSumAux (drop 1 l)).2)
+  by apply: vecSum_run_dwl.
+have He1le : Rabs (nth 0 (vecSum l) 1) <= pow K.
+  by rewrite He1 -Hs1; apply: TwoSum_err_le_r.
+have HE' : TwoSum eps (nth 0 (vecSum l) 1) = DWR r et by rewrite -Heqk.
+have [Hcorr Herr] : r + et = eps + nth 0 (vecSum l) 1 /\
+                    Rabs et <= Rabs (nth 0 (vecSum l) 1).
+  move: HE' (TwoSum_correct_loc Feps Fe1) (TwoSum_err_le_r Feps Fe1).
+  case: (TwoSum eps (nth 0 (vecSum l) 1)) => s e [-> ->] H1 H2.
+  by rewrite /= in H1 H2; split; lra.
+have Hetv : Rabs et = pow K by lra.
+have He1v : Rabs (nth 0 (vecSum l) 1) = pow K by lra.
+(* [eps = s_0 = x_0 + s_1 - e_1], so [|r| >= |x_0| - 4u]                      *)
+have Heps : eps = (vecSumAux l).2 by rewrite Hhd // vecSum_nth0.
+have Hstep : (vecSumAux l).2 + nth 0 (vecSum l) 1 =
+             nth 0 l 0 + (vecSumAux (drop 1 l)).2.
+  by have := vecSum_run_step Hsz1 Hfmt; rewrite drop0.
+have Hrlow : Rabs (nth 0 l 0) - 4 * pow K <= Rabs r.
+  move: Hcorr Hstep Hetv He1v Hs1; rewrite Heps; split_Rabs; lra.
+(* the draft's [|s_0| >= 1/2 u^{-1}], via [pairwise_ulp] at [(x_0, x_2)]      *)
+have [HRs _ _ _ _] :=
+  vecSum_pinning_of_violation Heven Hqsz Hfmt Hnz Hsort Hpair Hkq' en0 HK
+                              Hviol'.
+rewrite Heqq /= in HRs.
+have Hx2n0 : nth 0 l 2 <> 0 by apply: Hnz; apply: ltnW.
+have Hpow2 : pow (K + p) = 4 * pow (K + p - 2).
+  have H4 : (4 = pow 2) by rewrite /= /Z.pow_pos /=; lra.
+  by rewrite H4 -bpow_plus; congr bpow; lia.
+have Hx2 : pow (K + p - 2) <= Rabs (nth 0 l 2).
+  have [Hufp _] := vecSum_run_ufp Heven Hfmt Hnz Hsort Hpair (ltnW Hsz4).
+  have Hle := ufp_le_abs Hx2n0.
+  by lra.
+have Hulpx0 : pow (K + p - 2) < ulp (nth 0 l 0).
+  case: (Hpair 0%N (ltnW Hsz4)) => [Hzz|Hlt]; first by case: Hx2n0.
+  by lra.
+have Hx0 : pow (K + p - 2 + p) <= Rabs (nth 0 l 0).
+  case: (Rle_lt_dec (pow (K + p - 2 + p)) (Rabs (nth 0 l 0))) => // Hlt.
+  by have := bound_ulp_FLX Hp2 Hlt; lra.
+(* [ulp(y_j) >= 4u]                                                           *)
+have H4u : 4 * pow K = pow (K + 2).
+  by rewrite bpow_plus /= /Z.pow_pos /=; lra.
+have Hbig : pow (K + p - 3 + p) <= Rabs r.
+  have Hhalf : 2 * pow (K + p - 3 + p) = pow (K + p - 2 + p).
+    have H2 : (2 = pow 1) by rewrite /= /Z.pow_pos /=; lra.
+    by rewrite H2 -bpow_plus; congr bpow; lia.
+  have Hsm : pow (K + 2) <= pow (K + p - 3 + p) by apply: bpow_le; lia.
+  by rewrite -H4u in Hsm; lra.
+have Hulpr : pow (K + 2) <= ulp r.
+  have Hu4 : pow (K + 2) <= pow (K + p - 2) by apply: bpow_le; lia.
+  apply: Rle_trans Hu4 _.
+  have <- : ulp (pow (K + p - 3 + p)) = pow (K + p - 2).
+    by rewrite ulp_bpow /FLX_exp; congr bpow; lia.
+  apply: (ulp_le beta fexp).
+  by rewrite [Rabs (pow _)]Rabs_pos_eq //; apply: bpow_ge_0.
+(* the mass: [|e_{i_1}| <= u] and at most two later errors, each [<= u^2]     *)
+have Heqle : Rabs (nth 0 (vecSum l) q) <= pow K.
+  have Hgp := bpow_gt_0 beta (K - p + 1).
+  case: (vecSum_right_of_i_cases Heven Hqsz Hfmt Hnz Hsort Hpair Hkq' en0 HK
+                                 Hviol'); rewrite Hpred;
+    by [case=> -> _; lra | case=> -> _; lra | lra].
+have Hszt : (size (drop q.+1 (vecSum l)) <= 2)%N.
+  rewrite size_drop Hszl leq_subLR.
+  apply: leq_trans Hsz6 _.
+  by rewrite Heqq addnC.
+have Hd0 : 0 <= pow (K - p) by apply: bpow_ge_0.
+have Hdom : forall z, z \in drop q.+1 (vecSum l) -> Rabs z <= pow (K - p).
+  move=> z /(nthP 0)[m Hm <-]; rewrite nth_drop.
+  have [i' Hi' Htail] :=
+    vecSum_tail_err_le_u2_of_violation Heven Hqsz Hfmt Hnz Hsort Hpair Hkq'
+                                       en0 HK Hviol'.
+  have Hi'1 : (i' <= m.+1)%N.
+    have Hi'2 : (i' <= 1)%N by move: Hi'; rewrite Heqq /=.
+    by apply: leq_trans Hi'2 (ltn0Sn m).
+  have -> : (q.+1 + m = m.+1.+2.+1)%N by rewrite Heqq /=.
+  apply: Htail => //; rewrite -Hszl.
+  by move: Hm; rewrite size_drop ltn_subRL Heqq /=.
+(* the draft's counting, with [(1 - u) ulp(y_j)] as the format witness        *)
+have HB : format ((1 - IZR 1 * u) * ulp r).
+  by apply: format_1_sub_ku_ulp; move: pow2_ge_16; lia.
+have H1 : IZR 1 = 1 by [].
+have Hup : pow (K - p) = u * pow K
+  by rewrite uE_pow -bpow_plus; congr bpow; lia.
+have Fq : format (nth 0 (vecSum l) q) by apply: HfV; apply: mem_nth.
+have Ftail : {in drop q.+1 (vecSum l), forall z, format z}
+  by move=> z /mem_drop; apply: HfV.
+apply: (vseb_head_lt_split Fet Fq Ftail HB Hszt Hd0 Hdom);
+    last by rewrite ?H1; nra.
+have H2 : INR 2 = 2 by rewrite /=; lra.
+rewrite -H4u in Hulpr.
+rewrite H2 ?H1.
+by nra.
+Qed.
+
+(* Draft 5.3, case [i_1 <= 3], sub-case [x_{i_1-2} = 1-u].  Here the pair     *)
+(* reinforces: [|e_{i_1-1}| = u] and [|s_{i_1-2}| = 2].  The draft pins       *)
+(* [eps_{i_0} = -u] against [e_{i_1} >= 5/8 u] -- the CANCELLATION            *)
+(* [|eps_{i_0} + e_{i_1}| <= 3/8 u] -- after which the at most 3 remaining    *)
+(* errors are [<= u^2].                                                       *)
+Lemma vseb_emit_viol_le3_same (l : seq R) (k q : nat) (eps r et : R) (K : Z) :
+  ties_to_even choice ->
+  (size l <= 6)%N ->
+  {in l, forall z, format z} ->
+  (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
+  sorted_mag l -> pairwise_ulp l ->
+  format eps -> TwoSum eps (nth 0 (vecSum l) k) = DWR r et ->
+  ((k = 1)%N -> eps = nth 0 (vecSum l) 0) ->
+  format et -> (0 < k)%N -> (k < q)%N -> (q <= 3)%N ->
+  (q < size (vecSum l))%N ->
+  nth 0 (vecSum l) k <> 0 -> nth 0 (vecSum l) q <> 0 ->
+  uls (nth 0 (vecSum l) k) = pow K ->
+  pow K <= Rabs et -> 2 * Rabs et <= ulp r ->
+  5 / 8 * pow K <= Rabs (nth 0 (vecSum l) q) ->
+  Rabs (nth 0 (vecSum l) q.-1) = pow K ->
+  Rabs (vecSumAux (drop q.-1.-1 l)).2 = 2 * pow (K + p) ->
+  Rabs (nth 0 (vsebAux et (nth 0 (vecSum l) q :: drop q.+1 (vecSum l))) 0)
+    < ulp r.
+Proof.
+Admitted.
+
 (* Draft 5.3, case [i_1 <= 3] (with [e_{i_1} >= 5/8 u]).  Splits on 5.2's    *)
 (* "at the left of [i]": in the [x_{i_1-2} = -1+u] case [e_{i_1-1} = 0]      *)
 (* forces [i_1 = 3] and then [|y_j| = |s_0| >= 1/2 u^{-1}], so               *)
@@ -2863,7 +3052,30 @@ Lemma vseb_emit_viol_le3 (l : seq R) (k q : nat) (eps r et : R) (K : Z) :
   Rabs (nth 0 (vsebAux et (nth 0 (vecSum l) q :: drop q.+1 (vecSum l))) 0)
     < ulp r.
 Proof.
-Admitted.
+move=> Heven Hsz6 Hfmt Hnz Hsort Hpair Feps HE Hhd Fet Hk Hkq Hq3 Hq en0 Hqn0
+       HK Ht Hulp Hviol.
+have Hq2 : (1 < q)%N by apply: leq_ltn_trans Hk Hkq.
+have Hl0 : (0 < size l)%N.
+  move: Hq Hq2; rewrite size_vecSum.
+  by case: (size l) => [|n] //= H1 H2; have := leq_ltn_trans H2 H1.
+have Hszl : size (vecSum l) = size l by rewrite size_vecSum prednK.
+have Hpred : (q.-1.+1 = q)%N by rewrite prednK //; apply: ltnW.
+have Hqsz : (q.-1.+1 < size l)%N by rewrite Hpred -Hszl.
+have Hkq' : (k <= q.-1)%N by rewrite -ltnS Hpred.
+have Hviol' : 5 / 8 * pow K <= Rabs (nth 0 (vecSum l) q.-1.+1) by rewrite Hpred.
+case: (vecSum_left_sum_cases Heven Hqsz Hfmt Hnz Hsort Hpair Hkq' en0 HK
+                             Hviol') => Hsum.
+  have [Hs1 Hz] := vecSum_left_opp Heven Hqsz Hfmt Hnz Hsort Hpair Hkq' en0 HK
+                                   Hviol' Hsum.
+  by apply: (vseb_emit_viol_le3_opp Heven Hsz6 Hfmt Hnz Hsort Hpair Feps HE Hhd
+                                    Fet Hk Hkq Hq3 Hq en0 Hqn0 HK Ht Hulp Hviol
+                                    Hz Hs1).
+have [Hs0 He] := vecSum_left_same Heven Hqsz Hfmt Hnz Hsort Hpair Hkq' en0 HK
+                                  Hviol' Hsum.
+by apply: (vseb_emit_viol_le3_same Heven Hsz6 Hfmt Hnz Hsort Hpair Feps HE Hhd
+                                   Fet Hk Hkq Hq3 Hq en0 Hqn0 HK Ht Hulp Hviol
+                                   He Hs0).
+Qed.
 
 (* The THIRD tie the proof needs, and the only one that rounds DOWN.          *)
 (* [pow e - pow(e-p) - pow(e-p-1)] is halfway between [pow e - 2 pow(e-p)]    *)

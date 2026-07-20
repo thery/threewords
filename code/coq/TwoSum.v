@@ -515,6 +515,25 @@ have Hab : is_imul (a + b) (bpow beta (Z.min (cexp a) (cexp b))).
 by apply: is_imul_minus => //; apply: is_imul_pow_round.
 Qed.
 
+(* The TwoSum error never exceeds the SECOND operand: [a] is itself a float   *)
+(* sitting at distance [|b|] from the exact sum, so the nearest float is at   *)
+(* least as close.  Draft 5.3's [i_1 <= 3] case uses it twice, to pin         *)
+(* [|e_{i_1 - 1}| = |eps_{i_0}| = u] from below by [u] and above by the       *)
+(* running sum.                                                               *)
+Lemma TwoSum_err_le_r a b : format a -> format b ->
+  Rabs (dwl (TwoSum a b)) <= Rabs b.
+Proof.
+move=> Fa Fb.
+have Hc : dwh (TwoSum a b) + dwl (TwoSum a b) = a + b
+  by exact: TwoSum_correct_loc Fa Fb.
+have -> : dwl (TwoSum a b) = (a + b) - RND (a + b)
+  by move: Hc; rewrite TwoSum_hi; lra.
+have [_ Hnear] := round_N_pt beta fexp choice (a + b).
+have Hb := Hnear a Fa.
+rewrite (_ : a - (a + b) = - b) ?Rabs_Ropp in Hb; last by lra.
+by rewrite Rabs_minus_sym.
+Qed.
+
 (* The TwoSum error inherits at least the [uls] of the smaller-grid operand:  *)
 (* if [uls s <= uls a] then [uls s <= uls (dwl (TwoSum a s))].  Both operands *)
 (* lie on the grid [bpow (cexp s + trZ (mant s))] (= [uls s]), hence so does  *)

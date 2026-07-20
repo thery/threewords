@@ -61,9 +61,6 @@ Local Notation mant := (scaled_mantissa beta fexp).
 Local Notation RND := (round beta fexp rnd).
 Local Notation ulp := (ulp beta fexp).
 Local Notation uls := (uls p).
-Local Notation error_le_half_ulp_RN :=
-  (@error_le_half_ulp_round beta (FLT_exp p)
-     (FLT_exp_valid p) (FLT_exp_monotone p) choice).
 Local Notation TwoSum := (TwoSum p choice).
 Local Notation TwoSum_hi := (TwoSum_hi p choice).
 Local Notation formatDWR := (formatDWR p).

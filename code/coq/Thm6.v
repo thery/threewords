@@ -1534,7 +1534,12 @@ Qed.
 (* Here the pair reinforces, giving the sum [2A - G] -- exactly the tie       *)
 (* just below [2A], which ties-to-even sends UP to [2A]                       *)
 (* ([RN_midpoint_even_lo]).  The 2Sum error is then the discarded [G].        *)
-Lemma vecSum_left_same (l : seq R) (i j : nat) (k : Z) :
+(* The SIGNED form, which is what 5.3 needs: the draft writes this case as    *)
+(* "[e_{i-1} = -u] and [s_{i-2} = 2]", and the two signs are not              *)
+(* independent -- the discarded [G] is taken AWAY from the running sum, so    *)
+(* [e_i] always carries the sign OPPOSITE to [s_{i-1}].  5.3's cancellation   *)
+(* [|eps_{i_0} + e_{i_1}| <= 3/8 u] rests on exactly this.                    *)
+Lemma vecSum_left_same_signed (l : seq R) (i j : nat) (k : Z) :
   ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
   (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
   sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
@@ -1542,8 +1547,10 @@ Lemma vecSum_left_same (l : seq R) (i j : nat) (k : Z) :
   5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
   Rabs (nth 0 l i.-1 + (vecSumAux (drop i l)).2) =
     2 * pow (k + p) - pow k ->
-  Rabs (vecSumAux (drop i.-1 l)).2 = 2 * pow (k + p) /\
-  Rabs (nth 0 (vecSum l) i) = pow k.
+  ((vecSumAux (drop i.-1 l)).2 = 2 * pow (k + p) /\
+   nth 0 (vecSum l) i = - pow k) \/
+  ((vecSumAux (drop i.-1 l)).2 = - (2 * pow (k + p)) /\
+   nth 0 (vecSum l) i = pow k).
 Proof.
 move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol Hsum.
 have iLl : (i < size l)%N by apply: ltn_trans (ltnSn i) Hi.
@@ -1575,11 +1582,30 @@ have H : nth 0 l i.-1 + (vecSumAux (drop i l)).2 =
          - (2 * pow (k + p) - pow k).
   by move: Hsum; split_Rabs; lra.
 case: H => HE; rewrite HE in Hrnd Hstep.
-- rewrite Hmid in Hrnd; split; first by rewrite Hrnd Rabs_pos_eq; lra.
-  by move: Hstep; rewrite Hrnd; split_Rabs; lra.
-rewrite Hmidn in Hrnd; split.
-  by rewrite Hrnd Rabs_Ropp Rabs_pos_eq; lra.
-by move: Hstep; rewrite Hrnd; split_Rabs; lra.
+  rewrite Hmid in Hrnd; left; split => //.
+  by move: Hstep; rewrite Hrnd; lra.
+rewrite Hmidn in Hrnd; right; split => //.
+by move: Hstep; rewrite Hrnd; lra.
+Qed.
+
+(* The magnitudes alone, as the rest of 5.2 consumes them.                    *)
+Lemma vecSum_left_same (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  Rabs (nth 0 l i.-1 + (vecSumAux (drop i l)).2) =
+    2 * pow (k + p) - pow k ->
+  Rabs (vecSumAux (drop i.-1 l)).2 = 2 * pow (k + p) /\
+  Rabs (nth 0 (vecSum l) i) = pow k.
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol Hsum.
+have HA := bpow_gt_0 beta (k + p).
+have HGp := bpow_gt_0 beta k.
+case: (vecSum_left_same_signed Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol
+                               Hsum) => [] [Hs He]; rewrite Hs He;
+  by split; split_Rabs; lra.
 Qed.
 
 (* ===========================================================================*)

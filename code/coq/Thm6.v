@@ -2863,6 +2863,83 @@ Lemma vseb_emit_viol_le3 (l : seq R) (k q : nat) (r et : R) (K : Z) :
 Proof.
 Admitted.
 
+(* The THIRD tie the proof needs, and the only one that rounds DOWN.          *)
+(* [pow e - pow(e-p) - pow(e-p-1)] is halfway between [pow e - 2 pow(e-p)]    *)
+(* (mantissa [2^p - 2], EVEN) and [pow e - pow(e-p)] (mantissa [2^p - 1],     *)
+(* odd), so ties-to-even sends it DOWN.  Same shape as                        *)
+(* [RN_midpoint_even_lo], one notch lower; it is what excludes the mixed      *)
+(* pair [(u-u^2, u-2u^2)] in the [u-2u^2] counting.                           *)
+Lemma RN_midpoint_even_lo2 (e : Z) : ties_to_even choice ->
+  RND (pow e - pow (e - p) - pow (e - p - 1)) = pow e - 2 * pow (e - p).
+Proof.
+move=> Heven.
+have Hpe := bpow_gt_0 beta e.
+have Hpep := bpow_gt_0 beta (e - p).
+have Hpep1 := bpow_gt_0 beta (e - p - 1).
+have Hhalf : pow (e - p) = 2 * pow (e - p - 1).
+  have Haux : pow ((e - p - 1) + 1)%Z = 2 * pow (e - p - 1)
+    by rewrite bpow_plus bpow_1 /=; lra.
+  by rewrite -Haux; congr bpow; lia.
+have He1 : pow e = 2 * pow (e - 1).
+  have Haux : pow ((e - 1) + 1)%Z = 2 * pow (e - 1)
+    by rewrite bpow_plus bpow_1 /=; lra.
+  by rewrite -Haux; congr bpow; lia.
+have H8 : pow (e - 1) = 8 * pow (e - 4).
+  have -> : (e - 1 = 3 + (e - 4))%Z by lia.
+  by rewrite bpow_plus /= /Z.pow_pos /=; lra.
+have Hle4 : pow (e - p) <= pow (e - 4) by apply: bpow_le; lia.
+have Hx0 : 0 < pow e - pow (e - p) - pow (e - p - 1) by lra.
+have Hmagx : mag beta (pow e - pow (e - p) - pow (e - p - 1)) = e :> Z.
+  by apply: mag_unique_pos; split; lra.
+have Hcexp : cexp (pow e - pow (e - p) - pow (e - p - 1)) = (e - p)%Z.
+  by rewrite /cexp Hmagx /FLX_exp.
+have Hpm1 : pow (-1)%Z = / 2 by rewrite /= /Z.pow_pos /=; lra.
+have Hpp : pow p = IZR (2 ^ p).
+  have -> : (2 = radix2 :> Z)%Z by [].
+  by rewrite IZR_Zpower //; lia.
+have Hppg := bpow_gt_0 beta p.
+have Hsm : mant (pow e - pow (e - p) - pow (e - p - 1)) = pow p - 1 - / 2.
+  rewrite /scaled_mantissa Hcexp !Rmult_minus_distr_r -!bpow_plus.
+  have -> : (e + - (e - p) = p)%Z by lia.
+  have -> : (e - p + - (e - p) = 0)%Z by lia.
+  have -> : (e - p - 1 + - (e - p) = -1)%Z by lia.
+  by rewrite Hpm1 (pow0E beta).
+have Hfloor : Zfloor (mant (pow e - pow (e - p) - pow (e - p - 1)))
+                = (2 ^ p - 2)%Z.
+  rewrite Hsm; apply: Zfloor_imp.
+  have -> : (2 ^ p - 2 + 1 = 2 ^ p - 1)%Z by lia.
+  by rewrite !minus_IZR -Hpp /=; lra.
+have Hceil : Zceil (mant (pow e - pow (e - p) - pow (e - p - 1)))
+               = (2 ^ p - 1)%Z.
+  rewrite Hsm; apply: Zceil_imp.
+  have -> : (2 ^ p - 1 - 1 = 2 ^ p - 2)%Z by lia.
+  by rewrite !minus_IZR -Hpp /=; lra.
+have HRD : round beta fexp Zfloor (pow e - pow (e - p) - pow (e - p - 1)) =
+           pow e - 2 * pow (e - p).
+  rewrite /round Hfloor Hcexp /F2R /= !minus_IZR -Hpp !Rmult_minus_distr_r.
+  have -> : pow p * pow (e - p) = pow e by rewrite -bpow_plus; congr bpow; lia.
+  by lra.
+have HRU : round beta fexp Zceil (pow e - pow (e - p) - pow (e - p - 1)) =
+           pow e - pow (e - p).
+  rewrite /round Hceil Hcexp /F2R /= !minus_IZR -Hpp !Rmult_minus_distr_r.
+  have -> : pow p * pow (e - p) = pow e by rewrite -bpow_plus; congr bpow; lia.
+  by lra.
+have Hmid :
+  (pow e - pow (e - p) - pow (e - p - 1)) -
+    round beta fexp Zfloor (pow e - pow (e - p) - pow (e - p - 1)) =
+  round beta fexp Zceil (pow e - pow (e - p) - pow (e - p - 1)) -
+    (pow e - pow (e - p) - pow (e - p - 1)).
+  by rewrite HRD HRU; lra.
+rewrite (@round_N_middle beta fexp choice _ Hmid) Hfloor.
+have Heven2p : Z.even (2 ^ p) = true.
+  have -> : (2 ^ p = 2 * 2 ^ (p - 1))%Z.
+    by rewrite -Z.pow_succ_r; [congr (_ ^ _)%Z; lia | lia].
+  by rewrite Z.even_mul.
+have -> : choice (2 ^ p - 2) = false.
+  by rewrite Heven Z.even_sub Heven2p.
+exact: HRD.
+Qed.
+
 (* Draft 5.2, "at the right of [i]", case [e_i = u - 2u^2]: "so we must have  *)
 (* [s_{i+1} >= u-u^2] with [x_{i+1} <= u-u^2], so either there is no more     *)
 (* non-zero [e_{i'}] or [i <= 3]" -- here on the [i >= 3] side, where the     *)

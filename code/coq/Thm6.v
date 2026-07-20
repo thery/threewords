@@ -2465,6 +2465,72 @@ apply: (vseb_subcase_lt_half (t := pow K)) => // [|z zt]; first by lra.
 by apply: Rle_trans (Hdom z zt) _; lra.
 Qed.
 
+(* The draft's 5.3 sub-cases [|e_{i_1}| > 1/2 u] and [|e_{i_1}| = 1/2 u].     *)
+(* Both read "similarly to what we saw before, we deduce [|x_{i_1-2}| < 1],   *)
+(* so [|x_{i_1}| < u] so [|e_{i_1+1}|, ..., |e_5| <= u^2]" -- i.e. both go    *)
+(* back through the 5.2 chain, which is exactly why that chain is stated on   *)
+(* the divisibility ([..._of_imul]) rather than on the [5/8] threshold.  The  *)
+(* two sub-cases differ ONLY in how they obtain it, so both land here; and    *)
+(* the head bound [<= 5/8 u] covers the [= 1/2 u] one a fortiori, so the      *)
+(* draft's separate [1/2] constant buys nothing once the tail bound is the    *)
+(* same.                                                                      *)
+Lemma vseb_emit_of_imul (l : seq R) (k q : nat) (r et : R) (K : Z) :
+  ties_to_even choice ->
+  (size l <= 6)%N ->
+  {in l, forall z, format z} ->
+  (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
+  sorted_mag l -> pairwise_ulp l ->
+  format et -> (0 < k)%N -> (k < q)%N -> (q < size (vecSum l))%N ->
+  nth 0 (vecSum l) k <> 0 ->
+  uls (nth 0 (vecSum l) k) = pow K ->
+  pow K <= Rabs et -> 2 * Rabs et <= ulp r ->
+  is_imul (vecSumAux (drop q.-1 l)).2 (pow (K + 1)) ->
+  Rabs (nth 0 (vecSum l) q) <= 5 / 8 * pow K ->
+  Rabs (nth 0 (vsebAux et (nth 0 (vecSum l) q :: drop q.+1 (vecSum l))) 0)
+    < ulp r.
+Proof.
+move=> Heven Hsz6 Hfmt Hnz Hsort Hpair Fet Hk Hkq Hq en0 HK Ht Hulp Him He.
+have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
+have Hpk := bpow_gt_0 beta K.
+have Hq2 : (1 < q)%N by apply: leq_ltn_trans Hk Hkq.
+have Hl0 : (0 < size l)%N.
+  move: Hq Hq2; rewrite size_vecSum.
+  by case: (size l) => [|n] //= H1 H2; have := leq_ltn_trans H2 H1.
+have Hszl : size (vecSum l) = size l by rewrite size_vecSum prednK.
+have Hpred : (q.-1.+1 = q)%N by rewrite prednK //; apply: ltnW.
+have Hqsz : (q.-1.+1 < size l)%N by rewrite Hpred -Hszl.
+have Hkq' : (k <= q.-1)%N by rewrite -ltnS Hpred.
+(* the draft's "[|x_i| < u], so [forall i' >= i+1, |e_{i'}| <= u^2]"          *)
+have [i' Hi'q Htail] :=
+  vecSum_tail_err_le_u2_of_imul Heven Hqsz Hfmt Hnz Hsort Hpair Hkq' en0
+    (etrans HK (erefl _)) Him.
+have Hn2 : ((q - 2).+2 = q)%N by rewrite -addn2 subnK //.
+have Htail' : forall z, z \in drop q.+1 (vecSum l) -> Rabs z <= pow (K - p).
+  move=> z /(nthP 0)[j Hj <-].
+  rewrite nth_drop.
+  have Hjs : (q.+1 + j < size l)%N
+    by move: Hj; rewrite size_drop Hszl ltn_subRL addnC.
+  have Hm3 : ((q - 2 + j).+3 = q.+1 + j)%N by rewrite -{2}Hn2 !addSn.
+  have Hi'm : (i' <= q - 2 + j)%N.
+    apply: leq_trans (leq_addr j _).
+    by move: Hi'q; rewrite -{1}Hn2 /= ltnS.
+  by rewrite -Hm3; apply: Htail => //; rewrite Hm3.
+have Fq : format (nth 0 (vecSum l) q) by apply: HfV; apply: mem_nth.
+have Ftail : {in drop q.+1 (vecSum l), forall z, format z}
+  by move=> z /mem_drop; apply: HfV.
+(* "we are adding at most 3 of them" -- this is where [size l <= 6] is paid  *)
+have Hszt : (size (drop q.+1 (vecSum l)) <= 3)%N.
+  rewrite size_drop Hszl leq_subLR.
+  apply: leq_trans Hsz6 _.
+  by rewrite addSn addnC; move: Hq2; rewrite -addn1 -(leq_add2l 3) addnCA.
+have Hu2 : pow (K - p) = u * pow K
+  by rewrite uE_pow -bpow_plus; congr bpow; lia.
+apply: (vseb_subcase_gt_half (t := pow K)) => // z zt.
+apply: Rle_trans (Htail' z zt) _.
+rewrite Hu2; have Hu0 : 0 < u by apply: u_gt_0.
+by nra.
+Qed.
+
 (* The draft's 5.3 CASE STUDY, with both of its indices in hand: [k] is       *)
 (* [i_0] (the error consumed at this emit, whose [uls] is the draft's         *)
 (* normalising [u = pow K]) and [q] is [i_1] (the first non-zero error        *)

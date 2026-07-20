@@ -107,6 +107,46 @@ Lemma Pnonoverlap_lt l i : Pnonoverlap l -> (i.+1 < size l)%N ->
   nth 0 l i.+1 <> 0 -> Rabs (nth 0 l i.+1) < ulp (nth 0 l i).
 Proof. by move=> Pl Hi Hn0; case: (Pl i Hi). Qed.
 
+(* ---- moving a guarded bound to a bigger neighbour ------------------------ *)
+(* Under FLX [ulp 0 = 0], so [Pnonoverlap]/[pairwise_ulp] carry a "successor  *)
+(* is zero" guard, and every consumer must transport the guard along with     *)
+(* the bound.  These three shapes are what the consumers actually need; they  *)
+(* keep the guard out of the client proofs.                                   *)
+
+(* [y] stays under the ulp of anything at least as big as [b].                *)
+Lemma guarded_ulp_le (y b a : R) :
+  (y = 0 \/ Rabs y < ulp b) -> Rabs b <= Rabs a ->
+  y = 0 \/ Rabs y < ulp a.
+Proof.
+move=> [->|Hy] Hba; first by left.
+by right; apply: Rlt_le_trans Hy _; apply: (ulp_le beta fexp).
+Qed.
+
+(* Same, when [y] is dominated by a value that is itself under [ulp a].       *)
+Lemma guarded_ulp_abs_le (y c a : R) :
+  Rabs y <= Rabs c -> (c = 0 \/ Rabs c < ulp a) ->
+  y = 0 \/ Rabs y < ulp a.
+Proof.
+move=> Hyc [Hc0|Hc].
+  by left; move: Hyc; rewrite Hc0 Rabs_R0; split_Rabs; lra.
+by right; apply: Rle_lt_trans Hyc Hc.
+Qed.
+
+(* Two guarded steps compose: [uls]-style descent through a format [c].  A    *)
+(* zero [c] would force [y] under [ulp 0 = 0], which is what makes the        *)
+(* middle guard collapse.                                                     *)
+Lemma guarded_ulp_trans (y c a : R) :
+  format c -> (y = 0 \/ Rabs y < ulp c) -> (c = 0 \/ Rabs c < ulp a) ->
+  y = 0 \/ Rabs y < ulp a.
+Proof.
+move=> Fc [->|Hy] Hc; first by left.
+have cn0 : c <> 0
+  by move=> c0; move: Hy; rewrite c0 ulp_FLX_0; split_Rabs; lra.
+right; case: Hc => [c0|Hc]; first by case: cn0.
+apply: Rlt_trans Hc; apply: Rlt_le_trans Hy _.
+by apply: ulp_le_abs.
+Qed.
+
 (* The two preconditions of Theorem 6 on the merged sequence.                 *)
 
 (* --- magnitude order -----------------------------------------------------  *)

@@ -1547,10 +1547,12 @@ Lemma vecSum_left_same_signed (l : seq R) (i j : nat) (k : Z) :
   5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
   Rabs (nth 0 l i.-1 + (vecSumAux (drop i l)).2) =
     2 * pow (k + p) - pow k ->
-  ((vecSumAux (drop i.-1 l)).2 = 2 * pow (k + p) /\
-   nth 0 (vecSum l) i = - pow k) \/
-  ((vecSumAux (drop i.-1 l)).2 = - (2 * pow (k + p)) /\
-   nth 0 (vecSum l) i = pow k).
+  [/\ (vecSumAux (drop i.-1 l)).2 = 2 * pow (k + p),
+      (vecSumAux (drop i l)).2 = pow (k + p) &
+      nth 0 (vecSum l) i = - pow k] \/
+  [/\ (vecSumAux (drop i.-1 l)).2 = - (2 * pow (k + p)),
+      (vecSumAux (drop i l)).2 = - pow (k + p) &
+      nth 0 (vecSum l) i = pow k].
 Proof.
 move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol Hsum.
 have iLl : (i < size l)%N by apply: ltn_trans (ltnSn i) Hi.
@@ -1581,10 +1583,17 @@ have H : nth 0 l i.-1 + (vecSumAux (drop i l)).2 =
          nth 0 l i.-1 + (vecSumAux (drop i l)).2 =
          - (2 * pow (k + p) - pow k).
   by move: Hsum; split_Rabs; lra.
+(* the pair REINFORCES, so [s_i] carries the sign of the sum: the other      *)
+(* sign would need [|x_{i-1}| = 3A - G], well past its own bound.            *)
+have HX := vecSum_left_x_eq Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
+have [HRs _ _ _ _] :=
+  vecSum_pinning_of_violation Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
 case: H => HE; rewrite HE in Hrnd Hstep.
   rewrite Hmid in Hrnd; left; split => //.
+    by move: HX HRs HE; split_Rabs; lra.
   by move: Hstep; rewrite Hrnd; lra.
 rewrite Hmidn in Hrnd; right; split => //.
+  by move: HX HRs HE; split_Rabs; lra.
 by move: Hstep; rewrite Hrnd; lra.
 Qed.
 
@@ -1604,8 +1613,153 @@ move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol Hsum.
 have HA := bpow_gt_0 beta (k + p).
 have HGp := bpow_gt_0 beta k.
 case: (vecSum_left_same_signed Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol
-                               Hsum) => [] [Hs He]; rewrite Hs He;
+                               Hsum) => [] [Hs _ He]; rewrite Hs He;
   by split; split_Rabs; lra.
+Qed.
+
+(* Draft 5.2/5.3 bridge: in the reinforcing case the two errors around the    *)
+(* violation are TIED TOGETHER.  The pinning leaves [x_i] no choice of sign   *)
+(* (the opposite one would put [|e_{i+1}|] near [2A]), so the exact step      *)
+(* [s_i + e_{i+1} = x_i + s_{i+1}] collapses to [e_{i+1} = e_i + s_{i+1}].    *)
+(* With [|s_{i+1}| <= 2u] and [5/8 u <= |e_{i+1}| <= u] that forces           *)
+(* [e_{i+1}] to have the sign OPPOSITE to [e_i = -u], and the two of them     *)
+(* to cancel down to the draft's [3/8 u].                                     *)
+Lemma vecSum_left_same_err_opp (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  Rabs (nth 0 l i.-1 + (vecSumAux (drop i l)).2) =
+    2 * pow (k + p) - pow k ->
+  [/\ nth 0 (vecSum l) i.+1 =
+        nth 0 (vecSum l) i + (vecSumAux (drop i.+1 l)).2,
+      nth 0 (vecSum l) i * nth 0 (vecSum l) i.+1 < 0 &
+      Rabs (nth 0 (vecSum l) i + nth 0 (vecSum l) i.+1) <= 3 / 8 * pow k].
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol Hsum.
+have HG := bpow_gt_0 beta k.
+have HA := bpow_gt_0 beta (k + p).
+(* [A >= 16u] is the slack that kills the wrong sign of [x_i]                 *)
+have HAG : 16 * pow k <= pow (k + p).
+  have H16 : 16 * pow k = pow (k + 4).
+    by rewrite bpow_plus /= /Z.pow_pos /=; lra.
+  by rewrite H16; apply: bpow_le; lia.
+have [HRs HRc _ HS2ge HP5] :=
+  vecSum_pinning_of_violation Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
+have Hstep := vecSum_run_step Hi Hf.
+(* every error to the right of [i] is at most [u]                             *)
+have HE1le : Rabs (nth 0 (vecSum l) i.+1) <= pow k.
+  have Hgp := bpow_gt_0 beta (k - p + 1).
+  case: (vecSum_right_of_i_cases Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls
+                                 Hviol);
+    by [case=> -> _; lra | case=> -> _; lra | lra].
+have HS2le : Rabs (vecSumAux (drop i.+1 l)).2 <= 2 * pow k
+  by move: HP5 HE1le; split_Rabs; lra.
+case: (vecSum_left_same_signed Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol
+                               Hsum) => [] [_ HS1 HE].
+  (* [s_i = A], so [x_i = A - u] and [e_{i+1} = s_{i+1} - u]                  *)
+  have HXv : nth 0 l i = pow (k + p) - pow k.
+    by move: HRc HS1 HS2le HE1le Hstep HAG; split_Rabs; lra.
+  have HE1v : nth 0 (vecSum l) i.+1 = (vecSumAux (drop i.+1 l)).2 - pow k
+    by move: Hstep; rewrite HS1 HXv; lra.
+  have HS2g : pow k <= (vecSumAux (drop i.+1 l)).2
+    by move: HS2ge HE1le; rewrite HE1v; split_Rabs; lra.
+  have HE1pos : 5 / 8 * pow k <= nth 0 (vecSum l) i.+1
+    by move: Hviol; rewrite HE1v; split_Rabs; lra.
+  split; first by rewrite HE1v HE; lra.
+    by rewrite HE; nra.
+  by rewrite HE HE1v; split_Rabs; lra.
+(* the mirror image                                                           *)
+have HXv : nth 0 l i = - (pow (k + p) - pow k).
+  by move: HRc HS1 HS2le HE1le Hstep HAG; split_Rabs; lra.
+have HE1v : nth 0 (vecSum l) i.+1 = (vecSumAux (drop i.+1 l)).2 + pow k
+  by move: Hstep; rewrite HS1 HXv; lra.
+have HS2g : (vecSumAux (drop i.+1 l)).2 <= - pow k
+  by move: HS2ge HE1le; rewrite HE1v; split_Rabs; lra.
+have HE1neg : nth 0 (vecSum l) i.+1 <= - (5 / 8 * pow k)
+  by move: Hviol; rewrite HE1v; split_Rabs; lra.
+split; first by rewrite HE1v HE; lra.
+  by rewrite HE; nra.
+by rewrite HE HE1v; split_Rabs; lra.
+Qed.
+
+(* Draft 5.2/5.3, the reinforcing case again: "all the [e_i], [i <= i_1-2],   *)
+(* are divisible by 1", which is what forces [i_0 = i_1 - 1].  With           *)
+(* [i <= 2] the only offending pair is [j = 1, i = 2], and there the          *)
+(* divisibility is [pairwise_ulp] at [(x_0, x_2)]: [|x_2| = A - u] pushes     *)
+(* [ulp(x_0)] past [A/2], so [x_0] is a multiple of [A] -- as is              *)
+(* [s_1 = +/- 2A] -- and hence so is [e_1], whose [uls] is then at least      *)
+(* [A], not the normalising [u].                                              *)
+Lemma vecSum_left_same_i0 (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (0 < j)%N -> (j < i)%N -> (i <= 2)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  Rabs (nth 0 l i.-1 + (vecSumAux (drop i l)).2) =
+    2 * pow (k + p) - pow k ->
+  False.
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hj0 Hji Hi2 Hej0 Huls Hviol Hsum.
+have Hji' : (j <= i)%N by apply: ltnW.
+have Heqi : i = 2%N.
+  apply/eqP; rewrite eqn_leq Hi2 /=.
+  by move: Hj0 Hji; case: (i) => [|[|i']] //; case: (j).
+have Heqj : j = 1%N by move: Hj0 Hji; rewrite Heqi; case: (j) => [|[|j']].
+have HG := bpow_gt_0 beta k.
+have HA := bpow_gt_0 beta (k + p).
+have HAG : 16 * pow k <= pow (k + p).
+  have H16 : 16 * pow k = pow (k + 4).
+    by rewrite bpow_plus /= /Z.pow_pos /=; lra.
+  by rewrite H16; apply: bpow_le; lia.
+have Hhalf : 2 * pow (k + p - 1) = pow (k + p).
+  have H2 : (2 = pow 1) by rewrite /= /Z.pow_pos /=; lra.
+  by rewrite H2 -bpow_plus; congr bpow; lia.
+have Hsz2 : (0.+2 < size l)%N by rewrite -Heqi; apply: ltnW.
+have Hsz1 : (0.+1 < size l)%N by apply: ltnW.
+have [_ HRc _ _ _] :=
+  vecSum_pinning_of_violation Heven Hi Hf Hnz Hsort Hpair Hji' Hej0 Huls Hviol.
+rewrite Heqi in HRc.
+(* [s_1 = +/- 2A] is a multiple of [A]                                        *)
+have HS1imul : is_imul (vecSumAux (drop 1 l)).2 (pow (k + p)).
+  case: (vecSum_left_same_signed Heven Hi Hf Hnz Hsort Hpair Hji' Hej0 Huls
+                                 Hviol Hsum) => [] [HS0 _ _];
+    rewrite Heqi /= in HS0.
+    by exists 2%Z; rewrite HS0.
+  by exists (-2)%Z; rewrite HS0; lra.
+(* and so is [x_0], because [pairwise_ulp] must clear [|x_2| = A - u]         *)
+have Fx0 : format (nth 0 l 0) by apply: Hf; apply: mem_nth; apply: ltnW.
+have Hx2n0 : nth 0 l 2 <> 0 by apply: Hnz.
+have Hulpx0 : pow (k + p) - pow k < ulp (nth 0 l 0).
+  case: (Hpair 0%N Hsz2) => [Hzz|Hlt]; first by case: Hx2n0.
+  by move: Hlt; rewrite HRc.
+have Hx0 : pow (k + p - 1 + p) <= Rabs (nth 0 l 0).
+  case: (Rle_lt_dec (pow (k + p - 1 + p)) (Rabs (nth 0 l 0))) => // Hlt.
+  by have := bound_ulp_FLX Hp2 Hlt; lra.
+have Hmag : (k + 2 * p <= mag beta (nth (0:R) l 0))%Z.
+  apply: mag_ge_bpow.
+  by have -> : (k + 2 * p - 1 = k + p - 1 + p)%Z by lia.
+have Hcexp : (k + p <= cexp (nth (0:R) l 0))%Z
+  by rewrite /cexp /FLX_exp; lia.
+have Himx0 : is_imul (nth 0 l 0) (pow (k + p))
+  by apply: is_imul_pow_le (format_imul_cexp Fx0) Hcexp.
+(* [e_1] is their rounding error, hence a multiple of [A] as well             *)
+have Hstep := vecSum_run_step Hsz1 Hf.
+have Hrnd := vecSum_run_rnd Hsz1.
+rewrite drop0 in Hstep Hrnd.
+have He1 : nth 0 (vecSum l) 1 =
+           (nth 0 l 0 + (vecSumAux (drop 1 l)).2) -
+           RND (nth 0 l 0 + (vecSumAux (drop 1 l)).2) by lra.
+have Hime1 : is_imul (nth 0 (vecSum l) 1) (pow (k + p)).
+  rewrite He1; apply: is_imul_minus; first by apply: is_imul_add.
+  by apply: is_imul_pow_round; apply: is_imul_add.
+have Fe1 : format (nth 0 (vecSum l) 1).
+  apply: (format_vecSum Hf); apply: mem_nth.
+  by rewrite size_vecSum prednK //; apply: ltnW; apply: ltnW.
+move: Hej0 Huls; rewrite Heqj => Hej0 Huls.
+have := is_imul_uls_ge Fe1 Hej0 Hime1; rewrite Huls => Hle.
+by have := le_bpow _ _ _ Hle; lia.
 Qed.
 
 (* ===========================================================================*)

@@ -2,7 +2,7 @@
 (* Algorithm 8 (TWSum): the sum of two triple-word numbers, and its two main  *)
 (* correctness results -- the result is a triple word ([TWSum_isTW]) and the  *)
 (* relative error bound ([TWSum_error]).  Generic over the precision [p] and  *)
-(* minimal exponent [emin] (binary64 is fixed only in [addition.v]); built on *)
+(* over the precision [p] alone -- FLX, no [emin] (binary64 is fixed only in *)
 (* [TwoSum], [Nonoverlap], [TWR], [Merge], [VecSum] and [VSEB].               *)
 (* ---------------------------------------------------------------------------*)
 
@@ -18,6 +18,7 @@ Require Import TWR.
 Require Import Merge.
 Require Import VecSum.
 Require Import VSEB.
+Require Import Thm6.
 Delimit Scope R_scope with R.
 Delimit Scope Z_scope with Z.
 
@@ -28,14 +29,15 @@ Unset Printing Implicit Defensive.
 Section SecTWSum.
 
 Variable p : Z.
-Variable emin : Z.
 Hypothesis Hp2 : (1 < p)%Z.
-Hypothesis emin_le_0 : (emin <= 0)%Z.
 (* The correctness of triple-word addition needs enough precision (paper      *)
 (* Section 5: [p >= 4] for Theorem 6, [p >= 6] for the Theorem-3 truncation   *)
 (* and [size < p + 1] for six merged terms).  [p >= 6] covers all of them;    *)
 (* binary64 ([p = 53]) satisfies it in [addition.v].                          *)
 Hypothesis Hp6 : (6 <= p)%Z.
+
+(* [Thm6.v] is stated for [4 <= p]; here [6 <= p].                           *)
+Fact Hp4 : (4 <= p)%Z. Proof. by lia. Qed.
 
 Local Notation beta := radix2.
 Local Notation pow e := (bpow beta e).
@@ -55,65 +57,65 @@ Local Notation rnd := (Znearest choice).
 Local Instance valid_rnd : Valid_rnd rnd := valid_rnd_N choice.
 
 Local Notation float := (float radix2).
-Local Notation fexp := (FLT_exp emin p).
+Local Notation fexp := (FLX_exp p).
 Local Notation format := (generic_format beta fexp).
 Local Notation cexp := (cexp beta fexp).
 Local Notation mant := (scaled_mantissa beta fexp).
 Local Notation RND := (round beta fexp rnd).
 Local Notation ulp := (ulp beta fexp).
-Local Notation uls := (uls p emin).
+Local Notation uls := (uls p).
 Local Notation error_le_half_ulp_RN :=
-  (@error_le_half_ulp_round beta (FLT_exp emin p)
-     (FLT_exp_valid emin p) (FLT_exp_monotone emin p) choice).
+  (@error_le_half_ulp_round beta (FLX_exp p)
+     (FLX_exp_valid p) (FLX_exp_monotone p) choice).
 Local Notation TwoSum_correct_RN :=
-  (@TwoSum_correct emin p choice Hp2 emin_le_0 choice_sym).
+  (@TwoSum_correct p choice Hp2 choice_sym).
 
-Local Notation TwoSum := (TwoSum p emin choice).
-Local Notation TwoSum_hi := (TwoSum_hi p emin choice).
-Local Notation formatDWR := (formatDWR p emin).
-Local Notation magnitudeDWR := (magnitudeDWR p emin).
+Local Notation TwoSum := (TwoSum p choice).
+Local Notation TwoSum_hi := (TwoSum_hi p choice).
+Local Notation formatDWR := (formatDWR p).
+Local Notation magnitudeDWR := (magnitudeDWR p).
 Local Notation format_TwoSum := (format_TwoSum Hp2 choice).
 Local Notation TwoSum_correct_loc :=
-  (TwoSum_correct_loc Hp2 emin_le_0 choice_sym).
+  (TwoSum_correct_loc Hp2 choice_sym).
 Local Notation magnitude_TwoSum :=
-  (magnitude_TwoSum Hp2 emin_le_0 choice_sym).
-Local Notation TwoSum_err_imul := (TwoSum_err_imul Hp2 emin_le_0 choice_sym).
+  (magnitude_TwoSum Hp2 choice_sym).
+Local Notation TwoSum_err_imul := (TwoSum_err_imul Hp2 choice_sym).
 Local Notation TwoSum_err_uls_ge :=
-  (TwoSum_err_uls_ge Hp2 emin_le_0 choice_sym).
+  (TwoSum_err_uls_ge Hp2 choice_sym).
 
-Local Notation Pnonoverlap := (Pnonoverlap p emin).
-Local Notation pairwise_ulp := (pairwise_ulp p emin).
-Local Notation Fnonoverlap := (Fnonoverlap p emin).
-Local Notation format_lt_ulp_0 := (@format_lt_ulp_0 p emin Hp2).
-Local Notation format_lt_ulp_le := (@format_lt_ulp_le p emin Hp2).
+Local Notation Pnonoverlap := (Pnonoverlap p).
+Local Notation pairwise_ulp := (pairwise_ulp p).
+Local Notation Fnonoverlap := (Fnonoverlap p).
+Local Notation format_lt_ulp_le := (@format_lt_ulp_le p Hp2).
 Local Notation Pnonoverlap_imp_pairwise_ul :=
   (Pnonoverlap_imp_pairwise_ul Hp2).
 Local Notation abs_le_ufp_norm := (abs_le_ufp_norm Hp2).
-Local Notation nu_of_lt_ulp := (nu_of_lt_ulp Hp2).
-Local Notation small_head_zero := (@small_head_zero p emin Hp2).
-Local Notation sumR_ufp_bound := (@sumR_ufp_bound p emin Hp2).
-Local Notation nth_step_zero := (@nth_step_zero p emin Hp2).
+Local Notation small_head_zero := (@small_head_zero p Hp2).
+Local Notation sumR_ufp_bound := (@sumR_ufp_bound p Hp2).
+Local Notation nth_step_zero := (@nth_step_zero p Hp2).
 
-(* Triple-word type and merge from [TWR.v]/[Merge.v]; fix [p]/[emin].         *)
-Local Notation isTW := (isTW p emin).
+(* Triple-word type and merge from [TWR.v]/[Merge.v]; fix [p].               *)
+Local Notation isTW := (isTW p).
 Local Notation isTW_sorted_mag := (isTW_sorted_mag Hp2).
 Local Notation Merge_pairwise_ulp := (Merge_pairwise_ulp Hp2).
 
-(* [VecSum.v] / [VSEB.v] entry points; re-hide this format's [p]/[emin]/      *)
-(* [choice] (and the [Hp2]/[emin_le_0]/[choice_sym] proofs).                  *)
-Local Notation vecSum := (vecSum p emin choice).
-Local Notation vseb := (vseb p emin choice).
-Local Notation vsebK := (vsebK p emin choice).
-Local Notation size_vecSum := (size_vecSum p emin choice).
+(* [VecSum.v] / [VSEB.v] / [Thm6.v] entry points; re-hide this format's      *)
+(* [p]/[choice] (and the [Hp2]/[choice_sym] proofs).                         *)
+Local Notation vecSum := (vecSum p choice).
+Local Notation vseb := (vseb p choice).
+Local Notation vsebK := (vsebK p choice).
+Local Notation size_vecSum := (size_vecSum p choice).
 Local Notation format_vecSum := (format_vecSum Hp2).
 Local Notation format_vseb := (format_vseb Hp2).
 Local Notation format_vsebK := (format_vsebK Hp2).
-Local Notation vecSum_sum := (vecSum_sum Hp2 emin_le_0 choice_sym).
-Local Notation vseb_sum := (vseb_sum Hp2 emin_le_0 choice_sym).
-Local Notation vecSum_Fnonoverlap :=
-  (vecSum_Fnonoverlap Hp2 emin_le_0 choice_sym).
+Local Notation vecSum_sum := (vecSum_sum Hp2 choice_sym).
+Local Notation vseb_sum := (vseb_sum Hp2 choice_sym).
+Local Notation vecSum_run_ufp := (vecSum_run_ufp Hp2 choice_sym).
+Local Notation vecSum_err_ufp := (vecSum_err_ufp Hp2 choice_sym).
 Local Notation vseb_Pnonoverlap :=
-  (vseb_Pnonoverlap Hp2 emin_le_0 choice_sym).
+  (vseb_Pnonoverlap Hp2 choice_sym).
+Local Notation vecSum_vseb_Pnonoverlap :=
+  (vecSum_vseb_Pnonoverlap Hp2 Hp4 choice_sym).
 
 (* ===========================================================================*)
 (*  Algorithm 8: TWSum -- the sum of two triple-word numbers.                 *)
@@ -139,10 +141,15 @@ Local Notation errc := (2 * (u * u * u) + 42 / 10 * (u * u * u * u)).
 (*  Sketch (paper, Section 5.1, p >= 4):                                      *)
 (*   - Merge keeps floating-point numbers, magnitude-sorted, with the         *)
 (*     pairwise-ulp separation, i.e. the hypotheses of Theorem 6.             *)
-(*   - VecSum turns that into an F-nonoverlapping (wIZ) sequence with         *)
-(*     the same exact sum (Theorem 1 / Corollary 1).                          *)
-(*   - VSEB returns a P-nonoverlapping sequence (Theorem 2), so its           *)
-(*     first three terms form a TW number.                                    *)
+(*   - [VSEB (VecSum ...)] is P-nonoverlapping with the same exact sum         *)
+(*     ([vecSum_vseb_Pnonoverlap], paper Theorem 6), so its first three        *)
+(*     terms form a TW number.                                                *)
+(*                                                                            *)
+(*  NB.  The intermediate "[VecSum ...] is F-nonoverlapping" is NOT used any   *)
+(*  more, because it is FALSE for merges of near-equal odd leaders (see the    *)
+(*  note in [VecSum.v] and the machine-checked [CEThm6.v]).  Theorem 6 is a    *)
+(*  DIRECT statement about [VSEB (VecSum ...)]: VSEB repairs the overlap that  *)
+(*  VecSum can leave behind.                                                   *)
 (* ===========================================================================*)
 (* Merging two triples and running VecSum yields exactly six terms, so the    *)
 (* [size <= p + 1] side condition of [vseb_Pnonoverlap] holds once [6 <= p].  *)
@@ -151,9 +158,22 @@ Lemma size_vecSum_Merge x0 x1 x2 y0 y1 y2 :
      (size (vecSum (Merge [:: x0; x1; x2] [:: y0; y1; y2]))) <= p + 1)%Z.
 Proof. by rewrite size_vecSum size_Merge /=; lia. Qed.
 
-Lemma TWSum_isTW x y : isTW x -> isTW y -> isTW (TWSum x y).
+(* Paper Theorem 6 (the statement [TWSum] actually needs).  For at most SIX    *)
+(* magnitude-sorted, pairwise-ulp-separated floating-point inputs (with no     *)
+(* underflow: nonzero terms normal), running VecSum and then VSEB yields a     *)
+(* P-nonoverlapping sequence.  Round-to-nearest must be TIES-TO-EVEN.          *)
+(*                                                                            *)
+(* This is DIRECT: the raw [vecSum l] is generally NOT F-nonoverlapping        *)
+(* ([CEThm6.v]), so it does NOT factor through [vecSum_Fnonoverlap]/           *)
+(* [vseb_Pnonoverlap].  The proof (paper Section 5.1, undetailed there) uses   *)
+(* the run-bound [vecSum_run_ufp] and error-bound [vecSum_err_ufp], then a     *)
+(* case study on how VSEB's Fast2Sum steps collapse the (few) overlaps VecSum  *)
+
+Lemma TWSum_isTW x y :
+  ties_to_even choice ->
+  isTW x -> isTW y -> isTW (TWSum x y).
 Proof.
-case: x => x0 x1 x2; case: y => y0 y1 y2 => Hx Hy.
+case: x => x0 x1 x2; case: y => y0 y1 y2 => Hceven Hx Hy.
 pose z := Merge [:: x0; x1; x2] [:: y0; y1; y2].
 pose e := vecSum z.
 (* Merge keeps the six terms floating-point ...                               *)
@@ -190,11 +210,12 @@ have He_sum : sumR e = sumR z by apply: vecSum_sum.
 (*             (vecSum_Fnonoverlap Hz_format Hz_sorted Hz_ulp).1).1].         *)
 have Hr_nonover : Pnonoverlap (vsebK 3 e).
   apply/Pnonoverlap_take.
-  case: (@vseb_Pnonoverlap e) => //.
-  - exact: size_vecSum_Merge.
-  - apply/format_vecSum/format_Merge => //; first by apply: (isTW_format Hx).
-    by apply: (isTW_format Hy).
-  by case: (@vecSum_Fnonoverlap z).
+  rewrite /e; apply: vecSum_vseb_Pnonoverlap.
+  - exact: Hceven.
+  - by rewrite /z size_Merge.
+  - exact: Hz_format.
+  - exact: Hz_sorted.
+  exact: Hz_ulp.
 (* and its terms are floating-point numbers.                                  *)
 have Hr_format : {in vsebK 3 e, forall t, format t}.
   by apply/format_vsebK/format_vecSum.
@@ -204,28 +225,25 @@ have Hr_format : {in vsebK 3 e, forall t, format t}.
 (* [Hr_nonover] (real terms) or [0 < ulp _] (the padding zeros).              *)
 rewrite /TWSum -/z -/e.
 move: Hr_nonover Hr_format; case: (vsebK 3 e) => [|r0 [|r1 [|r2 tl]]] Hno Hfmt.
-- by split; [exact: generic_format_0 | exact: generic_format_0
-           | exact: generic_format_0 | rewrite Rabs_R0; exact: ulp_gt_0
-           | rewrite Rabs_R0; exact: ulp_gt_0].
-- by split; [apply: Hfmt; rewrite !inE eqxx | exact: generic_format_0
-           | exact: generic_format_0 | rewrite Rabs_R0; exact: ulp_gt_0
-           | rewrite Rabs_R0; exact: ulp_gt_0].
-- by split; [apply: Hfmt; rewrite !inE eqxx | 
-             apply: Hfmt; rewrite !inE eqxx orbT | 
-             exact: generic_format_0 | 
-             apply: (Hno 0%N) | rewrite Rabs_R0; exact: ulp_gt_0].
+- by split; try exact: generic_format_0; left.
+- by split; try exact: generic_format_0;
+     [apply: Hfmt; rewrite !inE eqxx | left | left].
+- by split; [apply: Hfmt; rewrite !inE eqxx | apply: Hfmt; rewrite !inE eqxx orbT
+           | exact: generic_format_0 | apply: (Hno 0%N) | left].
 by split; [apply: Hfmt; rewrite !inE eqxx | apply: Hfmt; rewrite !inE eqxx orbT
-         | apply: Hfmt; rewrite !inE eqxx !orbT | 
-           apply: (Hno 0%N) | apply: (Hno 1%N)].
+         | apply: Hfmt; rewrite !inE eqxx !orbT | apply: (Hno 0%N)
+         | apply: (Hno 1%N)].
 Qed.
 
 (* A float is at most [(2 - 2u) ufp] of itself (max-mantissa bound).  Holds   *)
 (* also at 0 and in the subnormal range, so no no-underflow hypothesis.       *)
-Lemma TWSum_error x y : isTW x -> isTW y ->
+Lemma TWSum_error x y :
+  ties_to_even choice ->
+  isTW x -> isTW y ->
   Rabs (TWval (TWSum x y) - (TWval x + TWval y)) <=
      errc * Rabs (TWval x + TWval y).
 Proof.
-case: x => x0 x1 x2; case: y => y0 y1 y2 => Hx Hy.
+case: x => x0 x1 x2; case: y => y0 y1 y2 => Hceven Hx Hy.
 pose z := Merge [:: x0; x1; x2] [:: y0; y1; y2].
 pose e := vecSum z.
 (* Merge is a permutation: it preserves the exact sum.                        *)
@@ -258,11 +276,14 @@ have Htrunc :
     - by rewrite !inE => /or3P[] /eqP->; case: Hy.
     - by apply: isTW_Pnonoverlap Hx.
     by apply: isTW_Pnonoverlap Hy.
-  have HFe : Fnonoverlap e by case: (vecSum_Fnonoverlap Hzf Hzs Hzu).
   have Fe : {in e, forall t, format t} by apply: format_vecSum.
   have Py : Pnonoverlap (vseb e).
-    by case: (vseb_Pnonoverlap _ Fe HFe) => //;
-       rewrite /e; exact: size_vecSum_Merge.
+    rewrite /e; apply: vecSum_vseb_Pnonoverlap.
+    - exact: Hceven.
+    - by rewrite /z size_Merge.
+    - exact: Hzf.
+    - exact: Hzs.
+    exact: Hzu.
   have Fy : {in vseb e, forall t, format t} by apply: format_vseb.
   set y := vseb e.
   have Hsplit : sumR (vseb e) - sumR (vsebK 3 e) = sumR (drop 3 y).
@@ -300,12 +321,10 @@ have Htrunc :
     move=> k Hkn.
     have Hk : (k.+1 < size y)%N.
       by rewrite ltnNge; apply/negP => Hge; apply: Hkn; rewrite nth_default.
-    have Hpk : Rabs (nth 0 y k.+1) < ulp (nth 0 y k) by apply: Py.
-    apply: ufp_ulp_step.
-    - by move=> H; apply: Hkn; apply: (nth_step_zero Py Fy H).
-    - exact: Hkn.
-    - exact: Hpk.
-    exact: (nu_of_lt_ulp (Fk k.+1) Hkn Hpk).
+    have Hpk : Rabs (nth 0 y k.+1) < ulp (nth 0 y k)
+      by apply: Pnonoverlap_lt Hk Hkn.
+    apply: ufp_ulp_step => //.
+    by move=> H; apply: Hkn; apply: (nth_step_zero Py Fy H).
   have d0 := dstep 0%N y1n.
   have d1 := dstep 1%N y2n.
   have d2 := dstep 2%N y3n.

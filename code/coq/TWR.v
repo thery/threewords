@@ -55,9 +55,15 @@ Definition TWval (x : twR) : R := let: TWR x0 x1 x2 := x in x0 + x1 + x2.
 
 (* Definition 5: a triple-word number is a P-nonoverlapping triplet           *)
 (* of floating-point numbers.                                                 *)
+(* Under FLX [ulp 0 = 0], so the strict Priest bound has to carry the same    *)
+(* "successor is zero" guard as [Pnonoverlap] -- otherwise NO triple word     *)
+(* with a zero limb qualifies, [TWSum]'s own zero-padded output included.     *)
+(* This does not weaken the FLT reading, where [ulp 0 = pow emin] makes the   *)
+(* guard unreachable for a format successor.                                  *)
 Definition isTW (x : twR) : Prop :=
   let: TWR x0 x1 x2 := x in
-  [/\ format x0, format x1, format x2, Rabs x1 < ulp x0 & Rabs x2 < ulp x1].
+  [/\ format x0, format x1, format x2,
+      x1 = 0 \/ Rabs x1 < ulp x0 & x2 = 0 \/ Rabs x2 < ulp x1].
 
 (* ===========================================================================*)
 (*  Triple-word numbers as 3-element sequences                                *)
@@ -68,8 +74,9 @@ Definition TW2l x := let: TWR x0 x1 x2 := x in [:: x0; x1; x2].
 (* sorted.  Two applications of [format_lt_ulp_le] to the [isTW] conjuncts.   *)
 Lemma isTW_sorted_mag x : isTW x -> sorted_mag (TW2l x).
 Proof.
-by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|//]] _; 
-   apply: format_lt_ulp_le.
+by case: x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|//]] _;
+   [case: x1Lux0 => [->|H] | case: x2Lux1 => [->|H]];
+   rewrite ?Rabs_R0 //; try apply: Rabs_pos; apply: format_lt_ulp_le.
 Qed.
 
 (* A triple-word, viewed as a 3-element list, is P-nonoverlapping (Def. 5).   *)

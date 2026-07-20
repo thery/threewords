@@ -3091,7 +3091,58 @@ Lemma vecSum_no_more_err_of_1m2u (l : seq R) (i j : nat) (k : Z) :
   (2 < i)%N ->
   forall m, (i.+1 < m)%N -> nth 0 (vecSum l) m = 0.
 Proof.
-Admitted.
+move=> Heven Hsz6 Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol Heq Hi3 m Hm.
+have Hpk := bpow_gt_0 beta k.
+have Hgk := bpow_gt_0 beta (k - p + 1).
+have Hszl : size (vecSum l) = size l
+  by rewrite size_vecSum prednK //; apply: ltn_trans Hi.
+case: (ltnP m (size (vecSum l))) => [Hmsz|Hge]; last by rewrite nth_default.
+have Hmlt : (m < size l)%N by rewrite -Hszl.
+(* [i >= 3] and [size l <= 6] leave exactly one live configuration           *)
+have Hm5 : m = 5%N.
+  have H1 : (5 <= m)%N by apply: leq_trans Hm; rewrite !ltnS.
+  have H2 : (m <= 5)%N by rewrite -ltnS; apply: leq_trans Hmlt _.
+  by apply/eqP; rewrite eqn_leq H2 H1.
+have Hieq : i = 3%N.
+  apply/eqP; rewrite eqn_leq Hi3 andbT.
+  by move: Hm; rewrite Hm5 !ltnS.
+have Hsz : size l = 6%N.
+  by apply/eqP; rewrite eqn_leq Hsz6 /=; move: Hmlt; rewrite Hm5.
+rewrite Hm5.
+(* the running sum is [RND(x_4 + x_5)] and [e_5] is its error                *)
+have H5sz : (4.+1 < size l)%N by rewrite Hsz.
+have Hrnd := vecSum_run_rnd H5sz.
+have Hlast : (vecSumAux (drop 5 l)).2 = nth 0 l 5
+  by apply: vecSum_run_last; rewrite Hsz.
+rewrite Hlast in Hrnd.
+have F4 : format (nth 0 l 4) by apply: Hf; apply: mem_nth; rewrite Hsz.
+have F5 : format (nth 0 l 5) by apply: Hf; apply: mem_nth; rewrite Hsz.
+have Hstep := vecSum_run_step H5sz Hf.
+rewrite Hlast in Hstep.
+(* [Heq] picks 5.2's case 2, which pins [|s_3| = 2u - 2u^2]                  *)
+have Hcases := vecSum_right_of_i_cases Heven Hi Hf Hnz Hsort Hpair Hji Hej0
+                                       Huls Hviol.
+rewrite Hieq in Hcases.
+rewrite Hieq in Heq.
+have Hs : Rabs (RND (nth 0 l 4 + nth 0 l 5)) = 2 * pow k - pow (k - p + 1).
+  rewrite -Hrnd.
+  case: Hcases => [[He _]|[_ Hs2]|He]; last 1 first.
+  - by move: Heq He; have := bpow_gt_0 beta (k - p + 1); lra.
+  - by move: Heq He; lra.
+  by [].
+(* the draft's [x_{i+1} <= u - u^2] for both inputs                          *)
+have [i' Hi'i Hxlt] :=
+  vecSum_inputs_lt_u_of_violation Hi Hf Hsort Hpair Hji Hej0 Huls Hviol.
+rewrite Hieq in Hi'i.
+have Hi'2 : (i' <= 2)%N by rewrite -ltnS.
+have Hi'3 : (i' <= 3)%N by apply: leq_trans Hi'2 _.
+have Ha4 : Rabs (nth 0 l 4) <= pow k - pow (k - p)
+  by apply: abs_le_pred_of_lt => //; apply: (Hxlt 2%N Hi'2); rewrite Hsz.
+have Ha5 : Rabs (nth 0 l 5) <= pow k - pow (k - p)
+  by apply: abs_le_pred_of_lt => //; apply: (Hxlt 3%N Hi'3); rewrite Hsz.
+have Hexact := pair_pin_1m2u Heven F4 F5 Ha4 Ha5 Hs.
+by move: Hstep; rewrite Hrnd Hexact; lra.
+Qed.
 
 (* Draft 5.3, case [i_1 >= 4] (with [e_{i_1} >= 5/8 u]): "in particular      *)
 (* there is no need to consider beyond [r_{i_1}]".  5.2's                    *)

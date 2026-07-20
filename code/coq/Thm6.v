@@ -2415,6 +2415,56 @@ Qed.
 (* case lemma above discharges one branch; what is admitted here is the       *)
 (* dispatch plus the two branches doc/thm6.md still owes ([i_1 <= 3] and      *)
 (* the [|e_4| = |e_3|] index argument).                                       *)
+(* The draft's "[uls(e_{i_1}) <= 1/8 u]" in its sub-case [1/2 u > |e_{i_1}|]  *)
+(* and [|e_{i_1}| <> 1/4 u].  [uls x] is a power of two at most [|x|], so     *)
+(* here it is at most [1/4 u]; and AT [1/4 u] the bound [|x| < 2 uls x]       *)
+(* pins [|x| = uls x = 1/4 u] ([abs_eq_uls_of_lt_2uls]) -- exactly the value  *)
+(* the sub-case excludes.  So the boundary is unreachable and [uls x] drops   *)
+(* a further notch.                                                           *)
+Lemma uls_le_eighth (x : R) (K : Z) :
+  format x -> x <> 0 -> Rabs x < / 2 * pow K -> Rabs x <> / 4 * pow K ->
+  uls x <= / 8 * pow K.
+Proof.
+move=> Fx xn0 Hlt Hne.
+have Hpk := bpow_gt_0 beta K.
+have E1 : 2 * pow (K - 1) = pow K.
+  by rewrite -(bpow_plus beta 1 (K - 1)) (_ : (1 + (K - 1) = K)%Z) //; lia.
+have E2 : 4 * pow (K - 2) = pow K.
+  by rewrite -(bpow_plus beta 2 (K - 2)) (_ : (2 + (K - 2) = K)%Z) //; lia.
+have E3 : 8 * pow (K - 3) = pow K.
+  by rewrite -(bpow_plus beta 3 (K - 3)) (_ : (3 + (K - 3) = K)%Z) //; lia.
+have [J HJ] := uls_pow xn0.
+have Hux : uls x <= Rabs x by apply: uls_le_abs.
+have HJ1 : (J <= K - 2)%Z.
+  have Hp1 : pow J < pow (K - 1) by rewrite -HJ in E1 *; lra.
+  by move: (lt_bpow beta _ _ Hp1); lia.
+case: (Z_le_gt_dec J (K - 3)) => [HJ3|HJ2].
+  have Hle := bpow_le beta _ _ HJ3.
+  by rewrite HJ; lra.
+have HJeq : J = (K - 2)%Z by lia.
+have Hu2 : Rabs x < 2 * uls x by rewrite HJ HJeq; lra.
+by case: Hne; rewrite (abs_eq_uls_of_lt_2uls Fx xn0 Hu2) HJ HJeq; lra.
+Qed.
+
+(* The draft's 5.3 sub-case [1/2 u > |e_{i_1}|], [|e_{i_1}| <> 1/4 u],        *)
+(* discharged from purely LOCAL data: no [vecSum] index reasoning is needed   *)
+(* here, because the tail bound comes from [uls]-domination alone (the        *)
+(* [>= 1/2 u] sub-cases are the ones that must go back through 5.2).          *)
+Lemma vseb_emit_lt_half (e et r : R) (tail : seq R) (K : Z) :
+  format et -> format e -> {in tail, forall z, format z} ->
+  e <> 0 -> pow K <= Rabs et -> 2 * Rabs et <= ulp r ->
+  Rabs e < / 2 * pow K -> Rabs e <> / 4 * pow K ->
+  (size tail <= 3)%N ->
+  (forall z, z \in tail -> Rabs z <= uls e) ->
+  Rabs (nth 0 (vsebAux et (e :: tail)) 0) < ulp r.
+Proof.
+move=> Fet Fe Ftail en0 Ht Hulp Hlt Hne Hsz Hdom.
+have Hpk := bpow_gt_0 beta K.
+have Huls := uls_le_eighth Fe en0 Hlt Hne.
+apply: (vseb_subcase_lt_half (t := pow K)) => // [|z zt]; first by lra.
+by apply: Rle_trans (Hdom z zt) _; lra.
+Qed.
+
 (* The draft's 5.3 CASE STUDY, with both of its indices in hand: [k] is       *)
 (* [i_0] (the error consumed at this emit, whose [uls] is the draft's         *)
 (* normalising [u = pow K]) and [q] is [i_1] (the first non-zero error        *)

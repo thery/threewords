@@ -155,6 +155,26 @@ have -> : Rabs x = Rabs (IZR M) * uls x.
 nra.
 Qed.
 
+(* A float closer to zero than TWICE its [uls] IS its [uls] in magnitude.     *)
+(* [x = M * uls x] with [M] a nonzero integer, so [|M| < 2] forces [|M| = 1]. *)
+(* This is what makes a [uls] boundary case identifiable: below [2 * uls x]   *)
+(* there is exactly one admissible magnitude.                                 *)
+Lemma abs_eq_uls_of_lt_2uls x :
+  format x -> x <> 0 -> Rabs x < 2 * uls x -> Rabs x = uls x.
+Proof.
+move=> xF xn0 Hlt; have Hu := uls_gt_0 xn0.
+have Hx := ulsE xF.
+set M := (Ztrunc (mant x) / 2 ^ Z.of_nat (trZ (Ztrunc (mant x))))%Z in Hx.
+have M0 : M <> 0%Z by move=> H0; apply: xn0; rewrite Hx H0 /= Rmult_0_l.
+have HxM : Rabs x = Rabs (IZR M) * uls x.
+  by rewrite {1}Hx Rabs_mult (Rabs_pos_eq _ (Rlt_le _ _ Hu)).
+have HA : Rabs (IZR M) = IZR (Z.abs M) by rewrite abs_IZR.
+have H1 : 1 <= IZR (Z.abs M) by apply: IZR_le; lia.
+have H2 : IZR (Z.abs M) < 2 by move: Hlt; rewrite HxM HA; nra.
+have HM : Z.abs M = 1%Z by have := lt_IZR _ _ H2; have := le_IZR _ _ H1; lia.
+by move: HxM; rewrite HA HM => ->; lra.
+Qed.
+
 (* ===========================================================================*)
 (*  [is_imul] bridge: reusable "multiples of a power grid" facts, feeding the *)
 (*  paper's "multiples of 2u" argument (Theorem 1) via Flocq's [is_imul].     *)

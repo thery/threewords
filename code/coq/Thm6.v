@@ -2533,6 +2533,30 @@ Qed.
 
 (* ---- the three branches doc/thm6.md 5.3 still owes ---------------------*)
 
+(* What the walk's FIRST step contributes to the emitted head.  Either the    *)
+(* step is inexact -- and then the head is [RND(eps + e)] no matter what      *)
+(* follows, which is why the draft can write "[y_{j+1} = r_{i_1-1}]" and stop *)
+(* -- or it is exact, and the walk carries on from the exact sum.  This is    *)
+(* the structural reason the [i_1 >= 4] case needs no mass argument on the    *)
+(* inexact side.                                                              *)
+Lemma vsebAux_head_step (eps e : R) (l : seq R) :
+  nth 0 (vsebAux eps (e :: l)) 0 = RND (eps + e) \/
+  (dwl (TwoSum eps e) = 0 /\
+   nth 0 (vsebAux eps (e :: l)) 0 = nth 0 (vsebAux (RND (eps + e)) l) 0).
+Proof.
+case: l => [|e2 l].
+  left; rewrite vsebAux_1.
+  by case E : (TwoSum eps e) => [y0 y1] /=; have := TwoSum_hi eps e; rewrite E.
+rewrite vsebAux_consS.
+case E : (TwoSum eps e) => [r et].
+have Hr : r = RND (eps + e) by have := TwoSum_hi eps e; rewrite E.
+case: (Req_EM_T et 0) => [Het0|Hetn0]; last by left; rewrite /= Hr.
+change (nth 0 (vsebAux r (e2 :: l)) 0 = RND (eps + e) \/
+        et = 0 /\ nth 0 (vsebAux r (e2 :: l)) 0
+                  = nth 0 (vsebAux (RND (eps + e)) (e2 :: l)) 0).
+by right; rewrite Hr.
+Qed.
+
 (* Ties-to-even, in the form the draft's "[2u | s_{i_1-1}]" needs: a rounding *)
 (* whose error is EXACTLY [1/2 pow K] lands on the [pow (K+1)] grid.  Write   *)
 (* [c] for [cexp v]; the error is [|m - Znearest m| pow c] with               *)
@@ -2652,6 +2676,35 @@ Lemma vseb_emit_viol_le3 (l : seq R) (k q : nat) (r et : R) (K : Z) :
 Proof.
 Admitted.
 
+(* Draft 5.2, "at the right of [i]", case [e_i = u - 2u^2]: "so we must have  *)
+(* [s_{i+1} >= u-u^2] with [x_{i+1} <= u-u^2], so either there is no more     *)
+(* non-zero [e_{i'}] or [i <= 3]" -- here on the [i >= 3] side, where the     *)
+(* disjunction must resolve to "no more non-zero [e_{i'}]".                   *)
+(*                                                                            *)
+(* Unlike the [e_i = u] case ([vecSum_right_of_i_count]) this does NOT close  *)
+(* by the running-sum contradiction: [vecSum_run_ge_next_1m2u] only reaches   *)
+(* [u - 2u^2], which sits BELOW the input ceiling [u - u^2], so a stranded    *)
+(* running sum is not absurd.  What closes it is a PINNING: with [i >= 3]     *)
+(* and [size l <= 6] the only live case is [size l = 6], [i = 3], where the   *)
+(* running sum [|s_3| = 2u - 2u^2] is [RND(x_4 + x_5)] with                   *)
+(* [|x_4|, |x_5| <= u - u^2].  The midpoint [2u - 3u^2] is a TIE that         *)
+(* ties-to-even sends DOWN (its lower neighbour [2u - 4u^2] has the even      *)
+(* mantissa), so [x_4 + x_5 > 2u - 3u^2]; both inputs then sit on the [u^2]   *)
+(* grid inside [(u - 2u^2, u - u^2]], forcing [x_4 = x_5 = +-(u - u^2)] and   *)
+(* hence [x_4 + x_5 = +-(2u - 2u^2)] EXACTLY, i.e. [e_5 = 0].                 *)
+Lemma vecSum_no_more_err_of_1m2u (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (size l <= 6)%N -> (i.+1 < size l)%N ->
+  {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  Rabs (nth 0 (vecSum l) i.+1) = pow k - pow (k - p + 1) ->
+  (2 < i)%N ->
+  forall m, (i.+1 < m)%N -> nth 0 (vecSum l) m = 0.
+Proof.
+Admitted.
+
 (* Draft 5.3, case [i_1 >= 4] (with [e_{i_1} >= 5/8 u]): "in particular      *)
 (* there is no need to consider beyond [r_{i_1}]".  5.2's                    *)
 (* [vecSum_right_of_i_count] kills the [|e_{i_1}| = u] case here (it forces  *)
@@ -2674,7 +2727,100 @@ Lemma vseb_emit_viol_ge4 (l : seq R) (k q : nat) (r et : R) (K : Z) :
   Rabs (nth 0 (vsebAux et (nth 0 (vecSum l) q :: drop q.+1 (vecSum l))) 0)
     < ulp r.
 Proof.
-Admitted.
+move=> Heven Hsz6 Hfmt Hnz Hsort Hpair Fet Hk Hkq Hq4 Hq en0 Hqn0 HK Ht Hulp
+       Hviol.
+have Hpk := bpow_gt_0 beta K.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu16 := u_le_inv16.
+have Hulp0 : 0 < ulp r by have := Rabs_pos et; lra.
+have Hq2 : (1 < q)%N by apply: leq_ltn_trans Hk Hkq.
+have Hl0 : (0 < size l)%N.
+  move: Hq Hq2; rewrite size_vecSum.
+  by case: (size l) => [|n] //= H1 H2; have := leq_ltn_trans H2 H1.
+have Hszl : size (vecSum l) = size l by rewrite size_vecSum prednK.
+have Hpred : (q.-1.+1 = q)%N by rewrite prednK //; apply: ltnW.
+have Hqsz : (q.-1.+1 < size l)%N by rewrite Hpred -Hszl.
+have Hkq' : (k <= q.-1)%N by rewrite -ltnS Hpred.
+have Hviol' : 5 / 8 * pow K <= Rabs (nth 0 (vecSum l) q.-1.+1) by rewrite Hpred.
+have Hi3 : (2 < q.-1)%N by rewrite -ltnS Hpred.
+have Hp0 : pow (K - p) = u * pow K
+  by rewrite uE_pow -bpow_plus; congr bpow; lia.
+have Hp1 : pow (K - p + 1) = 2 * u * pow K.
+  have -> : (K - p + 1 = 1 + (K - p))%Z by lia.
+  by rewrite bpow_plus bpow_1 Hp0 /=; lra.
+(* [i_1 >= 4] with [size l <= 6]: at most ONE error is left after [e_{i_1}]  *)
+(* -- the draft's "no need to consider beyond [r_{i_1}]".                     *)
+have Hszt : (size (drop q.+1 (vecSum l)) <= 1)%N.
+  rewrite size_drop Hszl leq_subLR.
+  apply: leq_trans Hsz6 _.
+  by rewrite addSn addnC; move: Hq4; rewrite -addn1 -(leq_add2l 1) addnCA.
+have Hmerge : forall (x : R) (tl : seq R), format x -> (size tl <= 1)%N ->
+    nth 0 (vsebAux x tl) 0 = RND (x + nth 0 tl 0).
+  by move=> x [|a [|b tl]] //= Fx _; rewrite Rplus_0_r round_generic.
+have Fq : format (nth 0 (vecSum l) q)
+  by apply: (format_vecSum Hfmt); apply: mem_nth.
+have Frnd : format (RND (et + nth 0 (vecSum l) q))
+  by apply: generic_format_round.
+case: (vsebAux_head_step et (nth 0 (vecSum l) q) (drop q.+1 (vecSum l)))
+      => [Hhd|[Hex Hhd]]; rewrite Hhd.
+  (* INEXACT step: the head is [RND(eps + e_{i_1})], whatever follows        *)
+  have Hcases := vecSum_right_of_i_cases Heven Hqsz Hfmt Hnz Hsort Hpair Hkq'
+                                         en0 HK Hviol'.
+  rewrite Hpred in Hcases.
+  case: Hcases => [[Heq _]|[Heq _]|Hle].
+  - (* [|e_{i_1}| = u] is excluded here: 5.2's counting forces [i <= 3]      *)
+    have := vecSum_right_of_i_count Heven Hsz6 Hqsz Hfmt Hnz Hsort Hpair Hkq'
+                                    en0 HK Hviol'.
+    by rewrite Hpred => /(_ Heq); rewrite leqNgt Hi3.
+  - apply: (vseb_next_lt_of_1mu (t := pow K)) => //.
+    by rewrite Heq Hp1; lra.
+  have H := vseb_next_1m2u (yj := r) (t := pow K) Ht Hulp.
+  have Hb : Rabs (nth 0 (vecSum l) q) <= (1 - 4 * u) * pow K
+    by move: Hle; rewrite Hp1; lra.
+  by have := H _ Hb; nra.
+(* EXACT step: the walk carries on from [eps + e_{i_1}], with one term left  *)
+rewrite (Hmerge _ _ Frnd Hszt) nth_drop addn0.
+have Htl : Rabs (nth 0 (vecSum l) (q.+1 + 0)) <= / 2 * u * ulp r.
+  rewrite addn0.
+  case: (ltnP q.+1 (size (vecSum l))) => [Hlt1|Hge1]; last first.
+    by rewrite nth_default // Rabs_R0; nra.
+  have [i' Hi'q Htail] :=
+    vecSum_tail_err_le_u2_of_violation Heven Hqsz Hfmt Hnz Hsort Hpair Hkq'
+                                       en0 HK Hviol'.
+  have Hn2 : ((q - 2).+2 = q)%N by rewrite -addn2 subnK //.
+  have Hm3 : ((q - 2).+3 = q.+1)%N by rewrite -{2}Hn2.
+  have Hi'm : (i' <= q - 2)%N by move: Hi'q; rewrite -{1}Hn2 -Hpred /= ltnS.
+  have Hb := Htail _ Hi'm.
+  rewrite Hm3 -Hszl in Hb.
+  have Hb2 := Hb Hlt1.
+  rewrite Hp0 in Hb2.
+  by nra.
+rewrite addn0 in Htl.
+have Hcases := vecSum_right_of_i_cases Heven Hqsz Hfmt Hnz Hsort Hpair Hkq'
+                                       en0 HK Hviol'.
+rewrite Hpred in Hcases.
+case: Hcases => [[Heq _]|[Heq _]|Hle].
+- have := vecSum_right_of_i_count Heven Hsz6 Hqsz Hfmt Hnz Hsort Hpair Hkq'
+                                  en0 HK Hviol'.
+  by rewrite Hpred => /(_ Heq); rewrite leqNgt Hi3.
+- (* [|e_{i_1}| = u - 2u^2]: the draft's OTHER counting says nothing         *)
+  (* non-zero is left, and then the merged word IS the emitted head          *)
+  have Heq' : Rabs (nth 0 (vecSum l) q.-1.+1) = pow K - pow (K - p + 1)
+    by rewrite Hpred.
+  have Hz : nth 0 (vecSum l) q.+1 = 0.
+    apply: (vecSum_no_more_err_of_1m2u Heven Hsz6 Hqsz Hfmt Hnz Hsort Hpair
+                                       Hkq' en0 HK Hviol' Heq' Hi3).
+    by rewrite Hpred ltnSn.
+  rewrite Hz Rplus_0_r round_generic //.
+  have H := vseb_next_1mu (yj := r) (t := pow K) Ht Hulp.
+  have Hb : Rabs (nth 0 (vecSum l) q) <= (1 - 2 * u) * pow K
+    by move: Heq; rewrite Hp1; lra.
+  by have := H _ Hb; nra.
+have H := vseb_next_1m2u (yj := r) (t := pow K) Ht Hulp.
+have Hb : Rabs (nth 0 (vecSum l) q) <= (1 - 4 * u) * pow K
+  by move: Hle; rewrite Hp1; lra.
+by apply: vseb_merge_lt => //; apply: (H _ Hb).
+Qed.
 
 (* The draft's 5.3 CASE STUDY, with both of its indices in hand: [k] is       *)
 (* [i_0] (the error consumed at this emit, whose [uls] is the draft's         *)

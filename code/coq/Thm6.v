@@ -258,17 +258,29 @@ Qed.
 (* above [5/4 pow k]) and hence [|s| >= ufp s = 2^(p-1) ulp s >= pow(k+p)].    *)
 (* This is the draft's "[|e_i| <= 1/2 ulp(s_{i-1})] gives [|s_{i-1}| >= 1]"    *)
 (* (with [1 = 2^p uls(e_j)] after the [uls(e_j) = u] normalisation).           *)
-Lemma abs_ge_of_ulp_lb (s : R) (k : Z) :
-  5 / 8 * pow k <= / 2 * ulp s -> pow (k + p) <= Rabs s.
+(* The content, stated on the [ulp] itself: a running sum whose [ulp] is      *)
+(* strictly coarser than [pow k] has [|s| >= ufp s = 2^(p-1) ulp s >=         *)
+(* pow(k+p)].  Stating it this way is what lets the draft's own "similarly    *)
+(* to what we saw before" in 5.3 reuse the 5.2 chain: there the threshold on  *)
+(* [|e_{i_1}|] is [> 1/2 u], not [>= 5/8 u], and both give [ulp s > pow k].   *)
+Lemma abs_ge_of_ulp_gt (s : R) (k : Z) :
+  pow k < ulp s -> pow (k + p) <= Rabs s.
 Proof.
 move=> H.
 have Hk : 0 < pow k by apply: bpow_gt_0.
 have Hs0 : s <> 0 by move=> s0; move: H; rewrite s0 ulp_FLX_0; lra.
 have Hulp : ulp s = pow (cexp s) by rewrite ulp_neq_0.
-have Hce : (k < cexp s)%Z by apply: (lt_bpow beta); rewrite -Hulp; lra.
+have Hce : (k < cexp s)%Z by apply: (lt_bpow beta); rewrite -Hulp.
 have Hcexp : cexp s = (mag beta s - p)%Z by rewrite /cexp /FLX_exp.
 apply: Rle_trans (bpow_mag_le beta s Hs0).
 apply: bpow_le; lia.
+Qed.
+
+Lemma abs_ge_of_ulp_lb (s : R) (k : Z) :
+  5 / 8 * pow k <= / 2 * ulp s -> pow (k + p) <= Rabs s.
+Proof.
+move=> H; apply: abs_ge_of_ulp_gt.
+by have := bpow_gt_0 beta k; lra.
 Qed.
 
 (* Dual of [abs_ge_of_ulp_lb]: a magnitude upper bound forces an ulp upper     *)
@@ -352,18 +364,41 @@ Qed.
 (* a multiple of [2 uls(e_j) = pow(k+1)] -- the draft's "[2u | s_{i-1}]" (with *)
 (* [uls(e_j) = u]).  A float of magnitude [>= pow(k+p)] lies on a grid at      *)
 (* least as coarse as [pow(k+1)] ([is_imul_bound_pow_format]).                 *)
+Lemma vecSum_run_imul_of_run_ge (l : seq R) (i : nat) (k : Z) :
+  {in l, forall z, format z} ->
+  pow (k + p) <= Rabs (vecSumAux (drop i l)).2 ->
+  is_imul (vecSumAux (drop i l)).2 (pow (k + 1)).
+Proof.
+move=> Hf Hge.
+have Fs : format (vecSumAux (drop i l)).2.
+  have Hdf : {in drop i l, forall z, format z} by move=> z /mem_drop; apply: Hf.
+  by have [Fs _] := format_vecSumAux Hdf.
+have H := is_imul_bound_pow_format Hge Fs.
+by rewrite (_ : (k + 1 = k + p - p + 1)%Z); last lia.
+Qed.
+
 Lemma vecSum_run_imul_of_violation (l : seq R) (i : nat) (k : Z) :
   (i.+1 < size l)%N -> {in l, forall z, format z} ->
   5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
   is_imul (vecSumAux (drop i l)).2 (pow (k + 1)).
 Proof.
 move=> Hi Hf Hviol.
-have Fs : format (vecSumAux (drop i l)).2.
-  have Hdf : {in drop i l, forall z, format z} by move=> z /mem_drop; apply: Hf.
-  by have [Fs _] := format_vecSumAux Hdf.
-have Hge := vecSum_run_ge_of_violation Hi Hf Hviol.
-have H := is_imul_bound_pow_format Hge Fs.
-by rewrite (_ : (k + 1 = k + p - p + 1)%Z); last lia.
+by apply: vecSum_run_imul_of_run_ge (vecSum_run_ge_of_violation Hi Hf Hviol).
+Qed.
+
+(* The draft's 5.3 route to the same divisibility: there the threshold is     *)
+(* [|e_{i_1}| > 1/2 u].  Since [ulp] is a power of two, [ulp(s) >= 2|e| >     *)
+(* pow k] already forces [ulp(s) >= 2 pow k], hence [|s| >= 1].               *)
+Lemma vecSum_run_imul_of_gt_half (l : seq R) (i : nat) (k : Z) :
+  (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  / 2 * pow k < Rabs (nth 0 (vecSum l) i.+1) ->
+  is_imul (vecSumAux (drop i l)).2 (pow (k + 1)).
+Proof.
+move=> Hi Hf Hviol.
+apply: (vecSum_run_imul_of_run_ge Hf).
+apply: abs_ge_of_ulp_gt.
+have := vecSum_err_le_half_ulp_run Hi Hf.
+by lra.
 Qed.
 
 (* Draft 5.2, "[~(2u | x_{i'})] so [|x_{i'}| < 1]": a float off the            *)
@@ -450,13 +485,13 @@ Qed.
 (* reference error [e_j] ([j <= i]) whose [uls(e_j) = pow k] (so [e_j] is an   *)
 (* odd multiple of the grid, [~ 2u | e_j] by [not_imul_uls_succ]), some input  *)
 (* [x_{i'}] with [i' < i] is off the [2 uls(e_j) = pow(k+1)] grid.             *)
-Lemma vecSum_exists_offgrid_input (l : seq R) (i j : nat) (k : Z) :
+Lemma vecSum_exists_offgrid_input_of_imul (l : seq R) (i j : nat) (k : Z) :
   (i.+1 < size l)%N -> {in l, forall z, format z} -> (j <= i)%N ->
   nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
-  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  is_imul (vecSumAux (drop i l)).2 (pow (k + 1)) ->
   exists2 i', (i' < i)%N & ~ is_imul (nth 0 l i') (pow (k + 1)).
 Proof.
-move=> Hi Hf Hji Hej0 Huls Hviol.
+move=> Hi Hf Hji Hej0 Huls Him.
 have Hilt : (i < size l)%N by apply: ltn_trans (ltnSn i) Hi.
 have Hjs : (j < size (vecSum l))%N.
   rewrite size_vecSum prednK; last by apply: ltn_trans Hi.
@@ -465,7 +500,17 @@ have Fej : format (nth 0 (vecSum l) j)
   by apply: (format_vecSum Hf); apply: mem_nth.
 have Hnej : ~ is_imul (nth 0 (vecSum l) j) (pow (k + 1))
   by exact: not_imul_uls_succ Fej Hej0 Huls.
-apply: (vecSum_not_imul_prefix Hilt Hf Hji _ Hnej).
+exact: (vecSum_not_imul_prefix Hilt Hf Hji Him Hnej).
+Qed.
+
+Lemma vecSum_exists_offgrid_input (l : seq R) (i j : nat) (k : Z) :
+  (i.+1 < size l)%N -> {in l, forall z, format z} -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  exists2 i', (i' < i)%N & ~ is_imul (nth 0 l i') (pow (k + 1)).
+Proof.
+move=> Hi Hf Hji Hej0 Huls Hviol.
+apply: (vecSum_exists_offgrid_input_of_imul Hi Hf Hji Hej0 Huls).
 exact: vecSum_run_imul_of_violation Hi Hf Hviol.
 Qed.
 
@@ -473,6 +518,22 @@ Qed.
 (* ([i' < i]) is off the [pow(k+1)] grid, hence [|x_{i'}| < 1 = pow(k+p)], and *)
 (* by [sorted_mag] isotony EVERY later input [x_m] ([m >= i']) satisfies       *)
 (* [|x_m| < 1].  (The draft's "[|x_{i'}| < 1] so by isotony [|x_{i-2}| < 1]".) *)
+Lemma vecSum_inputs_lt_of_imul (l : seq R) (i j : nat) (k : Z) :
+  (i.+1 < size l)%N -> {in l, forall z, format z} -> sorted_mag l ->
+  (j <= i)%N -> nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  is_imul (vecSumAux (drop i l)).2 (pow (k + 1)) ->
+  exists2 i', (i' < i)%N &
+    forall m, (i' <= m)%N -> (m < size l)%N -> Rabs (nth 0 l m) < pow (k + p).
+Proof.
+move=> Hi Hf Hsort Hji Hej0 Huls Him.
+have [i' Hi'i Hoff] :=
+  vecSum_exists_offgrid_input_of_imul Hi Hf Hji Hej0 Huls Him.
+have Hi's : (i' < size l)%N by apply: ltn_trans Hi'i (ltn_trans (ltnSn i) Hi).
+exists i' => // m Hm Hmsz.
+apply: Rle_lt_trans (sorted_mag_le_nth Hsort Hm Hmsz) _.
+by apply: (abs_lt_of_not_imul _ Hoff); apply: Hf; apply: mem_nth.
+Qed.
+
 Lemma vecSum_inputs_lt_of_violation (l : seq R) (i j : nat) (k : Z) :
   (i.+1 < size l)%N -> {in l, forall z, format z} -> sorted_mag l ->
   (j <= i)%N -> nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
@@ -481,11 +542,8 @@ Lemma vecSum_inputs_lt_of_violation (l : seq R) (i j : nat) (k : Z) :
     forall m, (i' <= m)%N -> (m < size l)%N -> Rabs (nth 0 l m) < pow (k + p).
 Proof.
 move=> Hi Hf Hsort Hji Hej0 Huls Hviol.
-have [i' Hi'i Hoff] := vecSum_exists_offgrid_input Hi Hf Hji Hej0 Huls Hviol.
-have Hi's : (i' < size l)%N by apply: ltn_trans Hi'i (ltn_trans (ltnSn i) Hi).
-exists i' => // m Hm Hmsz.
-apply: Rle_lt_trans (sorted_mag_le_nth Hsort Hm Hmsz) _.
-by apply: (abs_lt_of_not_imul _ Hoff); apply: Hf; apply: mem_nth.
+apply: (vecSum_inputs_lt_of_imul Hi Hf Hsort Hji Hej0 Huls).
+exact: vecSum_run_imul_of_violation Hi Hf Hviol.
 Qed.
 
 (* Draft 5.2, "[|x_{i-1}| <= 1 - u]": each earlier input, being format and     *)
@@ -510,6 +568,27 @@ Qed.
 (* Draft 5.2, "[|x_i| < u]": with [|x_m| < 1] for the earlier inputs           *)
 (* ([m >= i']) we get [ulp(x_m) <= u = pow k] ([ulp_le_of_abs_lt]), so          *)
 (* [pairwise_ulp] ([|x_{m+2}| < ulp(x_m)]) yields [|x_{m+2}| < u].              *)
+Lemma vecSum_inputs_lt_u_of_imul (l : seq R) (i j : nat) (k : Z) :
+  (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  is_imul (vecSumAux (drop i l)).2 (pow (k + 1)) ->
+  exists2 i', (i' < i)%N &
+    forall m, (i' <= m)%N -> (m.+2 < size l)%N -> Rabs (nth 0 l m.+2) < pow k.
+Proof.
+move=> Hi Hf Hsort Hpair Hji Hej0 Huls Him.
+have [i' Hi'i Hlt] :=
+  vecSum_inputs_lt_of_imul Hi Hf Hsort Hji Hej0 Huls Him.
+exists i' => // m Hm Hmsz.
+have Hmsz' : (m < size l)%N.
+  by apply: ltn_trans Hmsz; apply: ltn_trans (ltnSn m) (ltnSn m.+1).
+have Hulp : ulp (nth 0 l m) <= pow k.
+  have := ulp_le_of_abs_lt (Hlt m Hm Hmsz').
+  by rewrite (_ : (k + p - p = k)%Z); last lia.
+have [Hz|Hlt2] := Hpair m Hmsz; first by rewrite Hz Rabs_R0; apply: bpow_gt_0.
+exact: Rlt_le_trans Hlt2 Hulp.
+Qed.
+
 Lemma vecSum_inputs_lt_u_of_violation (l : seq R) (i j : nat) (k : Z) :
   (i.+1 < size l)%N -> {in l, forall z, format z} ->
   sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
@@ -519,16 +598,8 @@ Lemma vecSum_inputs_lt_u_of_violation (l : seq R) (i j : nat) (k : Z) :
     forall m, (i' <= m)%N -> (m.+2 < size l)%N -> Rabs (nth 0 l m.+2) < pow k.
 Proof.
 move=> Hi Hf Hsort Hpair Hji Hej0 Huls Hviol.
-have [i' Hi'i Hlt] :=
-  vecSum_inputs_lt_of_violation Hi Hf Hsort Hji Hej0 Huls Hviol.
-exists i' => // m Hm Hmsz.
-have Hmsz' : (m < size l)%N.
-  by apply: ltn_trans Hmsz; apply: ltn_trans (ltnSn m) (ltnSn m.+1).
-have Hulp : ulp (nth 0 l m) <= pow k.
-  have := ulp_le_of_abs_lt (Hlt m Hm Hmsz').
-  by rewrite (_ : (k + p - p = k)%Z); last lia.
-have [Hz|Hlt2] := Hpair m Hmsz; first by rewrite Hz Rabs_R0; apply: bpow_gt_0.
-exact: Rlt_le_trans Hlt2 Hulp.
+apply: (vecSum_inputs_lt_u_of_imul Hi Hf Hsort Hpair Hji Hej0 Huls).
+exact: vecSum_run_imul_of_violation Hi Hf Hviol.
 Qed.
 
 (* Draft 5.2, "[|s_i| <= 2u]": with [|x_i| < u] and the *1 running-sum bound   *)
@@ -564,19 +635,19 @@ Qed.
 (* input [|x| < u = pow k] has [|e| <= 2u ufp(x) <= 2u pow(k-1) = pow(k-p) =    *)
 (* u^2] ([vecSum_err_ufp] + [ufp_le_of_abs_lt]).  This is the block-mass        *)
 (* content feeding the block bound; it does NOT need the pinning.             *)
-Lemma vecSum_tail_err_le_u2_of_violation (l : seq R) (i j : nat) (k : Z) :
+Lemma vecSum_tail_err_le_u2_of_imul (l : seq R) (i j : nat) (k : Z) :
   ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
   (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
   sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
   nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
-  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  is_imul (vecSumAux (drop i l)).2 (pow (k + 1)) ->
   exists2 i', (i' < i)%N &
     forall m, (i' <= m)%N -> (m.+2.+1 < size l)%N ->
       Rabs (nth 0 (vecSum l) m.+2.+1) <= pow (k - p).
 Proof.
-move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Him.
 have [i' Hi'i Hxlt] :=
-  vecSum_inputs_lt_u_of_violation Hi Hf Hsort Hpair Hji Hej0 Huls Hviol.
+  vecSum_inputs_lt_u_of_imul Hi Hf Hsort Hpair Hji Hej0 Huls Him.
 exists i' => // m Hm Hmsz.
 have Hmsz2 : (m.+2 < size l)%N by apply: ltn_trans (ltnSn _) Hmsz.
 have Hxn0 : nth 0 l m.+2 <> 0 by apply: Hnz.
@@ -588,6 +659,22 @@ have H2u : 2 * u = pow (1 - p) by rewrite /Fmore.u; lra.
 have -> : pow (k - p) = 2 * u * pow (k - 1).
   by rewrite H2u -bpow_plus; congr bpow; lia.
 by apply: Rmult_le_compat_l; [have := bpow_ge_0 beta (1 - p); lra | exact: Hufp].
+Qed.
+
+Lemma vecSum_tail_err_le_u2_of_violation (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  exists2 i', (i' < i)%N &
+    forall m, (i' <= m)%N -> (m.+2.+1 < size l)%N ->
+      Rabs (nth 0 (vecSum l) m.+2.+1) <= pow (k - p).
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
+apply: (vecSum_tail_err_le_u2_of_imul Heven Hi Hf Hnz Hsort Hpair Hji Hej0
+                                      Huls).
+exact: vecSum_run_imul_of_violation Hi Hf Hviol.
 Qed.
 
 (* ===========================================================================*)

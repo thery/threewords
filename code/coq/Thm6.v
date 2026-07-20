@@ -1684,29 +1684,28 @@ split; first by rewrite HE1v HE; lra.
 by rewrite HE HE1v; split_Rabs; lra.
 Qed.
 
-(* Draft 5.2/5.3, the reinforcing case again: "all the [e_i], [i <= i_1-2],   *)
-(* are divisible by 1", which is what forces [i_0 = i_1 - 1].  With           *)
-(* [i <= 2] the only offending pair is [j = 1, i = 2], and there the          *)
-(* divisibility is [pairwise_ulp] at [(x_0, x_2)]: [|x_2| = A - u] pushes     *)
-(* [ulp(x_0)] past [A/2], so [x_0] is a multiple of [A] -- as is              *)
-(* [s_1 = +/- 2A] -- and hence so is [e_1], whose [uls] is then at least      *)
-(* [A], not the normalising [u].                                              *)
-Lemma vecSum_left_same_i0 (l : seq R) (i j : nat) (k : Z) :
+(* Draft 5.2/5.3, the reinforcing case again: "all the [e_i],                 *)
+(* [i <= i_1-2], are divisible by 1".  With [i = 2] that is [s_0] and         *)
+(* [e_1], and the source of the divisibility is [pairwise_ulp] at             *)
+(* [(x_0, x_2)]: [|x_2| = A - u] pushes [ulp(x_0)] past [A/2], so [x_0] is    *)
+(* a multiple of [A]; so is [s_1 = +/- 2A], hence so are their rounded sum    *)
+(* [s_0] and its error [e_1].  This is what pins the walk's remainder to      *)
+(* the [A] grid, and so (5.3) what stops a tie from flipping                  *)
+(* [eps_{i_0}]: a multiple of [A] has an EVEN mantissa at scale [2u].         *)
+Lemma vecSum_left_same_imul (l : seq R) (i j : nat) (k : Z) :
   ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
   (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
-  sorted_mag l -> pairwise_ulp l -> (0 < j)%N -> (j < i)%N -> (i <= 2)%N ->
+  sorted_mag l -> pairwise_ulp l -> (j <= i)%N -> i = 2%N ->
   nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
   5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
   Rabs (nth 0 l i.-1 + (vecSumAux (drop i l)).2) =
     2 * pow (k + p) - pow k ->
-  False.
+  [/\ is_imul (nth 0 l 0) (pow (k + p)),
+      is_imul (vecSumAux (drop 1 l)).2 (pow (k + p)),
+      is_imul (nth 0 (vecSum l) 0) (pow (k + p)) &
+      is_imul (nth 0 (vecSum l) 1) (pow (k + p))].
 Proof.
-move=> Heven Hi Hf Hnz Hsort Hpair Hj0 Hji Hi2 Hej0 Huls Hviol Hsum.
-have Hji' : (j <= i)%N by apply: ltnW.
-have Heqi : i = 2%N.
-  apply/eqP; rewrite eqn_leq Hi2 /=.
-  by move: Hj0 Hji; case: (i) => [|[|i']] //; case: (j).
-have Heqj : j = 1%N by move: Hj0 Hji; rewrite Heqi; case: (j) => [|[|j']].
+move=> Heven Hi Hf Hnz Hsort Hpair Hji Heqi Hej0 Huls Hviol Hsum.
 have HG := bpow_gt_0 beta k.
 have HA := bpow_gt_0 beta (k + p).
 have HAG : 16 * pow k <= pow (k + p).
@@ -1719,11 +1718,11 @@ have Hhalf : 2 * pow (k + p - 1) = pow (k + p).
 have Hsz2 : (0.+2 < size l)%N by rewrite -Heqi; apply: ltnW.
 have Hsz1 : (0.+1 < size l)%N by apply: ltnW.
 have [_ HRc _ _ _] :=
-  vecSum_pinning_of_violation Heven Hi Hf Hnz Hsort Hpair Hji' Hej0 Huls Hviol.
+  vecSum_pinning_of_violation Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
 rewrite Heqi in HRc.
 (* [s_1 = +/- 2A] is a multiple of [A]                                        *)
 have HS1imul : is_imul (vecSumAux (drop 1 l)).2 (pow (k + p)).
-  case: (vecSum_left_same_signed Heven Hi Hf Hnz Hsort Hpair Hji' Hej0 Huls
+  case: (vecSum_left_same_signed Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls
                                  Hviol Hsum) => [] [HS0 _ _];
     rewrite Heqi /= in HS0.
     by exists 2%Z; rewrite HS0.
@@ -1744,16 +1743,46 @@ have Hcexp : (k + p <= cexp (nth (0:R) l 0))%Z
   by rewrite /cexp /FLX_exp; lia.
 have Himx0 : is_imul (nth 0 l 0) (pow (k + p))
   by apply: is_imul_pow_le (format_imul_cexp Fx0) Hcexp.
-(* [e_1] is their rounding error, hence a multiple of [A] as well             *)
+(* so are the rounded sum [s_0] and the error [e_1] it discards               *)
 have Hstep := vecSum_run_step Hsz1 Hf.
 have Hrnd := vecSum_run_rnd Hsz1.
 rewrite drop0 in Hstep Hrnd.
+have Hims0 : is_imul (nth 0 (vecSum l) 0) (pow (k + p)).
+  rewrite vecSum_nth0 Hrnd.
+  by apply: is_imul_pow_round; apply: is_imul_add.
 have He1 : nth 0 (vecSum l) 1 =
            (nth 0 l 0 + (vecSumAux (drop 1 l)).2) -
            RND (nth 0 l 0 + (vecSumAux (drop 1 l)).2) by lra.
 have Hime1 : is_imul (nth 0 (vecSum l) 1) (pow (k + p)).
   rewrite He1; apply: is_imul_minus; first by apply: is_imul_add.
   by apply: is_imul_pow_round; apply: is_imul_add.
+by split.
+Qed.
+
+(* Hence [i_0 = i_1 - 1] in this case: an [e_j] with [j <= i_1-2] would be a  *)
+(* multiple of [A], so its [uls] would be at least [A], not the normalising   *)
+(* [u].  With [i <= 2] the only offending pair is [j = 1, i = 2].             *)
+Lemma vecSum_left_same_i0 (l : seq R) (i j : nat) (k : Z) :
+  ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
+  (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
+  sorted_mag l -> pairwise_ulp l -> (0 < j)%N -> (j < i)%N -> (i <= 2)%N ->
+  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
+  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
+  Rabs (nth 0 l i.-1 + (vecSumAux (drop i l)).2) =
+    2 * pow (k + p) - pow k ->
+  False.
+Proof.
+move=> Heven Hi Hf Hnz Hsort Hpair Hj0 Hji Hi2 Hej0 Huls Hviol Hsum.
+have Hji' : (j <= i)%N by apply: ltnW.
+have Heqi : i = 2%N.
+  apply/eqP; rewrite eqn_leq Hi2 /=.
+  by move: Hj0 Hji; case: (i) => [|[|i']] //; case: (j).
+have Heqj : j = 1%N by move: Hj0 Hji; rewrite Heqi; case: (j) => [|[|j']].
+have [_ _ _ Hime1] :=
+  vecSum_left_same_imul Heven Hi Hf Hnz Hsort Hpair Hji' Heqi Hej0 Huls Hviol
+                        Hsum.
+have Hsz2 : (0.+2 < size l)%N by rewrite -Heqi; apply: ltnW.
+have Hsz1 : (0.+1 < size l)%N by apply: ltnW.
 have Fe1 : format (nth 0 (vecSum l) 1).
   apply: (format_vecSum Hf); apply: mem_nth.
   by rewrite size_vecSum prednK //; apply: ltnW; apply: ltnW.

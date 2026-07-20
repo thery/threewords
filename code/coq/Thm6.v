@@ -1738,8 +1738,8 @@ have H : nth 0 l i.-1 + (vecSumAux (drop i l)).2 =
          nth 0 l i.-1 + (vecSumAux (drop i l)).2 =
          - (2 * pow (k + p) - pow k).
   by move: Hsum; split_Rabs; lra.
-(* the pair REINFORCES, so [s_i] carries the sign of the sum: the other      *)
-(* sign would need [|x_{i-1}| = 3A - G], well past its own bound.            *)
+(* the pair REINFORCES, so [s_i] carries the sign of the sum: the other       *)
+(* sign would need [|x_{i-1}| = 3A - G], well past its own bound.             *)
 have HX := vecSum_left_x_eq Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
 have [HRs _ _ _ _] :=
   vecSum_pinning_of_violation Heven Hi Hf Hnz Hsort Hpair Hji Hej0 Huls Hviol.
@@ -3205,10 +3205,10 @@ apply: (vseb_subcase_mass_lt (t := pow K) (c := / 4) (M := / 4)) => //;
 Qed.
 
 (* The head bound when the FIRST step cancels: what survives is               *)
-(* [|eps + e|], not [|eps| + |e|].  Either the step is inexact and the head    *)
-(* IS [RND(eps + e)], or it is exact and the walk carries on from it -- and    *)
-(* then the mass argument applies with [eps + e] in place of [eps].  Draft     *)
-(* 5.3's [|eps_{i_0} + e_{i_1}| <= 3/8 u] is used exactly here.                *)
+(* [|eps + e|], not [|eps| + |e|].  Either the step is inexact and the head   *)
+(* IS [RND(eps + e)], or it is exact and the walk carries on from it -- and   *)
+(* then the mass argument applies with [eps + e] in place of [eps].  Draft    *)
+(* 5.3's [|eps_{i_0} + e_{i_1}| <= 3/8 u] is used exactly here.               *)
 Lemma vseb_head_lt_of_merge_mass (yj eps e B : R) (l : seq R) :
   format eps -> format e -> {in l, forall z, format z} -> format B ->
   Rabs (eps + e) + sumRabs l <= B -> B < ulp yj ->
@@ -3228,14 +3228,14 @@ by apply: vsebAux_head_leB => //;
    [apply: generic_format_round | rewrite Hexact; lra].
 Qed.
 
-(* Draft 5.3, case [i_1 <= 3], sub-case [x_{i_1-2} = -1+u].  The cancelling  *)
-(* pair kills [e_{i_1-1}], so [i_0 < i_1 - 1] forces [i_1 = 3] and           *)
-(* [i_0 = 1]: this emit is the FIRST one of the walk, so [eps] is [s_0]      *)
-(* itself.  The draft's "[|y_j| = |s_0| >= 1/2 u^{-1}]" is [pairwise_ulp]    *)
-(* at [(x_0, x_2)]: [|s_2| = 1] pushes [|x_2|] up to [1/4] (5.1's            *)
-(* [|s_i| <= 4 ufp(x_i)]), so [ulp(x_0) > 1/4] and [|x_0| >= 2^{p-2}] --     *)
-(* whence [ulp(y_j) >= 4u], while the whole remaining mass                   *)
-(* [|eps_{i_0}| + |e_3| + |e_4| + |e_5|] is at most [2u + 2u^2].             *)
+(* Draft 5.3, case [i_1 <= 3], sub-case [x_{i_1-2} = -1+u].  The cancelling   *)
+(* pair kills [e_{i_1-1}], so [i_0 < i_1 - 1] forces [i_1 = 3] and            *)
+(* [i_0 = 1]: this emit is the FIRST one of the walk, so [eps] is [s_0]       *)
+(* itself.  The draft's "[|y_j| = |s_0| >= 1/2 u^{-1}]" is [pairwise_ulp]     *)
+(* at [(x_0, x_2)]: [|s_2| = 1] pushes [|x_2|] up to [1/4] (5.1's             *)
+(* [|s_i| <= 4 ufp(x_i)]), so [ulp(x_0) > 1/4] and [|x_0| >= 2^{p-2}] --      *)
+(* whence [ulp(y_j) >= 4u], while the whole remaining mass                    *)
+(* [|eps_{i_0}| + |e_3| + |e_4| + |e_5|] is at most [2u + 2u^2].              *)
 Lemma vseb_emit_viol_le3_opp (l : seq R) (k q : nat) (eps r et : R) (K : Z) :
   ties_to_even choice ->
   (size l <= 6)%N ->

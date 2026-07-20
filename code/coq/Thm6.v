@@ -2846,12 +2846,14 @@ Qed.
 (* [eps_{i_0} = -u] and gives the CANCELLATION                               *)
 (* [|eps_{i_0} + e_{i_1}| <= 3/8 u] ([vsebAux_head_leB_merge] is built for   *)
 (* it), after which the at most 3 remaining errors are [<= u^2].             *)
-Lemma vseb_emit_viol_le3 (l : seq R) (k q : nat) (r et : R) (K : Z) :
+Lemma vseb_emit_viol_le3 (l : seq R) (k q : nat) (eps r et : R) (K : Z) :
   ties_to_even choice ->
   (size l <= 6)%N ->
   {in l, forall z, format z} ->
   (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
   sorted_mag l -> pairwise_ulp l ->
+  format eps -> TwoSum eps (nth 0 (vecSum l) k) = DWR r et ->
+  ((k = 1)%N -> eps = nth 0 (vecSum l) 0) ->
   format et -> (0 < k)%N -> (k < q)%N -> (q <= 3)%N ->
   (q < size (vecSum l))%N ->
   nth 0 (vecSum l) k <> 0 -> nth 0 (vecSum l) q <> 0 ->
@@ -3266,19 +3268,22 @@ Qed.
 (* normalising [u = pow K]) and [q] is [i_1] (the first non-zero error        *)
 (* after it).  [et] is [eps_{i_0}], [r] is [y_j].  The three inequalities     *)
 (* are the draft's opening: [|eps_{i_0}| >= u] and [ulp(y_j) >= 2|eps_{i_0}|].*)
-Lemma vseb_emit_cases (l : seq R) (k q : nat) (r et : R) (K : Z) :
+Lemma vseb_emit_cases (l : seq R) (k q : nat) (eps r et : R) (K : Z) :
   ties_to_even choice ->
   (size l <= 6)%N ->
   {in l, forall z, format z} ->
   (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
   sorted_mag l -> pairwise_ulp l ->
+  format eps -> TwoSum eps (nth 0 (vecSum l) k) = DWR r et ->
+  ((k = 1)%N -> eps = nth 0 (vecSum l) 0) ->
   format et -> (0 < k)%N -> (k < q)%N -> (q < size (vecSum l))%N ->
   nth 0 (vecSum l) k <> 0 -> nth 0 (vecSum l) q <> 0 ->
   uls (nth 0 (vecSum l) k) = pow K ->
   pow K <= Rabs et -> 2 * Rabs et <= ulp r ->
   Rabs (nth 0 (vsebAux et (drop q (vecSum l))) 0) < ulp r.
 Proof.
-move=> Heven Hsz6 Hfmt Hnz Hsort Hpair Fet Hk Hkq Hq en0 Hqn0 HK Ht Hulp.
+move=> Heven Hsz6 Hfmt Hnz Hsort Hpair Feps HE Hhd Fet Hk Hkq Hq en0 Hqn0 HK Ht
+       Hulp.
 have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
 have Hpk := bpow_gt_0 beta K.
 have Hq2 : (1 < q)%N by apply: leq_ltn_trans Hk Hkq.
@@ -3292,8 +3297,8 @@ rewrite (drop_nth 0 Hq).
 case: (Rle_lt_dec (5 / 8 * pow K) (Rabs (nth 0 (vecSum l) q))) => [Hviol|Hlt].
   (* the draft's *2 violation; split on [i_1 <= 3] vs [i_1 >= 4]             *)
   case: (leqP q 3) => [Hq3|Hq4].
-    by apply: (vseb_emit_viol_le3 Heven Hsz6 Hfmt Hnz Hsort Hpair Fet Hk Hkq
-                                  Hq3 Hq en0 Hqn0 HK Ht Hulp Hviol).
+    by apply: (vseb_emit_viol_le3 Heven Hsz6 Hfmt Hnz Hsort Hpair Feps HE Hhd
+                                  Fet Hk Hkq Hq3 Hq en0 Hqn0 HK Ht Hulp Hviol).
   by apply: (vseb_emit_viol_ge4 Heven Hsz6 Hfmt Hnz Hsort Hpair Fet Hk Hkq
                                 Hq4 Hq en0 Hqn0 HK Ht Hulp Hviol).
 case: (Rlt_le_dec (Rabs (nth 0 (vecSum l) q)) (/ 2 * pow K)) => [Hlt2|Hge2];
@@ -3337,11 +3342,12 @@ Lemma vecSum_emit_obligation (l : seq R) (k : nat) (eps r et : R) :
   (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
   sorted_mag l -> pairwise_ulp l ->
   format eps -> eps <> 0 -> (0 < k)%N -> (k < size (vecSum l))%N ->
+  ((k = 1)%N -> eps = nth 0 (vecSum l) 0) ->
   vsebDom (vecSum l) k eps ->
   TwoSum eps (nth 0 (vecSum l) k) = DWR r et -> et <> 0 ->
   Rabs (nth 0 (vsebAux et (drop k.+1 (vecSum l))) 0) < ulp r.
 Proof.
-move=> Heven Hsz6 Hfmt Hnz Hsort Hpair Feps epsn0 Hk Hk0 Hdom E Hetn0.
+move=> Heven Hsz6 Hfmt Hnz Hsort Hpair Feps epsn0 Hk Hk0 Hhd Hdom E Hetn0.
 have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
 have Fe : format (nth 0 (vecSum l) k) by apply: HfV; apply: mem_nth.
 have Fet : format et by have := format_TwoSum Feps Fe; rewrite E; case.
@@ -3372,8 +3378,8 @@ rewrite (vsebAux_drop0s Fet (k := (q - k.+1)%N)); first last.
 - rewrite size_drop; apply: ltn_sub2r => //.
   exact: leq_ltn_trans Hq1 Hq2.
 rewrite Hdd.
-by apply: (vseb_emit_cases Heven Hsz6 Hfmt Hnz Hsort Hpair Fet Hk Hq1 Hq2
-                           en0 Hqn0 HK); rewrite -?HK.
+by apply: (vseb_emit_cases Heven Hsz6 Hfmt Hnz Hsort Hpair Feps E Hhd Fet Hk
+                           Hq1 Hq2 en0 Hqn0 HK); rewrite -?HK.
 Qed.
 
 (* The walk, by induction on the SUFFIX.  Merges are handled by               *)
@@ -3386,13 +3392,14 @@ Lemma vecSum_vsebBlock_gen (l : seq R) (n k : nat) (eps : R) :
   (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
   sorted_mag l -> pairwise_ulp l ->
   (size (vecSum l) - k <= n)%N -> format eps -> (0 < k)%N ->
+  ((k = 1)%N -> eps = nth 0 (vecSum l) 0) ->
   vsebDom (vecSum l) k eps ->
   vsebBlock eps (drop k (vecSum l)).
 Proof.
 move=> Heven Hsz6 Hfmt Hnz Hsort Hpair.
 have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
 have Hch := vecSum_ulsChain Heven Hfmt Hnz Hsort Hpair.
-elim: n k eps => [|n IH] k eps Hn Feps Hk Hdom.
+elim: n k eps => [|n IH] k eps Hn Feps Hk Hhd Hdom.
   have Hge : (size (vecSum l) <= k)%N.
     by rewrite -subn_eq0; apply/eqP; case: (size (vecSum l) - k)%N Hn.
   by rewrite drop_oversize.
@@ -3414,6 +3421,7 @@ have [Fr Fet] : format r /\ format et
   by have := format_TwoSum Feps Fe; rewrite E.
 case: (Req_EM_T et 0) => [Het0|Hetn0].
   change (vsebBlock r (e2 :: tl)); rewrite -Hdr; apply: IH => //.
+    by move: Hk; case: (k) => // n' _ [].
   by apply: (vsebDom_merge HfV Hch Feps Hk0 Hdom); rewrite E Het0.
 change (Rabs (nth 0 (vsebAux et (e2 :: tl)) 0) < ulp r
         /\ vsebBlock et (e2 :: tl)).
@@ -3429,10 +3437,12 @@ have epsn0 : eps <> 0.
   by move: H Hhi; rewrite Heps0; lra.
 have Hdom' : vsebDom (vecSum l) k.+1 et
   by apply: (vsebDom_emit HfV Hch Feps epsn0 Hk0 Hdom E Hetn0).
-split; last by rewrite -Hdr; apply: IH.
+split; last first.
+  rewrite -Hdr; apply: IH => //.
+  by move: Hk; case: (k) => // n' _ [].
 rewrite -Hdr.
 by apply: (vecSum_emit_obligation Heven Hsz6 Hfmt Hnz Hsort Hpair Feps
-                                  epsn0 Hk Hk0 Hdom E Hetn0).
+                                  epsn0 Hk Hk0 Hhd Hdom E Hetn0).
 Qed.
 
 (* THE remaining core, assembled: the VecSum error sequence satisfies the     *)

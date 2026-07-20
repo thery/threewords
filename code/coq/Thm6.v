@@ -2940,6 +2940,130 @@ have -> : choice (2 ^ p - 2) = false.
 exact: HRD.
 Qed.
 
+(* The PINNING behind the [u - 2u^2] counting, as pure arithmetic (the        *)
+(* [interval_pin] pattern).  Two inputs of magnitude at most [u - u^2] whose  *)
+(* rounded sum has magnitude exactly [2u - 2u^2] must sum EXACTLY.            *)
+(*                                                                            *)
+(* The rounded sum sits in [[u, 2u)], where the grid is [2u^2], so the error  *)
+(* is at most [u^2] and [|a + b| >= 2u - 3u^2].  Each input is then at least  *)
+(* [u - 2u^2 > u/2], hence lies on the [u^2] grid, so [|a|, |b| in            *)
+(* {u - 2u^2, u - u^2}]; and opposite signs are impossible because they       *)
+(* would leave [|a + b| <= u^2].  That leaves three sums: [2u - 4u^2] and     *)
+(* [2u - 3u^2] round to themselves resp. DOWN ([RN_midpoint_even_lo2]), both  *)
+(* missing [2u - 2u^2]; only [2u - 2u^2] survives, and it is a float.         *)
+Lemma pair_pin_1m2u (a b : R) (k : Z) :
+  ties_to_even choice ->
+  format a -> format b ->
+  Rabs a <= pow k - pow (k - p) ->
+  Rabs b <= pow k - pow (k - p) ->
+  Rabs (RND (a + b)) = 2 * pow k - pow (k - p + 1) ->
+  RND (a + b) = a + b.
+Proof.
+move=> Heven Fa Fb Ha Hb Hs.
+have HG := bpow_gt_0 beta k.
+have Hg := bpow_gt_0 beta (k - p).
+have H2g : pow (k - p + 1) = 2 * pow (k - p).
+  have -> : (k - p + 1 = 1 + (k - p))%Z by lia.
+  by rewrite bpow_plus bpow_1 /=; lra.
+have H16 : 16 * pow (k - p) <= pow k.
+  have Hle : pow (k - p) <= pow (k - 4) by apply: bpow_le; lia.
+  have H16' : pow k = 16 * pow (k - 4).
+    have Hp16 : (16 : R) = pow 4 by rewrite /= /Z.pow_pos /=; lra.
+    by rewrite Hp16 -bpow_plus; congr bpow; lia.
+  by lra.
+have Hk1 : pow (k + 1) = 2 * pow k by rewrite bpow_plus bpow_1 /=; lra.
+have Hkm1 : pow (k - 1) = / 2 * pow k.
+  have Hp2' : (/ 2 : R) = pow (-1) by rewrite /= /Z.pow_pos /=; lra.
+  by rewrite Hp2' -bpow_plus; congr bpow; lia.
+have Hpp : pow k = IZR (2 ^ p) * pow (k - p).
+  have Hpp' : pow p = IZR (2 ^ p).
+    have -> : (2 = radix2 :> Z)%Z by [].
+    by rewrite IZR_Zpower //; lia.
+  by rewrite -Hpp' -bpow_plus; congr bpow; lia.
+(* an input in [[u - 2u^2, u - u^2]] sits above [u/2], hence on the [u^2]     *)
+(* grid, and only two multiples of [u^2] lie in that range                    *)
+have Hpin : forall x : R, format x -> Rabs x <= pow k - pow (k - p) ->
+              pow k - 2 * pow (k - p) <= Rabs x ->
+              Rabs x = pow k - 2 * pow (k - p) \/
+              Rabs x = pow k - pow (k - p).
+  move=> x Fx Hxle Hxge.
+  have xn0 : x <> 0 by move=> H0; move: Hxge; rewrite H0 Rabs_R0; lra.
+  have Hmagx : mag beta x = k :> Z.
+    by apply: mag_unique; split; [rewrite Hkm1|]; lra.
+  have Hcx : cexp x = (k - p)%Z by rewrite /cexp Hmagx /FLX_exp.
+  have [z Hz] : is_imul x (pow (k - p))
+    by have := format_imul_cexp Fx; rewrite Hcx.
+  have Habsz : Rabs x = IZR (Z.abs z) * pow (k - p).
+    by rewrite Hz Rabs_mult (Rabs_pos_eq (pow (k - p))) ?abs_IZR //; lra.
+  have Hz1 : IZR (2 ^ p) - 2 <= IZR (Z.abs z) by nra.
+  have Hz2 : IZR (Z.abs z) <= IZR (2 ^ p) - 1 by nra.
+  have Hzi : (Z.abs z = 2 ^ p - 2 \/ Z.abs z = 2 ^ p - 1)%Z.
+    have H1 : (2 ^ p - 2 <= Z.abs z)%Z
+      by apply: le_IZR; rewrite minus_IZR; lra.
+    have H2 : (Z.abs z <= 2 ^ p - 1)%Z
+      by apply: le_IZR; rewrite minus_IZR; lra.
+    by lia.
+  by case: Hzi => Hzi; [left|right]; rewrite Habsz Hzi !minus_IZR; nra.
+(* the rounded sum lies in [[u, 2u)], so the grid there is [2u^2] and the     *)
+(* rounding error is at most [u^2]                                           *)
+have Hsn0 : RND (a + b) <> 0
+  by move=> H0; move: Hs; rewrite H0 Rabs_R0; lra.
+have Hmags : mag beta (RND (a + b)) = (k + 1)%Z :> Z.
+  apply: mag_unique; rewrite (_ : (k + 1 - 1 = k)%Z); last by lia.
+  by rewrite Hs H2g Hk1; split; lra.
+have Hulps : ulp (RND (a + b)) = pow (k + 1 - p)
+  by rewrite ulp_neq_0 // /cexp /FLX_exp Hmags.
+have Hg1 : pow (k + 1 - p) = 2 * pow (k - p) by rewrite -H2g; congr bpow; lia.
+have Herr : Rabs (RND (a + b) - (a + b)) <= / 2 * ulp (RND (a + b))
+  by apply: error_le_half_ulp_round.
+rewrite Hulps Hg1 in Herr.
+have Hvge : 2 * pow k - 3 * pow (k - p) <= Rabs (a + b)
+  by move: Herr Hs; rewrite H2g; split_Rabs; lra.
+have Hage : pow k - 2 * pow (k - p) <= Rabs a
+  by move: Hvge Hb; have := Rabs_triang a b; lra.
+have Hbge : pow k - 2 * pow (k - p) <= Rabs b
+  by move: Hvge Ha; have := Rabs_triang a b; lra.
+(* opposite signs would leave [|a + b| <= u^2], far below [2u - 3u^2]         *)
+have Hsign : Rabs (a + b) = Rabs a + Rabs b.
+  case: (Rle_lt_dec 0 (a * b)) => [Hab|Hab]; first by split_Rabs; nra.
+  by move: Hvge Ha Hb; split_Rabs; lra.
+have Hg2 : pow (k + 1 - p - 1) = pow (k - p) by congr bpow; lia.
+have Htie : RND (2 * pow k - 3 * pow (k - p)) = 2 * pow k - 4 * pow (k - p).
+  have H := RN_midpoint_even_lo2 (k + 1) Heven.
+  rewrite Hk1 Hg1 Hg2 in H.
+  have -> : 2 * pow k - 3 * pow (k - p)
+          = 2 * pow k - 2 * pow (k - p) - pow (k - p) by lra.
+  by rewrite H; lra.
+case: (Hpin a Fa Ha Hage) => Ha'; case: (Hpin b Fb Hb Hbge) => Hb'.
+- (* [(u-2u^2, u-2u^2)]: the sum is [2u - 4u^2], below the error floor        *)
+  by move: Hvge; rewrite Hsign Ha' Hb'; lra.
+- (* the MIXED pairs sum to the tie [2u - 3u^2], which rounds DOWN            *)
+  have Hv : Rabs (a + b) = 2 * pow k - 3 * pow (k - p)
+    by rewrite Hsign Ha' Hb'; lra.
+  suff : False by [].
+  move: Hs; case: (Rle_lt_dec 0 (a + b)) => Hab.
+    have -> : a + b = 2 * pow k - 3 * pow (k - p) by move: Hv; split_Rabs; lra.
+    by rewrite Htie; split_Rabs; lra.
+  have -> : a + b = - (2 * pow k - 3 * pow (k - p))
+    by move: Hv; split_Rabs; lra.
+  by rewrite (@RN_opp_sym p choice choice_sym) Htie; split_Rabs; lra.
+- have Hv : Rabs (a + b) = 2 * pow k - 3 * pow (k - p)
+    by rewrite Hsign Ha' Hb'; lra.
+  suff : False by [].
+  move: Hs; case: (Rle_lt_dec 0 (a + b)) => Hab.
+    have -> : a + b = 2 * pow k - 3 * pow (k - p) by move: Hv; split_Rabs; lra.
+    by rewrite Htie; split_Rabs; lra.
+  have -> : a + b = - (2 * pow k - 3 * pow (k - p))
+    by move: Hv; split_Rabs; lra.
+  by rewrite (@RN_opp_sym p choice choice_sym) Htie; split_Rabs; lra.
+(* [(u-u^2, u-u^2)]: equal magnitudes and equal signs, so [a + b = 2a]        *)
+have Hba : b = a by move: Hsign Ha' Hb'; split_Rabs; lra.
+apply: round_generic.
+rewrite Hba.
+have -> : a + a = a * pow 1 by rewrite bpow_1 /=; lra.
+by apply: mult_bpow_exact_FLX.
+Qed.
+
 (* Draft 5.2, "at the right of [i]", case [e_i = u - 2u^2]: "so we must have  *)
 (* [s_{i+1} >= u-u^2] with [x_{i+1} <= u-u^2], so either there is no more     *)
 (* non-zero [e_{i'}] or [i <= 3]" -- here on the [i >= 3] side, where the     *)

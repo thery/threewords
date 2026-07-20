@@ -2382,12 +2382,62 @@ right=> m Hm Hmsz Hnm.
 by apply: Rle_trans Hulse; apply: Hch.
 Qed.
 
+(* The draft's "let [i_1] be the index of the first [e_i] after [e_{i_0}]     *)
+(* that is non-zero": either the rest of the list is all zeros, or there is   *)
+(* a FIRST non-zero, with everything strictly before it zero.                 *)
+Lemma seq_first_nonzero (V : seq R) (k n : nat) :
+  (size V - k <= n)%N ->
+  (forall m, (k <= m)%N -> (m < size V)%N -> nth 0 V m = 0) \/
+  (exists2 q, ((k <= q) && (q < size V))%N &
+     nth 0 V q <> 0 /\
+     forall m, (k <= m)%N -> (m < q)%N -> nth 0 V m = 0).
+Proof.
+elim: n k => [|n IH] k Hn.
+  left=> m Hm Hmsz.
+  have Hge : (size V <= k)%N.
+    by rewrite -subn_eq0; apply/eqP; case: (size V - k)%N Hn.
+  by move: Hmsz; rewrite ltnNge (leq_trans Hge Hm).
+case: (ltnP k (size V)) => [Hk|Hk]; last first.
+  by left=> m Hm Hmsz; move: Hmsz; rewrite ltnNge (leq_trans Hk Hm).
+case: (Req_EM_T (nth 0 V k) 0) => [Hz|Hnz]; last first.
+  by right; exists k; [rewrite leqnn Hk|split=> // m Hm; rewrite ltnNge Hm].
+have Hn' : (size V - k.+1 <= n)%N
+  by rewrite subnS; move: Hn; case: (size V - k)%N => [|m] //=.
+case: (IH k.+1 Hn') => [Hall|[q /andP[Hq1 Hq2] [Hqn0 Hqz]]].
+  by left=> m; rewrite leq_eqVlt => /orP[/eqP<-|Hm] Hmsz; [|apply: Hall].
+right; exists q; first by rewrite (leq_trans (leqnSn k) Hq1) Hq2.
+split=> // m; rewrite leq_eqVlt => /orP[/eqP<-|Hm] Hmq; [by []|by apply: Hqz].
+Qed.
+
 (* THE remaining core, at ONE emit: the draft's 5.3 case study.  [k] is the   *)
 (* draft's [i_0] -- the index of the error just consumed -- and the tail      *)
 (* [drop k.+1 (vecSum l)] is what the draft's [i_1] is looked for in.  Every  *)
 (* case lemma above discharges one branch; what is admitted here is the       *)
 (* dispatch plus the two branches doc/thm6.md still owes ([i_1 <= 3] and      *)
 (* the [|e_4| = |e_3|] index argument).                                       *)
+(* The draft's 5.3 CASE STUDY, with both of its indices in hand: [k] is       *)
+(* [i_0] (the error consumed at this emit, whose [uls] is the draft's         *)
+(* normalising [u = pow K]) and [q] is [i_1] (the first non-zero error        *)
+(* after it).  [et] is [eps_{i_0}], [r] is [y_j].  The three inequalities     *)
+(* are the draft's opening: [|eps_{i_0}| >= u] and [ulp(y_j) >= 2|eps_{i_0}|].*)
+Lemma vseb_emit_cases (l : seq R) (k q : nat) (r et : R) (K : Z) :
+  ties_to_even choice ->
+  (size l <= 6)%N ->
+  {in l, forall z, format z} ->
+  (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
+  sorted_mag l -> pairwise_ulp l ->
+  format et -> (0 < k)%N -> (k < q)%N -> (q < size (vecSum l))%N ->
+  nth 0 (vecSum l) k <> 0 -> nth 0 (vecSum l) q <> 0 ->
+  uls (nth 0 (vecSum l) k) = pow K ->
+  pow K <= Rabs et -> 2 * Rabs et <= ulp r ->
+  Rabs (nth 0 (vsebAux et (drop q (vecSum l))) 0) < ulp r.
+Proof.
+Admitted.
+
+(* THE per-emit obligation, reduced to the case study: locate the draft's     *)
+(* [i_1] ([seq_first_nonzero]), skip the zeros in between                     *)
+(* ([vsebAux_drop0s]), and hand over.  If nothing non-zero is left the walk   *)
+(* emits the remainder itself and [vsebBlock_obligation_zeros] closes it.     *)
 Lemma vecSum_emit_obligation (l : seq R) (k : nat) (eps r et : R) :
   ties_to_even choice ->
   (size l <= 6)%N ->
@@ -2399,7 +2449,40 @@ Lemma vecSum_emit_obligation (l : seq R) (k : nat) (eps r et : R) :
   TwoSum eps (nth 0 (vecSum l) k) = DWR r et -> et <> 0 ->
   Rabs (nth 0 (vsebAux et (drop k.+1 (vecSum l))) 0) < ulp r.
 Proof.
-Admitted.
+move=> Heven Hsz6 Hfmt Hnz Hsort Hpair Feps epsn0 Hk Hk0 Hdom E Hetn0.
+have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
+have Fe : format (nth 0 (vecSum l) k) by apply: HfV; apply: mem_nth.
+have Fet : format et by have := format_TwoSum Feps Fe; rewrite E; case.
+have Hftail : {in drop k.+1 (vecSum l), forall z, format z}
+  by move=> z /mem_drop; apply: HfV.
+have en0 : nth 0 (vecSum l) k <> 0.
+  by move=> H0; apply: Hetn0; have := dwl_TwoSum_r0 Feps; rewrite -H0 E.
+have Hle : uls (nth 0 (vecSum l) k) <= uls eps
+  by case: Hdom => [H0|H]; [case: epsn0|apply: H].
+have Hulp : 2 * Rabs et <= ulp r
+  by have := vseb_emit_ulp_ge Feps Fe; rewrite E.
+have Ht : uls (nth 0 (vecSum l) k) <= Rabs et.
+  have := vseb_emit_abs_ge Feps Fe epsn0 en0 Hle.
+  by rewrite E /=; apply.
+have [K HK] := uls_pow en0.
+case: (seq_first_nonzero (leq_subr k.+1 (size (vecSum l)))) => [Hall|].
+  (* nothing non-zero is left: the walk emits the remainder itself *)
+  apply: vsebBlock_obligation_zeros => // z.
+  move=> /(nthP 0)[m Hm <-].
+  rewrite nth_drop; apply: Hall; first exact: leq_addr.
+  by move: Hm; rewrite size_drop ltn_subRL addnC.
+move=> [q /andP[Hq1 Hq2] [Hqn0 Hqz]].
+have Hdd : drop (q - k.+1) (drop k.+1 (vecSum l)) = drop q (vecSum l)
+  by rewrite drop_drop subnK.
+rewrite (vsebAux_drop0s Fet (k := (q - k.+1)%N)); first last.
+- move=> m Hm; rewrite nth_drop; apply: Hqz; first exact: leq_addr.
+  by move: Hm; rewrite ltn_subRL addnC.
+- rewrite size_drop; apply: ltn_sub2r => //.
+  exact: leq_ltn_trans Hq1 Hq2.
+rewrite Hdd.
+by apply: (vseb_emit_cases Heven Hsz6 Hfmt Hnz Hsort Hpair Fet Hk Hq1 Hq2
+                           en0 Hqn0 HK); rewrite -?HK.
+Qed.
 
 (* The walk, by induction on the SUFFIX.  Merges are handled by               *)
 (* [vsebDom_merge] and recursion; emits split into the draft's per-emit       *)

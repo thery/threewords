@@ -77,3 +77,38 @@ argument (roughly the flavour of `Thm6`'s §5.2 pinning, but far shorter — one
 3-element instance, not the ≤6 case study).
 
 **`p ≥ 4`** enters through the constants (`½u`, `2u`, `|c| ≥ 1`), as usual.
+
+## The `(e1,e2)` core (`ToTW_e1e2`), fully worked out
+
+By contradiction: assume `|e2| > ½ uls(e1)`, set `uls(e1) = pow k`. The paper's
+chain, made precise (FLX, symbolic `k`):
+
+1. `|e2| ≤ ½ ulp(s1)` and `> ½ pow k` ⟹ `ulp(s1) > pow k` ⟹ `s1 ≠ 0`,
+   `cexp(s1) ≥ k+1` (the paper's "`s ≥ 1`, `2u ∣ s`").
+2. `e1 = dwl(2Sum(d0,s1))` is `is_imul (pow (min (cexp d0) (cexp s1)))`
+   (`TwoSum_err_imul`); `is_imul_uls_ge` gives `min(cexp d0, cexp s1) ≤ k`,
+   and with `cexp s1 ≥ k+1` this forces `cexp(d0) ≤ k` (the paper's "`e1` not
+   divisible by `2u`, so `d0 < 1`"). Edge `d0 = 0` ⟹ `d1 = 0` ⟹ `e2 = 0`,
+   contra.
+3. `|d1| ≤ ½ ulp(d0) = ½ pow(cexp d0) ≤ ½ pow k` ("`|d1| ≤ ½u`");
+   `cexp(s1) ≥ k+1` ⟹ `mag(s1) ≥ k+p+1` ⟹ `|s1| ≥ pow(k+p)` ("`s ≥ 1`").
+4. **Finish ("`|c| ≥ 1`, so `s = c`, `e2 = d1`") — the tie subtlety:**
+   - If `|d1| < ½ pow k` strictly: `|d1| < ¼ ulp c` even at a power of two, so
+     `d1 + c` is strictly interior to `c`'s rounding interval (both the
+     `pred`- and `succ`-midpoints), hence `RN(d1+c) = c` by
+     `round_N_le_midp` + `round_N_ge_midp`; then `e2 = d1`, `|e2| < ½ pow k`,
+     contra.
+   - If `|d1| = ½ pow k`: `d1 + c` can equal the midpoint `(c + pred c)/2`
+     (exactly when `c = ±pow(k+p)`, a power of two). Then `RN` ties-to-even to
+     `c` (`pred c = pow(k+p) − pow k` has odd mantissa, `c` even), but in
+     either resolution `|e2| = ½ pow k` — contradicting the **strict**
+     `|e2| > ½ pow k`. Formalising this needs Flocq's `round_N_eq_DN`/`_UP`
+     (that `RN x ∈ {round_DN x, round_UP x}`) or `RN_midpoint_even_lo`, not the
+     plain midpoint lemmas.
+
+`ToTW_e1zero` (case `e1 = 0`) is identical with `s0 = e0` in place of `e1`
+(`uls(s0)` in place of `uls(e1)`): the paper's "same reasoning with `e0`".
+
+**Status**: steps 1–3 are proved interactively (faithful to the paper); the
+finish's strict sub-case is routine, the `|d1| = ½ pow k` tie is the one part
+the paper omits and the only real work left.

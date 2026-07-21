@@ -14,6 +14,7 @@ Nonoverlap.v
 TWR.v
 Merge.v
 VecSum.v
+CEThm6.v
 VSEB.v
 TWSum.v
 addition.v

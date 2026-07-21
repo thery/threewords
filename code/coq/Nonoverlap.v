@@ -716,6 +716,112 @@ Qed.
 Lemma sumR_head_drop1 l : sumR l = nth 0 l 0 + sumR (drop 1 l).
 Proof. by case: l => [|a l] /=; rewrite ?drop0; lra. Qed.
 
+(* ---- Theorem 3: relative error of truncating a P-nonoverlapping seq ------ *)
+(* Paper 2.2, p.4.  Four steps, each about a P-nonoverlapping [l] with        *)
+(* [ufp0 := ufp (nth 0 l 0)].  See doc/thm3.md.                               *)
+
+(* Step 1 -- the paper's [ufp(y_k) <= u ufp(y_{k-1}) <= ... <= u^k ufp(y_0)]. *)
+Lemma ufp_decay_pow l k :
+  Pnonoverlap l -> {in l, forall z, format z} -> nth 0 l k <> 0 ->
+  ufp (nth 0 l k) <= u ^ k * ufp (nth 0 l 0).
+Proof.
+move=> Pl Fl; elim: k => [_|k IH Hkn].
+  by rewrite /= Rmult_1_l; apply: Rle_refl.
+have Hkn' : nth 0 l k <> 0 by move=> H; apply/Hkn/(nth_step_zero Pl Fl H).
+have Hk1 : (k.+1 < size l)%N.
+  by rewrite ltnNge; apply/negP => Hge; apply: Hkn; rewrite nth_default.
+have Hstep : ufp (nth 0 l k.+1) <= u * ufp (nth 0 l k).
+  apply: ufp_ulp_step => //.
+  by apply: Pnonoverlap_lt Hk1 Hkn.
+have Hu0 : 0 < u by rewrite uE; apply: bpow_gt_0.
+have Huk : 0 <= u ^ k by apply: pow_le; lra.
+have HU : 0 < ufp (nth 0 l k) := ufp_gt_0 _.
+apply: Rle_trans Hstep _.
+have Hd := IH Hkn'.
+have -> : u ^ k.+1 * ufp (nth 0 l 0) = u * (u ^ k * ufp (nth 0 l 0))
+  by rewrite /=; ring.
+by apply: Rmult_le_compat_l; lra.
+Qed.
+
+(* Step 2 -- tail bound: [sumR_ufp_bound] on the suffix, plus the decay.      *)
+Lemma sumR_drop_ufp_bound l k :
+  Pnonoverlap l -> {in l, forall z, format z} ->
+  Rabs (sumR (drop k l)) <= 2 * u ^ k * ufp (nth 0 l 0).
+Proof.
+move=> Pl Fl.
+have Pdk : Pnonoverlap (drop k l) by apply: Pnonoverlap_drop.
+have Fdk : {in drop k l, forall z, format z} by move=> z /mem_drop; apply: Fl.
+have Hu0 : 0 < u by rewrite uE; apply: bpow_gt_0.
+have Huk : 0 <= u ^ k by apply: pow_le; lra.
+have HU0 : 0 < ufp (nth 0 l 0) := ufp_gt_0 _.
+have Hbnd := sumR_ufp_bound Pdk Fdk.
+rewrite nth_drop addn0 in Hbnd.
+case: (Req_dec (nth 0 l k) 0) => [Hzk|Hnzk].
+  have -> : sumR (drop k l) = 0.
+    apply: small_head_zero Pdk Fdk _.
+    by rewrite nth_drop addn0.
+  by rewrite Rabs_R0; nra.
+have Hdecay := ufp_decay_pow Pl Fl Hnzk.
+apply: Rle_trans Hbnd _.
+have HUk : 0 < ufp (nth 0 l k) := ufp_gt_0 _.
+by nra.
+Qed.
+
+(* Step 3 -- lower bound [(1 - 2u) ufp(y_0) <= |sumR l|].                     *)
+Lemma sumR_ufp_lower l :
+  Pnonoverlap l -> {in l, forall z, format z} -> nth 0 l 0 <> 0 ->
+  (1 - 2 * u) * ufp (nth 0 l 0) <= Rabs (sumR l).
+Proof.
+move=> Pl Fl Hn0.
+have Hu0 : 0 < u by rewrite uE; apply: bpow_gt_0.
+have HU0 : 0 < ufp (nth 0 l 0) := ufp_gt_0 _.
+have Hy0 : ufp (nth 0 l 0) <= Rabs (nth 0 l 0) by apply: ufp_le_abs.
+have Htail : Rabs (sumR (drop 1 l)) <= 2 * u ^ 1 * ufp (nth 0 l 0)
+  by apply: sumR_drop_ufp_bound.
+rewrite /= Rmult_1_r in Htail.
+have Htri := Rabs_triang_inv (nth 0 l 0) (- sumR (drop 1 l)).
+rewrite Rabs_Ropp in Htri.
+have Hsl : nth 0 l 0 - - sumR (drop 1 l) = sumR l
+  by rewrite [sumR l]sumR_head_drop1; ring.
+rewrite Hsl in Htri.
+by move: Htri Htail Hy0; nra.
+Qed.
+
+(* Theorem 3 -- the relative truncation error.  [u <= /64] is the [p >= 6]   *)
+(* hypothesis, passed explicitly to keep this file generic.                  *)
+Lemma Pnonoverlap_truncate_error l k :
+  Pnonoverlap l -> {in l, forall z, format z} -> nth 0 l 0 <> 0 -> u <= / 64 ->
+  Rabs (sumR (drop k l)) <=
+    (2 * u ^ k + 42 / 10 * u ^ k.+1) * Rabs (sumR l).
+Proof.
+move=> Pl Fl Hn0 Hu64.
+have Hu0 : 0 < u by rewrite uE; apply: bpow_gt_0.
+have Huk : 0 < u ^ k by apply: pow_lt; lra.
+have HU0 : 0 < ufp (nth 0 l 0) := ufp_gt_0 _.
+have Htail : Rabs (sumR (drop k l)) <= 2 * u ^ k * ufp (nth 0 l 0)
+  by apply: sumR_drop_ufp_bound.
+have Hlow := sumR_ufp_lower Pl Fl Hn0.
+have Huk1 : u ^ k.+1 = u * u ^ k by rewrite /=; ring.
+rewrite Huk1.
+have Hs : 2 <= (2 + 42 / 10 * u) * (1 - 2 * u) by nra.
+have -> : 2 * u ^ k + 42 / 10 * (u * u ^ k) = (2 + 42 / 10 * u) * u ^ k
+  by ring.
+apply: Rle_trans Htail _.
+have Hpos1 : 0 <= Rabs (sumR l) - (1 - 2 * u) * ufp (nth 0 l 0) by lra.
+have Hpos2 : 0 <= u ^ k * ufp (nth 0 l 0) by nra.
+have Hc : 0 <= 2 + 42 / 10 * u by lra.
+have Ha : 0 <= (2 + 42 / 10 * u) * u ^ k
+  by apply: Rmult_le_pos => //; apply: pow_le; lra.
+have Hb : 0 <= (2 + 42 / 10 * u) * (1 - 2 * u) - 2 by lra.
+have Hstep1 : 0 <= (2 + 42 / 10 * u) * u ^ k *
+                   (Rabs (sumR l) - (1 - 2 * u) * ufp (nth 0 l 0))
+  by apply: Rmult_le_pos.
+have Hstep2 : 0 <= u ^ k * ufp (nth 0 l 0) *
+                   ((2 + 42 / 10 * u) * (1 - 2 * u) - 2)
+  by apply: Rmult_le_pos.
+nra.
+Qed.
+
 (* ===========================================================================*)
 (*  Error bound: the "Ensure" clause of Algorithm 8 (p >= 6):                 *)
 (*    | r - (x + y) | <= (2 u^3 + 4.2 u^4) | x + y |.                         *)

@@ -347,69 +347,26 @@ have Htrunc :
   have Hsplit : sumR (vseb e) - sumR (vsebK 3 e) = sumR (drop 3 y).
     by rewrite /vsebK -/y -{1}(cat_take_drop 3 y) sumR_cat; ring.
   rewrite Hsplit -Hvseb_sum -/y.
+  (* The dropped tail is bounded by Theorem 3 (general k), at k = 3.          *)
   have Hu0 : 0 < u by rewrite uE; apply: bpow_gt_0.
   have Hu64 : u <= / 64.
     rewrite uE; have -> : (/ 64 = bpow beta (-6))%R
       by rewrite /= /Z.pow_pos /=; lra.
     by apply: bpow_le; lia.
-  have Herrc : 0 <= errc by nra.
-  have Hsub : {in drop 1 y, forall t, format t} /\
-              {in drop 3 y, forall t, format t}.
-    by split=> t /mem_drop tin; apply: Fy.
-  case: Hsub => Fd1 Fd3.
-  have Hty : Rabs (sumR (drop 3 y)) <= 2 * ufp (nth 0 (drop 3 y) 0).
-    apply: sumR_ufp_bound; last exact: Fd3.
-    by apply: Pnonoverlap_drop.
-  case: (Req_dec (nth 0 y 3) 0) => [y3z|y3n].
-    suff -> : sumR (drop 3 y) = 0.
-      by rewrite Rabs_R0; apply: Rmult_le_pos => //; exact: Rabs_pos.
-    apply: small_head_zero => //; first exact: Pnonoverlap_drop.
-    by rewrite nth_drop addn0.
-  have S3 : (3 < size y)%N.
-    by rewrite ltnNge; apply/negP => Hle; apply: y3n; rewrite nth_default.
-  have Fk : forall k, format (nth 0 y k).
-    move=> k; case: (ltnP k (size y)) => [Hk|Hk].
-      by apply: Fy; apply: mem_nth.
-    by rewrite nth_default //; apply: generic_format_0.
-  have y2n : nth 0 y 2 <> 0 by move=> H; apply/y3n/(nth_step_zero Py Fy H).
-  have y1n : nth 0 y 1 <> 0 by move=> H; apply/y2n/(nth_step_zero Py Fy H).
-  have y0n : nth 0 y 0 <> 0 by move=> H; apply/y1n/(nth_step_zero Py Fy H).
-  have dstep : forall k, nth 0 y k.+1 <> 0 ->
-                 ufp (nth 0 y k.+1) <= u * ufp (nth 0 y k).
-    move=> k Hkn.
-    have Hk : (k.+1 < size y)%N.
-      by rewrite ltnNge; apply/negP => Hge; apply: Hkn; rewrite nth_default.
-    have Hpk : Rabs (nth 0 y k.+1) < ulp (nth 0 y k)
-      by apply: Pnonoverlap_lt Hk Hkn.
-    apply: ufp_ulp_step => //.
-    by move=> H; apply: Hkn; apply: (nth_step_zero Py Fy H).
-  have d0 := dstep 0%N y1n.
-  have d1 := dstep 1%N y2n.
-  have d2 := dstep 2%N y3n.
-  have U0 : 0 < ufp (nth 0 y 0) := ufp_gt_0 _.
-  have U1 : 0 < ufp (nth 0 y 1) := ufp_gt_0 _.
-  have U2 : 0 < ufp (nth 0 y 2) := ufp_gt_0 _.
-  have e2 : ufp (nth 0 y 3) <= u * (u * (u * ufp (nth 0 y 0))).
-    apply: Rle_trans d2 _; apply: Rmult_le_compat_l; first lra.
-    apply: Rle_trans d1 _; apply: Rmult_le_compat_l; first lra.
-    exact: d0.
-  move: Hty; rewrite nth_drop addn0 => Hty.
-  have Hd1y : Rabs (sumR (drop 1 y)) <= 2 * ufp (nth 0 y 1).
-    have -> : nth 0 y 1 = nth 0 (drop 1 y) 0 by rewrite nth_drop addn0.
-    apply: sumR_ufp_bound; last exact: Fd1.
-    by apply: Pnonoverlap_drop.
-  have Hlow : (1 - 2 * u) * ufp (nth 0 y 0) <= Rabs (sumR y).
-    have Hy0 : ufp (nth 0 y 0) <= Rabs (nth 0 y 0) by apply: ufp_le_abs.
-    have := Rabs_triang_inv (nth 0 y 0) (- sumR (drop 1 y)).
-    rewrite Rabs_Ropp.
-    have -> : nth 0 y 0 - - sumR (drop 1 y) = sumR y
-      by rewrite [in RHS]sumR_head_drop1; ring.
-    move=> Htri; nra.
-  apply: Rle_trans Hty _.
-  have Hscal : 2 * (u * (u * u)) <=
-               (2 * (u * u * u) + 42 / 10 * (u * u * u * u)) * (1 - 2 * u)
-    by nra.
-  nra.
+  have -> : 2 * (u * u * u) + 42 / 10 * (u * u * u * u) =
+            2 * u ^ 3 + 42 / 10 * u ^ 3.+1 by rewrite /=; ring.
+  case: (Req_dec (nth 0 y 0) 0) => [Hy0z|Hy0n]; last first.
+    by apply: Pnonoverlap_truncate_error.
+  have H1 := nth_step_zero Py Fy Hy0z.
+  have H2 := nth_step_zero Py Fy H1.
+  have H3 := nth_step_zero Py Fy H2.
+  have -> : sumR (drop 3 y) = 0.
+    apply: small_head_zero; [by apply: Pnonoverlap_drop
+      | by move=> t /mem_drop; apply: Fy | by rewrite nth_drop addn0].
+  rewrite Rabs_R0; apply: Rmult_le_pos; last exact: Rabs_pos.
+  have H4 : 0 <= u ^ 3 by apply: pow_le; lra.
+  have H5 : 0 <= u ^ 3.+1 by apply: pow_le; lra.
+  lra.
 (* The result of TWSum is exactly the value of those three terms.  [vsebK 3 e]*)
 (* has length <= 3 (it is a [take 3]); TWSum reads its (zero-padded) first    *)
 (* three entries, whose sum is exactly [sumR (vsebK 3 e)].                    *)

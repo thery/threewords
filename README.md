@@ -129,9 +129,9 @@ Links point at the Rocq definition/theorem. ✅ proved · 🚧 skeleton (reducti
 | 4 | [VecSum](https://github.com/thery/threewords/blob/main/code/coq/VecSum.v#L110) | [Thm 1](https://github.com/thery/threewords/blob/main/code/coq/VecSum.v#L668) + [Cor 1](https://github.com/thery/threewords/blob/main/code/coq/VecSum.v#L855) | ✅ |
 | 5 | [VSEB](https://github.com/thery/threewords/blob/main/code/coq/VSEB.v#L118) | [Thm 2](https://github.com/thery/threewords/blob/main/code/coq/VSEB.v#L468) | ✅ |
 |  | keep-first-`k` error | [Thm 3](https://github.com/thery/threewords/blob/main/code/coq/Nonoverlap.v#L792) | ✅ |
-| 6 | [ToTW](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L127) | [Thm 4](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L211) | 🚧 |
+| 6 | [ToTW](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L127) | [Thm 4](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L312) | ✅ |
 | 7 | RoundTW | Thm 5 | ❌ |
-| 8 | [TWSum](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L245) | [Thm 6](https://github.com/thery/threewords/blob/main/code/coq/Thm6.v#L4365) + [error](https://github.com/thery/threewords/blob/main/code/coq/addition.v#L81) | ✅ |
+| 8 | [TWSum](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L346) | [Thm 6](https://github.com/thery/threewords/blob/main/code/coq/Thm6.v#L4365) + [error](https://github.com/thery/threewords/blob/main/code/coq/addition.v#L81) | ✅ |
 | 9–10 | 3Prod (TW×TW) | Thm 7 | ❌ |
 | 11–12 | 3Prod (DW×TW) | Thm 8 | ❌ |
 | 13 | 3Reci | Thm 9 | ❌ |

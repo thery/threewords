@@ -50,7 +50,7 @@ COVERAGE = [
     ("",      "keep-first-`k` error", None,
      [("Thm 3", R("Pnonoverlap_truncate_error", "Nonoverlap.v"))], "done"),
     ("6",     "ToTW",      R("ToTW", "TWSum.v"),
-     [("Thm 4", R("ToTW_isTW", "TWSum.v"))], "skel"),
+     [("Thm 4", R("ToTW_isTW", "TWSum.v"))], "done"),
     ("7",     "RoundTW",   None,
      [("Thm 5", None)], "no"),
     ("8",     "TWSum",     R("TWSum", "TWSum.v"),

@@ -109,6 +109,8 @@ chain, made precise (FLX, symbolic `k`):
 `ToTW_e1zero` (case `e1 = 0`) is identical with `s0 = e0` in place of `e1`
 (`uls(s0)` in place of `uls(e1)`): the paper's "same reasoning with `e0`".
 
-**Status**: steps 1–3 are proved interactively (faithful to the paper); the
-finish's strict sub-case is routine, the `|d1| = ½ pow k` tie is the one part
-the paper omits and the only real work left.
+**Status: PROVED** (`ToTW_e1e2`, `ToTW_e1zero`, both Qed). The finish turned
+out *not* to need the tie analysis at all: a 2Sum error never exceeds the
+other operand (`c` is a float, so `|e2| ≤ |c − (d1+c)| = |d1|` by the
+nearest-float property), which is the paper's "`s = c, e2 = d1`" immediately.
+Steps 1–2 (to get `|d1| ≤ ½ pow k`) plus that one line close it.

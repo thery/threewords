@@ -145,7 +145,55 @@ Lemma ToTW_e1e2 (d0 d1 c s1 s0 e1 e2 : R) :
   Rabs d1 <= / 2 * ulp d0 -> e1 <> 0 ->
   Rabs e2 <= / 2 * uls e1.
 Proof.
-Admitted.
+move=> Heven Fd0 Fd1 Fc E2 E1 Hd1 e1n0.
+apply: Rnot_lt_le => Hgt.
+have Fs1 : format s1 by have := format_TwoSum Fd1 Fc; rewrite E2; case.
+have Fe1 : format e1 by have := format_TwoSum Fd0 Fs1; rewrite E1; case.
+have Hs1v : s1 = RND (d1 + c) by have := TwoSum_hi d1 c; rewrite E2.
+have Hc2 : s1 + e2 = d1 + c.
+  move: E2 (TwoSum_correct_loc Fd1 Fc); case: (TwoSum d1 c) => sX eX.
+  by case=> <- <- /= ->.
+have Hm2 : Rabs e2 <= / 2 * ulp s1.
+  have := magnitude_TwoSum Fd1 Fc; rewrite E2 /magnitudeDWR; lra.
+have [k Hk] : exists e, uls e1 = pow e by apply: uls_pow.
+rewrite Hk in Hgt.
+have Hpk := bpow_gt_0 beta k.
+(* Step 1 (paper's [s >= 1, 2u | s]): [cexp s1 >= k+1]                       *)
+have Hulps1 : pow k < ulp s1 by lra.
+have s1n0 : s1 <> 0 by move=> H0; move: Hulps1; rewrite H0 ulp_FLX_0; lra.
+have Hcexp_s1 : (k < cexp s1)%Z.
+  apply: (lt_bpow beta); apply: Rlt_le_trans Hulps1 _.
+  rewrite ulp_neq_0 //; apply: Rle_refl.
+(* Step 2 (paper's [e1 not div 2u, so d0 < 1]): [cexp d0 <= k]              *)
+have Himul_e1 := TwoSum_err_imul Fd0 Fs1; rewrite E1 /= in Himul_e1.
+have Hmin_le : (Z.min (cexp d0) (cexp s1) <= k)%Z.
+  by apply: (le_bpow beta); rewrite -Hk; apply: is_imul_uls_ge.
+have Hcexp_d0 : (cexp d0 <= k)%Z by move: Hmin_le Hcexp_s1; lia.
+have d0n0 : d0 <> 0.
+  move=> H0.
+  have d1z : d1 = 0.
+    by move: Hd1; rewrite H0 ulp_FLX_0 Rmult_0_r; split_Rabs; lra.
+  have s1c : s1 = c by rewrite Hs1v d1z Rplus_0_l round_generic.
+  by move: Hgt Hc2; rewrite d1z s1c; split_Rabs; lra.
+(* Hence [|d1| <= 1/2 pow k] (paper's [|d1| <= 1/2 u])                       *)
+have Hd1_le : Rabs d1 <= / 2 * pow k.
+  apply: Rle_trans Hd1 _.
+  rewrite ulp_neq_0 //.
+  have : pow (cexp d0) <= pow k by apply: bpow_le.
+  lra.
+(* Finish: a 2Sum error never exceeds the OTHER operand ([c] is a float),   *)
+(* so [|e2| <= |d1|] -- this is the paper's [s = c, e2 = d1], but immediate *)
+(* from the nearest-float property (no [|c| >= 1] / tie analysis needed).   *)
+have He2_le : Rabs e2 <= Rabs d1.
+  have [_ Hnear] := round_N_pt beta fexp choice (d1 + c).
+  have Hb := Hnear c Fc.
+  have -> : Rabs e2 = Rabs (RND (d1 + c) - (d1 + c)).
+    by rewrite -Hs1v; move: Hc2; split_Rabs; lra.
+  apply: Rle_trans Hb _.
+  have -> : c - (d1 + c) = - d1 by lra.
+  rewrite Rabs_Ropp; apply: Rle_refl.
+lra.
+Qed.
 
 (* Theorem 4 core, case [e_1 = 0]: the same bound against the surviving high  *)
 (* word [s_0 = e_0] ("the same reasoning with [e_0] instead of [e_1]").        *)
@@ -155,7 +203,60 @@ Lemma ToTW_e1zero (d0 d1 c s1 s0 e1 e2 : R) :
   Rabs d1 <= / 2 * ulp d0 -> s0 <> 0 -> e1 = 0 ->
   Rabs e2 <= / 2 * uls s0.
 Proof.
-Admitted.
+move=> Heven Fd0 Fd1 Fc E2 E1 Hd1 s0n0 e1z.
+apply: Rnot_lt_le => Hgt.
+have Fs1 : format s1 by have := format_TwoSum Fd1 Fc; rewrite E2; case.
+have Fs0 : format s0 by have := format_TwoSum Fd0 Fs1; rewrite E1; case.
+have Hs1v : s1 = RND (d1 + c) by have := TwoSum_hi d1 c; rewrite E2.
+have Hc2 : s1 + e2 = d1 + c.
+  move: E2 (TwoSum_correct_loc Fd1 Fc); case: (TwoSum d1 c) => sX eX.
+  by case=> <- <- /= ->.
+have Hc1 : s0 + e1 = d0 + s1.
+  move: E1 (TwoSum_correct_loc Fd0 Fs1); case: (TwoSum d0 s1) => sX eX.
+  by case=> <- <- /= ->.
+have Hs0v : s0 = d0 + s1 by move: Hc1; rewrite e1z; lra.
+have Hm2 : Rabs e2 <= / 2 * ulp s1.
+  have := magnitude_TwoSum Fd1 Fc; rewrite E2 /magnitudeDWR; lra.
+have [k Hk] : exists e, uls s0 = pow e by apply: uls_pow.
+rewrite Hk in Hgt.
+have Hpk := bpow_gt_0 beta k.
+have Hulps1 : pow k < ulp s1 by lra.
+have s1n0 : s1 <> 0 by move=> H0; move: Hulps1; rewrite H0 ulp_FLX_0; lra.
+have Hcexp_s1 : (k < cexp s1)%Z.
+  apply: (lt_bpow beta); apply: Rlt_le_trans Hulps1 _.
+  rewrite ulp_neq_0 //; apply: Rle_refl.
+(* Step 2 via [s0 = d0 + s1]: if [cexp d0 >= k+1] then [pow(k+1) | s0],      *)
+(* contradicting [uls s0 = pow k] (the paper's "same reasoning with e0").    *)
+have Hs1_imul : is_imul s1 (pow (k + 1)).
+  by apply: is_imul_pow_le (format_imul_cexp Fs1) _; lia.
+have Hcexp_d0 : (cexp d0 <= k)%Z.
+  case: (Z_le_gt_dec (cexp d0) k) => // Hgt_d0.
+  have Hd0_imul : is_imul d0 (pow (k + 1)).
+    by apply: is_imul_pow_le (format_imul_cexp Fd0) _; lia.
+  have Hs0_imul : is_imul s0 (pow (k + 1)) by rewrite Hs0v; apply: is_imul_add.
+  have := is_imul_uls_ge Fs0 s0n0 Hs0_imul; rewrite Hk.
+  by move/(le_bpow beta); lia.
+have d0n0 : d0 <> 0.
+  move=> H0.
+  have d1z : d1 = 0.
+    by move: Hd1; rewrite H0 ulp_FLX_0 Rmult_0_r; split_Rabs; lra.
+  have s1c : s1 = c by rewrite Hs1v d1z Rplus_0_l round_generic.
+  by move: Hgt Hc2; rewrite d1z s1c; split_Rabs; lra.
+have Hd1_le : Rabs d1 <= / 2 * pow k.
+  apply: Rle_trans Hd1 _.
+  rewrite ulp_neq_0 //.
+  have : pow (cexp d0) <= pow k by apply: bpow_le.
+  lra.
+have He2_le : Rabs e2 <= Rabs d1.
+  have [_ Hnear] := round_N_pt beta fexp choice (d1 + c).
+  have Hb := Hnear c Fc.
+  have -> : Rabs e2 = Rabs (RND (d1 + c) - (d1 + c)).
+    by rewrite -Hs1v; move: Hc2; split_Rabs; lra.
+  apply: Rle_trans Hb _.
+  have -> : c - (d1 + c) = - d1 by lra.
+  rewrite Rabs_Ropp; apply: Rle_refl.
+lra.
+Qed.
 
 Lemma ToTW_vecSum_Fnonoverlap a b c :
   ties_to_even choice -> format a -> format b -> format c ->

@@ -33,7 +33,7 @@ Flocq's FLX), `u = 2^{-p}`.
 
 | Alg | Name (ops) | Theorem | Formalised |
 |-----|------------|---------|-----------|
-| 6 | ToTW(a,b,c) (21, 1 test) — 3 FP → TW | **Thm 4** (`p≥4`) | — |
+| 6 | ToTW(a,b,c) (21, 1 test) — 3 FP → TW | **Thm 4** (`p≥4`) | ✓ `ToTW_isTW` |
 | 7 | RoundTW(x₀,x₁,x₂) (3, 4 tests) — TW → nearest FP | **Thm 5** (`RoundTW(x̄)=RN(x̄)`, `p≥4`) | — |
 | 8 | TWSum(x,y) (42, 8 tests) — sum of two TW | **Thm 6** (result is TW, `p≥4`) + error `2u³+4.2u⁴` | ✓ `TWSum_isTW` / `TWSum_error`; Thm 6 core = `Thm6.vecSum_vseb_Pnonoverlap` |
 
@@ -66,7 +66,6 @@ formalised (only needed for multiplication).
 (Alg 5), and TWSum with Theorem 6 and its `2u³+4.2u⁴` error bound (Alg 8),
 instantiated at binary64. All zero-admit.
 
-**Not formalised:** 2Prod (Alg 3), the conversions ToTW/RoundTW (Alg 6, 7 /
-Thm 4, 5), the general Theorem 3 error bound (only its `k=3` instance is used),
+**Not formalised:** 2Prod (Alg 3), the conversion RoundTW (Alg 7 / Thm 5), the general Theorem 3 error bound (only its `k=3` instance is used),
 and the entire multiply/divide/reciprocal/sqrt half of the paper (Alg 9–18 /
 Thm 7–11).

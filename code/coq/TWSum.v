@@ -62,6 +62,8 @@ Local Notation format := (generic_format beta fexp).
 Local Notation cexp := (cexp beta fexp).
 Local Notation mant := (scaled_mantissa beta fexp).
 Local Notation RND := (round beta fexp rnd).
+Local Notation RU := (round beta fexp Zceil).
+Local Notation RD := (round beta fexp Zfloor).
 Local Notation ulp := (ulp beta fexp).
 Local Notation uls := (uls p).
 Local Notation error_le_half_ulp_RN :=
@@ -339,6 +341,64 @@ by split; [apply: Hfmt; rewrite !inE eqxx | apply: Hfmt; rewrite !inE eqxx orbT
          | apply: Hfmt; rewrite !inE eqxx !orbT | apply: (Hno 0%N)
          | apply: (Hno 1%N)].
 Qed.
+
+(* ===========================================================================*)
+(*  Algorithm 7 (RoundTW): round a triple word to the nearest float           *)
+(*  (paper Theorem 5).  See doc/thm5.md.                                      *)
+(* ===========================================================================*)
+
+(* [x0+x1] sits exactly halfway between its two nearest floats.               *)
+Definition is_midpoint (m : R) : Prop :=
+  m - round beta fexp Zfloor m = / 2 * ulp (round beta fexp Zfloor m).
+
+Definition RoundTW (x0 x1 x2 : R) : R :=
+  if Req_EM_T (RND (x0 + 2 * x1)) (x0 + 2 * x1) then
+    if Req_EM_T (RND (- (3 / 2 * u - 2 * (u * u)) * x0)) x1 then
+      if Rlt_le_dec 0 x2 then RU (x0 + x1)
+      else if Rlt_le_dec x2 0 then RD (x0 + x1)
+      else RND (x0 + x1)
+    else RND (x0 + x1)
+  else RND (x0 + x1).
+
+(* Helper A (paper's "if [x0+x1] is a FP number ..."): a float plus a tail    *)
+(* below half its ulp rounds back to the float.                               *)
+Lemma RoundTW_add_float x0 x1 x2 :
+  format x0 -> format x1 -> format x2 -> format (x0 + x1) ->
+  Rabs x2 < ulp x1 -> RND (x0 + x1 + x2) = x0 + x1.
+Proof.
+Admitted.
+
+(* Helper B (non-midpoint): a tail below the distance to the midpoint cannot  *)
+(* change the rounding, so [RN(m + d) = RN m].                                *)
+Lemma RN_add_notmid (m d : R) :
+  ~ is_midpoint m -> ~ format m -> Rabs d < ulp m -> RND (m + d) = RND m.
+Proof.
+Admitted.
+
+(* Helper C (midpoint): at a midpoint the sign of the tail decides the        *)
+(* rounding -- [RU] when positive, [RD] when negative, [RN] when zero.        *)
+Lemma RN_add_mid (m d : R) :
+  is_midpoint m -> ~ format m -> Rabs d < ulp m ->
+  RND (m + d) = if Rlt_le_dec 0 d then RU m
+                else if Rlt_le_dec d 0 then RD m else RND m.
+Proof.
+Admitted.
+
+(* The tie-detector (the core of Algorithm 7): with [isTW]'s separation, the  *)
+(* algorithm's first condition is FALSE exactly when [x0+x1] is a midpoint   *)
+(* the special case [x0 = 1+2u, x1 = -3/2 u] being caught by [star].            *)
+Lemma RoundTW_cond x0 x1 :
+  format x0 -> format x1 -> (x1 = 0 \/ Rabs x1 < ulp x0) -> ~ format (x0 + x1) ->
+  (RND (x0 + 2 * x1) = x0 + 2 * x1 /\
+   RND (- (3 / 2 * u - 2 * (u * u)) * x0) = x1) <-> is_midpoint (x0 + x1).
+Proof.
+Admitted.
+
+(* Paper Theorem 5. *)
+Lemma RoundTW_correct x0 x1 x2 :
+  isTW (TWR x0 x1 x2) -> RoundTW x0 x1 x2 = RND (x0 + x1 + x2).
+Proof.
+Admitted.
 
 (* ===========================================================================*)
 (*  Algorithm 8: TWSum -- the sum of two triple-word numbers.                 *)

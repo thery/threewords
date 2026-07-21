@@ -95,6 +95,31 @@ binary64 in `addition.v`. Working in FLX is what makes the central proof
 `u`, which is invalid once a real minimal exponent `emin` is present. See
 `doc/thm6.md` for why, and for the full proof.
 
+### Coverage of paper3
+
+Which of `paper3.pdf`'s algorithms/theorems are formalised. The **complete
+addition path** is done (zero admits); multiplication, division, reciprocal,
+square root and the two conversion helpers are not yet. Full catalogue with
+lemma names in `doc/paper3-map.md`; the addition proofs are written up in
+`doc/thm1.md` (Theorem 1 / Corollary 1) and `doc/thm6.md` (Theorem 6).
+
+| Alg | Paper object | Theorem | Formalised |
+|----:|--------------|:-------:|:----------:|
+| 1 | Fast2Sum — error of FP add (magnitudes known) | — | ✅ |
+| 2 | 2Sum — error of FP add | — | ✅ |
+| 3 | 2Prod — error of FP mult (FMA) | — | ❌ |
+| 4 | VecSum | **Thm 1** + **Cor 1** | ✅ |
+| 5 | VSEB (VecSumErrBranch) | **Thm 2** | ✅ |
+|   | keep-first-`k` relative error | **Thm 3** | `k=3` only |
+| 6 | ToTW — three FP numbers → TW | **Thm 4** | ❌ |
+| 7 | RoundTW — TW → nearest FP | **Thm 5** | ❌ |
+| 8 | TWSum — sum of two TW | **Thm 6** + error `2u³+4.2u⁴` | ✅ |
+| 9–10 | 3Prod — product of two TW | **Thm 7** | ❌ |
+| 11–12 | 3Prod — product of DW × TW | **Thm 8** | ❌ |
+| 13 | 3Reci — reciprocal of a TW | **Thm 9** | ❌ |
+| 14 | 3Div — quotient of two TW | **Thm 10** | ❌ |
+| 15 | 3SqRt — square root of a TW | **Thm 11** | ❌ |
+
 ### `code/coq/`
 
 Self-contained Rocq/Coq build: it bundles the triple-word files below together

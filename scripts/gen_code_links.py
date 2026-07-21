@@ -35,10 +35,11 @@ def R(ident, fname):
 #                 status).  status in {"done", "skel", "no"}.
 # A ref is R(ident, file) when formalised, else None.
 COVERAGE = [
-    ("1",     "Fast2Sum",  R("Fast2Sum_correct_aux", "Fast2Sum_robust_flx.v"),
-     [], "done"),
+    ("1",     "Fast2Sum",  None,
+     [("correctness", R("Fast2Sum_correct_aux", "Fast2Sum_robust_flx.v"))],
+     "done"),
     ("2",     "2Sum",      R("TwoSum", "TwoSum.v"),
-     [], "done"),
+     [("correctness", R("TwoSum_correct_loc", "TwoSum.v"))], "done"),
     ("3",     "2Prod (FMA)", None,
      [], "no"),
     ("4",     "VecSum",    R("vecSum", "VecSum.v"),

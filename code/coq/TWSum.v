@@ -118,6 +118,64 @@ Local Notation vecSum_vseb_Pnonoverlap :=
   (vecSum_vseb_Pnonoverlap Hp2 Hp4 choice_sym).
 
 (* ===========================================================================*)
+(*  Algorithm 6 (ToTW): three FP numbers to a triple word (paper Thm 4).      *)
+(*  ToTW a b c = VSEB(VecSum(d0, d1, c)) with (d0,d1) = 2Sum(a,b).  Unlike    *)
+(*  TWSum this does NOT go through Theorem 6: the special input [d0; d1; c]   *)
+(*  (a DW followed by one FP) makes VecSum's output already F-nonoverlapping, *)
+(*  so Theorem 2 ([vseb_Pnonoverlap]) suffices.  See doc/thm4.md.             *)
+(* ===========================================================================*)
+Definition ToTW (a b c : R) : twR :=
+  let: DWR d0 d1 := TwoSum a b in
+  match vsebK 3 (vecSum [:: d0; d1; c]) with
+  | [:: r0, r1, r2 & _] => TWR r0 r1 r2
+  | [:: r0; r1]         => TWR r0 r1 0
+  | [:: r0]             => TWR r0 0 0
+  | [::]                => TWR 0 0 0
+  end.
+
+(* THE content of Theorem 4 (doc/thm4.md, the [(e1,e2)] argument): the        *)
+(* VecSum of [d0; d1; c] is F-nonoverlapping.  [(e0,e1)] is free from the     *)
+(* 2Sum half-ulp bound; [(e1,e2)] is a divisibility/ulp contradiction.        *)
+Lemma ToTW_vecSum_Fnonoverlap a b c :
+  ties_to_even choice -> format a -> format b -> format c ->
+  Fnonoverlap (vecSum [:: dwh (TwoSum a b); dwl (TwoSum a b); c]).
+Proof.
+Admitted.
+
+(* Paper Theorem 4: [ToTW a b c] is a triple word (p >= 4; here p >= 6).      *)
+(* Reduction to Theorem 2, mirroring [TWSum_isTW].                            *)
+Lemma ToTW_isTW a b c :
+  ties_to_even choice -> format a -> format b -> format c -> isTW (ToTW a b c).
+Proof.
+move=> Hceven Fa Fb Fc.
+have HzF := ToTW_vecSum_Fnonoverlap Hceven Fa Fb Fc.
+have [Fd0 Fd1] : format (dwh (TwoSum a b)) /\ format (dwl (TwoSum a b)).
+  by have := format_TwoSum Fa Fb; case: (TwoSum a b) => h l [].
+move: HzF Fd0 Fd1; rewrite /ToTW; case: (TwoSum a b) => d0 d1 /= HzF Fd0 Fd1.
+pose z := [:: d0; d1; c].
+have Hzf : {in z, forall t, format t}.
+  by move=> t; rewrite !inE => /or3P[] /eqP->.
+have Hsz : (Z.of_nat (size (vecSum z)) <= p + 1)%Z.
+  by rewrite size_vecSum /=; move: Hp6; lia.
+have Hr_nonover : Pnonoverlap (vsebK 3 (vecSum z)).
+  apply/Pnonoverlap_take.
+  by case: (vseb_Pnonoverlap Hsz (format_vecSum Hzf) HzF).
+have Hr_format : {in vsebK 3 (vecSum z), forall t, format t}.
+  by apply/format_vsebK/format_vecSum.
+rewrite -/z.
+move: Hr_nonover Hr_format;
+  case: (vsebK 3 (vecSum z)) => [|r0 [|r1 [|r2 tl]]] Hno Hfmt.
+- by split; try exact: generic_format_0; left.
+- by split; try exact: generic_format_0;
+     [apply: Hfmt; rewrite !inE eqxx | left | left].
+- by split; [apply: Hfmt; rewrite !inE eqxx | apply: Hfmt; rewrite !inE eqxx orbT
+           | exact: generic_format_0 | apply: (Hno 0%N) | left].
+by split; [apply: Hfmt; rewrite !inE eqxx | apply: Hfmt; rewrite !inE eqxx orbT
+         | apply: Hfmt; rewrite !inE eqxx !orbT | apply: (Hno 0%N)
+         | apply: (Hno 1%N)].
+Qed.
+
+(* ===========================================================================*)
 (*  Algorithm 8: TWSum -- the sum of two triple-word numbers.                 *)
 (* ===========================================================================*)
 Definition TWSum (x y : twR) : twR :=

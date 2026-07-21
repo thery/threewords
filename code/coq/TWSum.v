@@ -33,7 +33,7 @@ Hypothesis Hp2 : (1 < p)%Z.
 (* The correctness of triple-word addition needs enough precision (paper      *)
 (* Section 5: [p >= 4] for Theorem 6, [p >= 6] for the Theorem-3 truncation   *)
 (* and [size < p + 1] for six merged terms).  [p >= 6] covers all of them;    *)
-(* binary64 ([p = 53]) satisfies it in [addition.v].                          *)
+(* binary64 ([p = 53]) satisfies it in [Addition.v].                          *)
 Hypothesis Hp6 : (6 <= p)%Z.
 
 (* [Thm6.v] is stated for [4 <= p]; here [6 <= p].                           *)

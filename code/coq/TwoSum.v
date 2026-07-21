@@ -3,7 +3,7 @@
 (* exactness, the format and half-ulp magnitude of its two words, and that    *)
 (* its low word (the error) lands on the coarse input grid ([is_imul]).  A    *)
 (* general round-to-nearest building block, generic over the precision [p]    *)
-(* (binary64 is fixed only in [addition.v]);                                 *)
+(* (binary64 is fixed only in [Addition.v]);                                 *)
 (* built on [Uls] and imported by the triple-word development.                *)
 (* ---------------------------------------------------------------------------*)
 

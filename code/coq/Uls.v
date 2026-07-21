@@ -1,7 +1,7 @@
 (* ---------------------------------------------------------------------------*)
 (* [uls x] -- the weight of the rightmost nonzero bit of a float -- and its   *)
 (* supporting 2-adic valuation ([trP]/[trZ]) and [is_imul] "multiples of a"   *)
-(* "power grid" bridge.  Split out of [addition.v]: this is format-generic    *)
+(* "power grid" bridge.  Split out of [Addition.v]: this is format-generic    *)
 (* (independent of round-to-nearest [choice] and of the triple-word layer),   *)
 (* so it stands alone and is imported by the triple-word development.         *)
 (* ---------------------------------------------------------------------------*)
@@ -22,7 +22,7 @@ Unset Printing Implicit Defensive.
 Section Uls.
 
 (* Generic over the precision [p]: the binary64 value (p = 53) is fixed only  *)
-(* in [addition.v], so these lemmas are reusable at any FLX format.  Radix is *)
+(* in [Addition.v], so these lemmas are reusable at any FLX format.  Radix is *)
 (* binary ([trP]/[trZ]                                                       *)
 (* are 2-adic valuations).                                                    *)
 Variable p : Z.

@@ -2,7 +2,7 @@
 (* Algorithm 5 (VecSumErrBranch, VSEB) and the paper's Theorem 2 (its output  *)
 (* is P-nonoverlapping).  A general round-to-nearest building block, generic  *)
 (* over the precision [p] alone -- FLX (binary64 is fixed only in            *)
-(* only in [addition.v]); built on [TwoSum] and [Nonoverlap].                 *)
+(* only in [Addition.v]); built on [TwoSum] and [Nonoverlap].                 *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.

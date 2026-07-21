@@ -39,7 +39,7 @@ Let p := 53%Z.
 
 Local Notation beta := radix2.
 
-Hypothesis Hp2 : Z.lt 1 p.
+Lemma Hp2 : Z.lt 1 p. Proof. by rewrite /p; lia. Qed.
 Local Notation pow e := (bpow beta e).
 
 Local Instance p_gt_0 : Prec_gt_0 p.

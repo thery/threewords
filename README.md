@@ -90,7 +90,7 @@ being classical logic, functional extensionality and the reals.
 
 The whole development is carried out in Flocq's **FLX** format (unbounded
 exponent range, `radix 2`, precision `p`), instantiated at `p = 53` for
-binary64 in `addition.v`. Working in FLX is what makes the central proof
+binary64 in `Addition.v`. Working in FLX is what makes the central proof
 (Theorem 6) tractable: it lets the argument rescale so that a rounding unit is
 `u`, which is invalid once a real minimal exponent `emin` is present. See
 `doc/thm6.md` for why, and for the full proof.
@@ -131,7 +131,7 @@ Links point at the Rocq definition/theorem. ✅ proved · 🚧 skeleton (reducti
 |  | keep-first-`k` error | [Thm 3](https://github.com/thery/threewords/blob/main/code/coq/Nonoverlap.v#L792) | ✅ |
 | 6 | [ToTW](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L129) | [Thm 4](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L314) | ✅ |
 | 7 | [RoundTW](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L354) | [Thm 5](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L398) | 🚧 |
-| 8 | [TWSum](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L406) | [Thm 6](https://github.com/thery/threewords/blob/main/code/coq/Thm6.v#L4365) + [error](https://github.com/thery/threewords/blob/main/code/coq/addition.v#L81) | ✅ |
+| 8 | [TWSum](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L406) | [Thm 6](https://github.com/thery/threewords/blob/main/code/coq/Thm6.v#L4365) + [error](https://github.com/thery/threewords/blob/main/code/coq/Addition.v#L81) | ✅ |
 | 9–10 | 3Prod (TW×TW) | Thm 7 | ❌ |
 | 11–12 | 3Prod (DW×TW) | Thm 8 | ❌ |
 | 13 | 3Reci | Thm 9 | ❌ |
@@ -160,7 +160,7 @@ its own `Makefile` and `_CoqProject`, so it builds on its own with
 | `Thm6.v`      | **Paper Theorem 6**: `VSEB (VecSum x₀ … x₅)` is P-nonoverlapping (`p ≥ 4`). The load-bearing result of the whole development; proved following `doc/thm6.md §5`. |
 | `CEThm6.v`    | A machine-checked counterexample showing Theorem 6 *cannot* be strengthened: the raw `VecSum` output is not F-nonoverlapping (input `[15;15;15/16;15/16]` at `p = 4` gives `[32;-1;7/8;0]`). VSEB is what repairs the overlap. |
 | `TWSum.v`     | Algorithm 8 (TWSum): the sum of two triple words. Its two correctness results — `TWSum_isTW` (the result is a triple word) and `TWSum_error` (relative error `≤ 2u³ + 4.2u⁴`). |
-| `addition.v`  | The binary64 instantiation (`p = 53`): `TWSum` and both theorems, specialised. |
+| `Addition.v`  | The binary64 instantiation (`p = 53`): `TWSum` and both theorems, specialised. |
 
 ### `code/ocaml/`
 

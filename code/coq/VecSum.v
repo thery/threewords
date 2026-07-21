@@ -731,188 +731,140 @@ apply: Rle_trans Hle _.
 by have := Hulsei; lra.
 Qed.
 
-(* Relaxed exponent hypothesis (paper Corollary 1): each [x_i] is [repr] at   *)
-(* [k_i], the [k_i] are non-increasing, and drop by at least 1 every two      *)
-(* steps -- i.e. at most one "overlap" (equal-magnitude consecutive pair),    *)
-(* never two in a row.  This is what [sorted_mag] + [pairwise_ulp] provide and*)
-(* what [Merge] guarantees on the six merged terms.  The two-step strict drop *)
-(* is only required at nonzero entries: in a [sorted_mag] list the zeros are  *)
-(* trailing, and a strict drop through a zero cannot be met at all under FLX  *)
-(* ([ulp 0 = 0]), so the guard keeps the hypothesis true.                    *)
-Definition Thm1_hyp_wk (k : nat -> Z) (l : seq R) : Prop :=
-  [/\ (forall i, (i < size l)%N -> repr (k i) (nth 0 l i)),
-      (forall i, (i.+1 < size l)%N -> (k i.+1 <= k i)%Z) &
-      (forall i, (i.+2 < size l)%N -> nth 0 l i.+2 <> 0 ->
-         (k i.+2 + 1 <= k i)%Z) ].
+(* Relaxed exponent hypothesis (paper Corollary 1): magnitude-sorted floats  *)
+(* with a designated overlap set [I] on which one equal-magnitude overlap is  *)
+(* tolerated (never two in a row), bounded by [ufp(x_{i+1}) <= 2^(p-2)        *)
+(* uls(x_i)].  These are the paper's hypotheses; [sorted_mag] + [pairwise_ulp]*)
+(* alone do NOT imply the overlap bound (counterexample [15;15;0.5] at p=4),  *)
+(* and dropping it is false ([CEThm6]).  See doc/thm1.md.                     *)
+Definition Cor1_hyp (l : seq R) : Prop :=
+  [/\ {in l, forall z, format z},
+      (forall i, (i < size l)%N -> nth 0 l i <> 0) &
+   exists inI : nat -> bool,
+    [/\ (forall i, inI i -> (0 < i)%N /\ (i.+1 < size l)%N),
+        (forall i, inI i -> ~~ inI i.+1),
+        (forall i, (i.+1 < size l)%N -> ~~ inI i ->
+           2 * ufp (nth 0 l i.+1) <= ufp (nth 0 l i)),
+        (forall i, inI i ->
+           ufp (nth 0 l i.+1) <= pow (p - 2) * uls (nth 0 l i)) &
+        (forall i, inI i -> 4 * ufp (nth 0 l i.+1) <= ufp (nth 0 l i.-1)) ]].
 
-(* Reusable pieces for PIECE 1 (building the relaxed exponent map).           *)
-
-(* Converse of [repr_format] at the canonical exponent: a nonzero float is    *)
-(* [repr] at [cexp x + p - 1] (so [k - p + 1 = cexp x]), with mantissa        *)
-(* [Ztrunc (mant x)] (bounded by [2^p] by the format).                       *)
-Lemma repr_canonical x : format x -> x <> 0 -> repr (cexp x + p - 1) x.
+(* Paper Corollary 1, main step: the bumped exponent map exists and meets the *)
+(* strict-gap hypothesis [Thm1_hyp] of Theorem 1.  [k_i = e_{x_i}] off [I],   *)
+(* [max(e_{x_i}, e_{x_{i+1}}+1)] on [I].  This is old [main]'s FLT proof with *)
+(* the [emin] bookkeeping removed: under FLX [cexp = mag - p] definitionally  *)
+(* and [repr] has no exponent lower bound.  See doc/thm1.md.                  *)
+Lemma Cor1_bump_Thm1_hyp l : Cor1_hyp l -> exists k, Thm1_hyp k l.
 Proof.
-move=> xF xn0.
-exists (Ztrunc (mant x)).
-  have Hm2 : (Z.abs (Ztrunc (mant x)) <= 2 ^ p - 1)%Z :=
-    Fast2Sum_robust_flx.FLX_mant_le Hp2 xF.
-  by lia.
-rewrite (_ : (cexp x + p - 1 - p + 1)%Z = cexp x); last by lia.
-have H := scaled_mantissa_mult_bpow beta fexp x.
-by rewrite -{1}H {1}(scaled_mantissa_generic beta fexp x xF).
-Qed.
-
-(* In a magnitude-sorted list the zeros are trailing: the predecessor of a    *)
-(* nonzero entry is itself nonzero.                                           *)
-Lemma sorted_mag_pred_neq0 {l : seq R} {i : nat} :
-  sorted_mag l -> (i.+1 < size l)%N ->
-  nth 0 l i.+1 <> 0 -> nth 0 l i <> 0.
-Proof.
-move=> lM Hi Hn1 Hi0; apply: Hn1.
-have := lM i Hi; rewrite Hi0 Rabs_R0 => Hle.
-by apply/Rabs_eq_R0; have := Rabs_pos (nth 0 l i.+1); lra.
-Qed.
-
-(* If [y] is nonzero and strictly below [ulp x], then its canonical exponent  *)
-(* is strictly below [x]'s.                                                  *)
-Lemma cexp_lt_ulp {x y : R} : format y -> x <> 0 -> y <> 0 ->
-  Rabs y < ulp x -> (cexp y < cexp x)%Z.
-Proof.
-move=> Fy xn0 yn0 Hlt.
-have Hux : ulp x = pow (cexp x) by rewrite ulp_neq_0.
-have Hmag : (mag beta y <= cexp x)%Z by apply: mag_le_bpow => //; rewrite -Hux.
-have Hc2 : cexp y = (mag beta y - p)%Z by [].
-by rewrite Hc2; lia.
-Qed.
-
-Fixpoint cmin_aux z (l : seq R) : Z := 
-  if l is f :: l1 then 
-    if Req_bool f 0 then cmin_aux z l1 else cmin_aux (Z.min z (cexp f)) l1
-  else z.
-
-Lemma cmin_aux_le z l: (cmin_aux z l <= z)%Z.
-Proof.
-elim: l z => //= [z|f l IH /= z]; first by lia.
-case: Req_bool_spec => // _.
-by apply: Z.le_trans (IH _) _; lia.
-Qed.
-
-Lemma cmin_aux_correct z l i : 
-  nth (0 : R) l i <> 0 -> (cmin_aux z l <= cexp (nth (0 : R) l i))%Z.
-Proof.
-elim: l i z => /= [i z|f l IH [|i] /= z]; first by rewrite nth_nil; case.
-  case: Req_bool_spec => // f_neq0 _.
-  by apply: Z.le_trans (@cmin_aux_le _ _) _; lia.
-case: Req_bool_spec => // _ nth_neq0; first by apply: IH.
-by apply: IH.
-Qed.
-
-Fixpoint cmin (l : seq R) := 
-  if l is f :: l1 then 
-    if Req_bool f 0 then cmin l1 else cmin_aux (cexp f) l1
-  else 0%Z.
-
-Lemma cmin_correct l i : 
-  nth (0 : R) l i <> 0 -> (cmin l <= cexp (nth (0 : R) l i))%Z.
-Proof.
-elim: l i => /= [i |f l IH [|i] /=]; first by rewrite nth_nil; case.
-  case: Req_bool_spec => // f_neq0 _.
-  by apply: cmin_aux_le.
-case: Req_bool_spec => // _ nth_neq0; first by apply: IH.
-by apply: cmin_aux_correct.
-Qed.
-
-
-(* PIECE 1: build the relaxed exponent map from the concrete hypotheses.  Take*)
-(* [k i := cexp (nth 0 l i) + p - 1] on nonzero entries (so [repr] holds via  *)
-(* [repr_canonical]) and any fixed value on zeros.  [sorted_mag] gives       *)
-(* [cexp] non-increasing ([cexp_le]) hence [k i.+1 <= k i]; [pairwise_ulp]    *)
-(* gives [cexp (nth i.+2) < cexp (nth i)] ([cexp_lt_ulp]) hence the two-step  *)
-(* strict drop.  The two-step drop is only claimed at nonzero entries (zeros  *)
-(* are trailing, and near the underflow floor the strict drop cannot hold).   *)
-Lemma sorted_pairwise_k l :
-  {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
-  exists k, Thm1_hyp_wk k l.
-Proof.
-move=> lF lM lP.
-pose k := fun (i : nat) =>
-   if Req_bool (nth (0 : R) l i) 0 then (cmin l + p - 1)%Z
-   else (cexp (nth (0 : R) l i) + p - 1)%Z.
+move=> [Hfmt Hnz [inI [HI Hcons Hoff Hon1 Hon2]]].
+pose ex := fun i => (cexp (nth (0:R) l i) + p - 1)%Z.
+pose k := fun i => if inI i then Z.max (ex i) (ex i.+1 + 1) else ex i.
 have Fnth : forall i, (i < size l)%N -> format (nth (0:R) l i).
-  by move=> i Hi; apply: lF; apply: mem_nth.
-have kE_z : forall i, nth (0:R) l i = 0 -> k i = (cmin l + p - 1)%Z.
-  by move=> i Hi; rewrite /k Hi; case: Req_bool_spec.
-have kE_nz : forall i, nth (0:R) l i <> 0 ->
-    k i = (cexp (nth (0:R) l i) + p - 1)%Z.
-  by move=> i Hi; rewrite /k; case: Req_bool_spec.
-exists k; split.
-- move=> i Hi.
-  case: (Req_dec (nth (0:R) l i) 0) => [Hz|Hnz]; last first.
-    by rewrite (kE_nz i Hnz); apply: repr_canonical => //; exact: Fnth.
-  rewrite (kE_z i Hz) Hz.
-  exists 0%Z; last by rewrite Rmult_0_l.
-  by rewrite Z.abs_0; apply: Z.pow_pos_nonneg; lia.
-- move=> i Hi.
-  case: (Req_dec (nth (0:R) l i.+1) 0) => [Hz1|Hnz1].
-    rewrite (kE_z _ Hz1).
-    case: (Req_dec (nth (0:R) l i) 0) => [Hz0|Hnz0].
-      by rewrite (kE_z _ Hz0); lia.
-    rewrite (kE_nz _ Hnz0).
-    suff : (cmin l <= cexp (nth 0%R l i))%Z by lia.
-    by apply: cmin_correct.
-  have Hnz0 := sorted_mag_pred_neq0 lM Hi Hnz1.
-  rewrite (kE_nz _ Hnz1) (kE_nz _ Hnz0).
-  suff: (cexp (nth (0:R) l i.+1) <= cexp (nth (0:R) l i))%Z by lia.
-  by apply: Fast2Sum_robust_flx.cexp_le => //; exact: (lM i Hi).
-- move=> i Hi Hnz2.
-  have Hi1 : (i.+1 < size l)%N by apply: ltn_trans (ltnSn i.+1) Hi.
-  have Hnz1 := sorted_mag_pred_neq0 lM Hi Hnz2.
-  have Hnz0 := sorted_mag_pred_neq0 lM Hi1 Hnz1.
-  rewrite (kE_nz _ Hnz2) (kE_nz _ Hnz0).
-  suff: (cexp (nth (0:R) l i.+2) < cexp (nth (0:R) l i))%Z by lia.
-  (* [Hnz2] rules out the zero guard, recovering the strict pairwise bound.   *)
-  by exact: (cexp_lt_ulp (Fnth i.+2 Hi) Hnz0 Hnz2
-              (pairwise_ulp_lt lP Hi Hnz2)).
+  by move=> i Hi; apply: Hfmt; apply: mem_nth.
+have Hcx : forall i, (i < size l)%N ->
+    cexp (nth (0:R) l i) = (mag beta (nth (0:R) l i) - p)%Z.
+  by move=> i Hi; rewrite /cexp /FLX_exp.
+have Hufp : forall i, (i < size l)%N -> ufp (nth (0:R) l i) = pow (ex i).
+  by move=> i Hi; rewrite /ufp /ex (Hcx i Hi); congr bpow; lia.
+exists k.
+have Hoff' : forall i, (i.+1 < size l)%N -> ~~ inI i -> (ex i.+1 + 1 <= ex i)%Z.
+  move=> i Hi HnI; have iLs : (i < size l)%N by apply: ltnW.
+  apply: (le_bpow beta); rewrite bpow_plus bpow_1 /=.
+  by have := Hoff i Hi HnI; rewrite (Hufp _ Hi) (Hufp _ iLs); lra.
+have Hon2' : forall i, inI i -> (ex i.+1 + 2 <= ex i.-1)%Z.
+  move=> i HiI; have [i0 i1s] := HI i HiI.
+  have iLs : (i < size l)%N by apply: ltn_trans (ltnSn i) i1s.
+  have im1 : (i.-1 < size l)%N by apply: leq_ltn_trans (leq_pred i) iLs.
+  apply: (le_bpow beta).
+  have E4 : pow 2 = 4 by rewrite /= /Z.pow_pos /=; lra.
+  rewrite bpow_plus E4.
+  by have := Hon2 i HiI; rewrite (Hufp _ i1s) (Hufp _ im1); lra.
+have Hdiv : forall i, inI i ->
+    is_imul (nth (0:R) l i) (pow (cexp (nth (0:R) l i.+1) + 1)).
+  move=> i HiI; have [i0 i1s] := HI i HiI.
+  have iLs : (i < size l)%N by apply: ltn_trans (ltnSn i) i1s.
+  have Fxi := Fnth i iLs.
+  have xin0 : nth (0:R) l i <> 0 by apply: Hnz.
+  have gE : uls (nth (0:R) l i) =
+      pow (cexp (nth (0:R) l i)
+             + Z.of_nat (trZ (Ztrunc (mant (nth (0:R) l i))))).
+    by rewrite /uls; case: Req_bool_spec => // /xin0.
+  have Hle : pow (cexp (nth (0:R) l i.+1) + 1) <= uls (nth (0:R) l i).
+    have H1 := Hon1 i HiI; rewrite (Hufp _ i1s) in H1.
+    have exeq : ex i.+1 = (cexp (nth (0:R) l i.+1) + p - 1)%Z by rewrite /ex.
+    rewrite exeq in H1.
+    have Hsplit : pow (cexp (nth (0:R) l i.+1) + p - 1) =
+        pow (p - 2) * pow (cexp (nth (0:R) l i.+1) + 1).
+      by rewrite -bpow_plus; congr bpow; lia.
+    rewrite Hsplit in H1; have := bpow_gt_0 beta (p-2); nra.
+  apply: is_imul_pow_le.
+    by have H := uls_imul Fxi; rewrite gE in H; exact: H.
+  by apply: (le_bpow beta); rewrite -gE; exact: Hle.
+have Hgap : forall i, (i.+2 < size l)%N -> (k i.+1 + 1 <= k i)%Z.
+  move=> i Hi.
+  have i1s : (i.+1 < size l)%N by apply: ltn_trans (ltnSn i.+1) Hi.
+  rewrite /k.
+  case E : (inI i); case E1 : (inI i.+1).
+  - by move: (Hcons i E); rewrite E1.
+  - by apply: Z.le_max_r.
+  - have A := Hoff' i i1s (negbT E).
+    have B : (ex i.+2 + 2 <= ex i)%Z := Hon2' i.+1 E1.
+    suff H : (Z.max (ex i.+1) (ex i.+2 + 1) <= ex i - 1)%Z by lia.
+    by apply: Z.max_lub; lia.
+  - by have := Hoff' i i1s (negbT E); lia.
+have Hlast : forall i, i.+2 = size l -> (k i.+1 <= k i)%Z.
+  move=> i Hi.
+  have i1s : (i.+1 < size l)%N by rewrite -Hi; apply: ltnSn.
+  have Hn1 : ~~ inI i.+1.
+    by apply/negP => Hc; have := (HI _ Hc).2; rewrite -Hi ltnn.
+  rewrite /k (negbTE Hn1).
+  case E : (inI i).
+  - by have := Z.le_max_r (ex i) (ex i.+1 + 1); lia.
+  - by have := Hoff' i i1s (negbT E); lia.
+split; [ | exact: Hgap | exact: Hlast].
+move=> i Hi.
+have Fxi := Fnth i Hi.
+have Hkge : (ex i <= k i)%Z.
+  by rewrite /k; case: (inI i); [apply: Z.le_max_l | apply: Z.le_refl].
+have Hisimul : is_imul (nth (0:R) l i) (pow (k i - p + 1)).
+  rewrite /k; case E : (inI i); last first.
+    have -> : (ex i - p + 1 = cexp (nth (0:R) l i))%Z by rewrite /ex; lia.
+    exact: format_imul_cexp Fxi.
+  case: (Z.max_spec (ex i) (ex i.+1 + 1)) => [[_ ->]|[_ ->]].
+    have -> : (ex i.+1 + 1 - p + 1 = cexp (nth (0:R) l i.+1) + 1)%Z
+      by rewrite /ex; lia.
+    exact: Hdiv i E.
+  have -> : (ex i - p + 1 = cexp (nth (0:R) l i))%Z by rewrite /ex; lia.
+  exact: format_imul_cexp Fxi.
+have [z Hz] := Hisimul.
+exists z; last exact: Hz.
+apply: lt_IZR; rewrite abs_IZR IZR_2powp.
+have Hb := bpow_mag_gt beta (nth (0:R) l i).
+have Hrw : Rabs (nth (0:R) l i) = Rabs (IZR z) * pow (k i - p + 1).
+  by rewrite {1}Hz Rabs_mult (Rabs_pos_eq _ (bpow_ge_0 _ _)).
+rewrite Hrw in Hb.
+have Hmle : pow (mag beta (nth (0:R) l i)) <= pow p * pow (k i - p + 1).
+  rewrite -bpow_plus; apply: bpow_le.
+  by move: Hkge (Hcx i Hi); rewrite /ex; lia.
+have Hpos := bpow_gt_0 beta (k i - p + 1).
+nra.
 Qed.
 
-(* PIECE 2 (to prove): the separation under the relaxed gap -- the core of    *)
-(* paper Corollary 1, the analogue of [vecSum_sep] for [Thm1_hyp_wk].  Sketch:*)
-(* rerun the [vecSum_sep] contradiction (run bound -> per-step error bound -> *)
-(* an input [x_w], [w < t], off the [2^(g+1)] grid, via [vecSumAux_split] +   *)
-(* [vecSumAux_imul]) with the constants doubled (equal-magnitude pairs) and   *)
-(* the final [k]-inequality adapted: [x_w] off the grid gives [k_w <= k_t]; if*)
-(* [w <= t-2] the 2-step strict drop [k_{i.+2}+1 <= k_i] gives [k_w > k_t]    *)
-(* (contradiction), and [w = t-1] is impossible since an equal-magnitude      *)
-(* predecessor on the same grid cannot be the off-grid input.                 *)
-Lemma vecSum_sep_wk k l : Thm1_hyp_wk k l ->
-  forall i j, (i < j)%N -> (j < size (vecSum l))%N ->
-    nth 0 (vecSum l) i <> 0 ->
-    Rabs (nth 0 (vecSum l) j) <= / 2 * uls (nth 0 (vecSum l) i).
-Proof.
-Admitted.
-
-(* The separation conjunct of Theorem 1 on the concrete input hypotheses      *)
-(* [sorted_mag l] + [pairwise_ulp l] (paper Corollary 1), assembled from the  *)
-(* two pieces above: build the relaxed [k], peel the recursive [Fnonoverlap]  *)
-(* off with [Fnonoverlap_allpairs], and apply the separation [vecSum_sep_wk]. *)
-Lemma vecSum_Fnonoverlap_sep l :
-  {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
-  Fnonoverlap (vecSum l).
-Proof.
-move=> lF lM lP; have [k Hk] := sorted_pairwise_k lF lM lP.
-by apply: Fnonoverlap_allpairs; apply: (vecSum_sep_wk Hk).
-Qed.
-
-(* Theorem 1 (VecSum), on the concrete input separation: [vecSum l] is        *)
-(* F-nonoverlapping AND has the same exact sum.  Assembles the divisibility   *)
-(* core [vecSum_Fnonoverlap_sep] with [vecSum_sum] (a chain of exact 2Sums).  *)
+(* Paper Corollary 1: [VecSum l] is F-nonoverlapping (wIZ) with the same sum, *)
+(* assembled from the bump [Cor1_bump_Thm1_hyp] and Theorem 1.                 *)
 Lemma vecSum_Fnonoverlap l :
-  {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
-  Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
+  Cor1_hyp l -> Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
 Proof.
-move=> lF lM lP; split; last by apply: vecSum_sum.
-exact: vecSum_Fnonoverlap_sep lF lM lP.
+move=> Hc; have [k Hk] := Cor1_bump_Thm1_hyp Hc.
+have [Hfmt _ _] := Hc.
+split; last by apply: vecSum_sum.
+apply: (vecSum_Fnonoverlap_core Hk) => //.
+  by move=> i Hi; apply: (vecSum_err_bound Hk).
+by move=> i Hi; apply: (VecSum_run_bound Hk).
 Qed.
+
+Lemma vecSum_Fnonoverlap_sep l : Cor1_hyp l -> Fnonoverlap (vecSum l).
+Proof. by move=> Hc; case: (vecSum_Fnonoverlap Hc). Qed.
 
 (* ===========================================================================*)
 (*  Toward paper Theorem 6 (ported from the FLT development).                 *)

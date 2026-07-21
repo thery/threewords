@@ -95,3 +95,23 @@ misfires. **This is the delicate part** and where `p ≥ 4` enters.
 - **Tie-detector** (the core): `¬format(x₀+2x₁) ∨ RN(−(3/2u−2u²)x₀)≠x₁`
   is false ⟺ `x₀+x₁` is a midpoint (given `isTW`), and in the special case.
 - **RoundTW** definition + **`RoundTW_correct`** = Theorem 5, assembled.
+
+## Refined bounds (found while filling)
+
+The "one easily checks" in the non-midpoint case rests on a divisibility fact,
+not just `|x₂| < ulp x₁`:
+
+Let `m = x₀+x₁`, `g = round_DN m`, `mid = g + ½ ulp g`. Then
+`m − mid = (x₀ − g) + x₁ − ½ ulp g` is a **multiple of `ulp x₁`**: from
+`|x₁| < ulp x₀` we get `cexp x₁ < cexp x₀`, so `x₀`, `g` and `½ ulp g =
+pow(cexp x₀ − 1)` are all multiples of `pow(cexp x₁) = ulp x₁`, as is `x₁`.
+Hence, when `m` is **not** a midpoint, `m − mid ≠ 0` is a nonzero multiple of
+`ulp x₁`, so `|m − mid| ≥ ulp x₁ > |x₂|`. Therefore `m + x₂` stays on the same
+side of `mid` as `m`, giving `RN(m + x₂) = RN(m)`.
+
+So the honest helper interfaces are:
+- `RN_add_notmid m d : ~ format m -> Rabs d < Rabs (m − mid m) -> RN(m+d)=RN m`
+  (`mid m := round_DN m + ½ ulp(round_DN m)`), and the assembly supplies
+  `|x₂| < ulp x₁ ≤ |m − mid|` via the divisibility above;
+- `RN_add_mid m d : is_midpoint m -> Rabs d < ½ ulp(round_DN m) -> RN(m+d) = RU/RD/RN m by sign of d`, with `|x₂| < ulp x₁ ≤ ½ ulp g` (again `2 ulp x₁ ≤ ulp x₀`);
+- `RoundTW_add_float`: `2 ulp x₁ ≤ ulp(x₀+x₁)`, so `|x₂| < ½ ulp(x₀+x₁)` and the float rounds back to itself.

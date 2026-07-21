@@ -1,0 +1,8 @@
+#!/bin/sh
+# Auto-update the README paper3->code links whenever a Coq source is committed.
+# Install with:  ln -s ../../scripts/pre-commit .git/hooks/pre-commit
+#            or: cp scripts/pre-commit .git/hooks/pre-commit && chmod +x it
+if git diff --cached --name-only | grep -q '^code/coq/.*\.v$'; then
+    python3 scripts/gen_code_links.py || exit 1
+    git add README.md
+fi

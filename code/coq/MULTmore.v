@@ -14,7 +14,6 @@ Section Mult.
 
 Variable p : Z.
 Context { prec_gt_0_ : Prec_gt_0 p }.
-Variable emin : Z.
 Variable beta : radix.
 
 Hypothesis Hp2: Z.lt 1 p.
@@ -26,7 +25,7 @@ Variable rnd : R -> Z.
 Context { valid_rnd : Valid_rnd rnd }.
 
 Local Notation float := (float beta).
-Local Notation fexp := (FLT_exp emin p).
+Local Notation fexp := (FLX_exp p).
 Local Notation format := (generic_format beta fexp).
 Local Notation cexp := (cexp beta fexp).
 Local Notation mant := (scaled_mantissa beta fexp).
@@ -138,30 +137,9 @@ congr (_ * pow _); lia.
 Qed.
 
 Lemma format_err_mul (a b : R) :
-  format a -> format b -> is_imul (a * b) (pow emin) ->
-  format (RN (a * b) - a * b).
-move=> Fa Fb [z zE].
-have [rz rE]:( is_imul (RN (a*b)) (pow emin)).
-   by apply/is_imul_pow_round;exists z.
-have eE: (RN (a * b) - a * b) = IZR (rz -z) * pow emin by rewrite  minus_IZR; lra.
-have [pLab|pGab] := Rle_lt_dec (pow (emin + 2 * p - 1)) (Rabs (a * b)).
-  by apply: mult_error_FLT.
-have F1 : Ulp.ulp beta fexp (pow (emin + 2 * p - 1)) = pow (emin + p).
-  by rewrite ulp_bpow; congr (pow _); rewrite /fexp ; lia.
-have [hut | hue] : Rabs (RN (a * b) - a * b) <= pow (emin + p).
-    apply/(Rle_trans _ (ulp beta fexp (a * b))); first by apply/error_le_ulp.
-    by rewrite -F1; apply/ulp_le; rewrite (Rabs_pos_eq (pow _)); try lra;
-      apply/bpow_ge_0.
-  apply/generic_format_FLT.
-  apply/(FLT_spec _ _ _ _ ({| Fnum := rz - z; Fexp := emin |} : float)); 
-     rewrite /F2R //=; last lia.
-  apply/lt_IZR; move:hut; rewrite {1}eE.
-  rewrite Rabs_mult abs_IZR IZR_Zpower; last lia.
-  rewrite (Rabs_pos_eq (pow _)); last by apply/bpow_ge_0.
-  by rewrite bpow_plus; move:(bpow_gt_0 beta emin); nra.
-move: hue; rewrite -(Rabs_pos_eq (pow _)); last by apply/bpow_ge_0.
-  by case/Rabs_eq_Rabs => ->; last apply/generic_format_opp;
-    apply/generic_format_FLT_bpow; lia.
+  format a -> format b -> format (RN (a * b) - a * b).
+Proof.
+exact: mult_error_FLX.
 Qed.
 
 Lemma imul_fexp_le (f : float) e : (e <= Fexp f)%Z -> is_imul f (pow e).

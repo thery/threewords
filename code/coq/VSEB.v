@@ -1,7 +1,7 @@
 (* ---------------------------------------------------------------------------*)
 (* Algorithm 5 (VecSumErrBranch, VSEB) and the paper's Theorem 2 (its output  *)
 (* is P-nonoverlapping).  A general round-to-nearest building block, generic  *)
-(* over the precision [p] and minimal exponent [emin] (binary64 is fixed      *)
+(* over the precision [p] alone -- FLX (binary64 is fixed only in            *)
 (* only in [addition.v]); built on [TwoSum] and [Nonoverlap].                 *)
 (* ---------------------------------------------------------------------------*)
 
@@ -24,9 +24,7 @@ Unset Printing Implicit Defensive.
 Section SecVSEB.
 
 Variable p : Z.
-Variable emin : Z.
 Hypothesis Hp2 : (1 < p)%Z.
-Hypothesis emin_le_0 : (emin <= 0)%Z.
 
 Local Notation beta := radix2.
 Local Notation pow e := (bpow beta e).
@@ -46,52 +44,47 @@ Local Notation rnd := (Znearest choice).
 Local Instance valid_rnd : Valid_rnd rnd := valid_rnd_N choice.
 
 Local Notation float := (float radix2).
-Local Notation fexp := (FLT_exp emin p).
+Local Notation fexp := (FLX_exp p).
 Local Notation format := (generic_format beta fexp).
 Local Notation cexp := (cexp beta fexp).
 Local Notation mant := (scaled_mantissa beta fexp).
 Local Notation RND := (round beta fexp rnd).
 Local Notation ulp := (ulp beta fexp).
-Local Notation uls := (uls p emin).
-Local Notation error_le_half_ulp_RN :=
-  (@error_le_half_ulp_round beta (FLT_exp emin p)
-     (FLT_exp_valid emin p) (FLT_exp_monotone emin p) choice).
+Local Notation uls := (uls p).
 Local Notation TwoSum_correct_RN :=
-  (@TwoSum_correct emin p choice Hp2 emin_le_0 choice_sym).
+  (@TwoSum_correct p choice Hp2 choice_sym).
 
-Local Notation TwoSum := (TwoSum p emin choice).
-Local Notation TwoSum_hi := (TwoSum_hi p emin choice).
-Local Notation formatDWR := (formatDWR p emin).
-Local Notation magnitudeDWR := (magnitudeDWR p emin).
+Local Notation TwoSum := (TwoSum p choice).
+Local Notation TwoSum_hi := (TwoSum_hi p choice).
+Local Notation formatDWR := (formatDWR p).
+Local Notation magnitudeDWR := (magnitudeDWR p).
 Local Notation format_TwoSum := (format_TwoSum Hp2 choice).
 Local Notation TwoSum_correct_loc :=
-  (TwoSum_correct_loc Hp2 emin_le_0 choice_sym).
-Local Notation dwh_TwoSum_r0 := (@dwh_TwoSum_r0 p emin choice).
+  (TwoSum_correct_loc Hp2 choice_sym).
+Local Notation dwh_TwoSum_r0 := (@dwh_TwoSum_r0 p choice).
 Local Notation dwl_TwoSum_r0 := 
-  (dwl_TwoSum_r0 Hp2 emin_le_0 choice_sym).
+  (dwl_TwoSum_r0 Hp2 choice_sym).
 Local Notation magnitude_TwoSum :=
-  (magnitude_TwoSum Hp2 emin_le_0 choice_sym).
-Local Notation TwoSum_err_imul := (TwoSum_err_imul Hp2 emin_le_0 choice_sym).
+  (magnitude_TwoSum Hp2 choice_sym).
+Local Notation TwoSum_err_imul := (TwoSum_err_imul Hp2 choice_sym).
 Local Notation TwoSum_err_uls_ge :=
-  (TwoSum_err_uls_ge Hp2 emin_le_0 choice_sym).
+  (TwoSum_err_uls_ge Hp2 choice_sym).
 
-Local Notation Pnonoverlap := (Pnonoverlap p emin).
-Local Notation pairwise_ulp := (pairwise_ulp p emin).
-Local Notation Fnonoverlap := (Fnonoverlap p emin).
-Local Notation format_lt_ulp_0 := (@format_lt_ulp_0 p emin Hp2).
-Local Notation format_lt_ulp_le := (@format_lt_ulp_le p emin Hp2).
+Local Notation Pnonoverlap := (Pnonoverlap p).
+Local Notation pairwise_ulp := (pairwise_ulp p).
+Local Notation Fnonoverlap := (Fnonoverlap p).
+Local Notation format_lt_ulp_le := (@format_lt_ulp_le p Hp2).
 Local Notation Pnonoverlap_imp_pairwise_ul :=
   (Pnonoverlap_imp_pairwise_ul Hp2).
 Local Notation abs_le_ufp_norm := (abs_le_ufp_norm Hp2).
-Local Notation nu_of_lt_ulp := (nu_of_lt_ulp Hp2).
-Local Notation small_head_zero := (@small_head_zero p emin Hp2).
-Local Notation sumR_ufp_bound := (@sumR_ufp_bound p emin Hp2).
-Local Notation nth_step_zero := (@nth_step_zero p emin Hp2).
+Local Notation small_head_zero := (@small_head_zero p Hp2).
+Local Notation sumR_ufp_bound := (@sumR_ufp_bound p Hp2).
+Local Notation nth_step_zero := (@nth_step_zero p Hp2).
 Local Notation Fnonoverlap_imm := (Fnonoverlap_imm Hp2).
-Local Notation Fnonoverlap_TwoSum_merge := 
-  (Fnonoverlap_TwoSum_merge Hp2 emin_le_0 choice_sym).
+Local Notation Fnonoverlap_TwoSum_merge :=
+  (Fnonoverlap_TwoSum_merge Hp2 choice_sym).
 Local Notation Fnonoverlap_TwoSum_err :=
-  (Fnonoverlap_TwoSum_err Hp2 emin_le_0 choice_sym). 
+  (Fnonoverlap_TwoSum_err Hp2 choice_sym).
 
 (* ===========================================================================*)
 (*  Algorithm 5: VecSumErrBranch (VSEB)                                       *)
@@ -274,26 +267,27 @@ Qed.
 
 (* Reusable block bound (paper Thm 2): the first term emitted by VSEB from a  *)
 (* nonzero remainder [eps] over an F-nonoverlap tail has magnitude [< 2|eps|].*)
-Lemma vsebAux_head_lt eps l :
+(* Block bound, stated on the MASS of the tail.  This is all the estimate     *)
+(* really needs: the F-nonoverlap hypothesis of [vsebAux_head_lt] below is    *)
+(* used ONLY to bound [sumRabs l] by [uls eps] geometrically                  *)
+(* ([Fnonoverlap_aux_sumRabs]), never term by term.  Splitting it out gives a *)
+(* reusable entry point for callers whose tail is NOT F-nonoverlapping -- in  *)
+(* particular a [VecSum] output, which need not be (see [CEThm6.v] on main).  *)
+Lemma vsebAux_head_lt_mass eps l :
   (Z.of_nat (size l).+2 <= p + 1)%Z ->
-  format eps -> {in l, forall z, format z} -> Fnonoverlap (eps :: l) ->
-  eps <> 0 -> Rabs (nth 0 (vsebAux eps l) 0) < 2 * Rabs eps.
+  format eps -> {in l, forall z, format z} -> eps <> 0 ->
+  sumRabs l <= uls eps * (1 - (/ 2) ^ (size l)) ->
+  Rabs (nth 0 (vsebAux eps l) 0) < 2 * Rabs eps.
 Proof.
-move=> Hsz epsF lF Fno epsn0.
+move=> Hsz epsF lF epsn0 Hsum.
 have Hu0 : 0 < uls eps by apply: uls_gt_0.
 have Hae : uls eps <= Rabs eps by apply: uls_le_abs.
 have He0 : 0 < Rabs eps by apply: Rabs_pos_lt.
 have Hd0 : 0 < (/ 2) ^ (size l) by apply: pow_lt; lra.
-have Hsum : sumRabs l <= uls eps * (1 - (/ 2) ^ (size l)).
-  have H := Fnonoverlap_consE epsn0 Fno.
-  by apply: Fnonoverlap_aux_sumRabs.
 have HsumLt : sumRabs l < uls eps by nra.
 have Hg : uls eps = pow (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps)))).
   by rewrite /uls; case: Req_bool_spec => // eps0; case: (epsn0 eps0).
 set g := (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps))))%Z.
-have Hgemin : (emin <= g)%Z.
-  by rewrite /g; have := Zle_0_nat (trZ (Ztrunc (mant eps)));
-     rewrite /cexp /FLT_exp; lia.
 have Hhalf : uls eps * (/ 2) ^ (size l) = pow (g - Z.of_nat (size l)).
   by rewrite pow_halfN Hg -bpow_plus; congr bpow; lia.
 (* [|eps|]'s integer mantissa is bounded ([< 2^p]), giving the block bound.   *)
@@ -302,7 +296,7 @@ have HmB : (Z.abs (Ztrunc (mant eps)) < beta ^ p)%Z.
     last lia.
   apply: Rlt_le_trans (_ : pow (mag beta eps - cexp eps) <= _)%R.
     exact: scaled_mantissa_lt_bpow.
-  by apply: bpow_le; rewrite /cexp /FLT_exp; lia.
+  by apply: bpow_le; rewrite /cexp /FLX_exp; lia.
 have Heps : Rabs eps = IZR (Z.abs (Ztrunc (mant eps))) * pow (cexp eps).
   by rewrite {1}epsF /F2R /= Rabs_mult -abs_IZR Rabs_pow.
 have Hcu : pow (cexp eps) <= uls eps.
@@ -345,17 +339,10 @@ have [HM|HM] := Rle_lt_or_eq_dec _ _ Hae.
   have H2 : 2 * Rabs eps = pow (g + 1) by rewrite H3 -HM Hg.
   exists (pred beta fexp (2 * Rabs eps)); split.
   + by apply: generic_format_pred; rewrite H2; apply: generic_format_bpow;
-       rewrite /FLT_exp; lia.
+       rewrite /FLX_exp; lia.
   + rewrite H2 pred_bpow.
     have Hlow : pow (fexp (g + 1)) <= Rabs eps - sumRabs l.
-      rewrite -HM /fexp /FLT_exp.
-      have [Hc|Hc] := Z.max_spec (g + 1 - p) emin.
-        rewrite (proj2 Hc).
-        have Hs : sumRabs l <= uls eps - pow emin.
-          rewrite -HgF; apply: (sumRabs_lt_le lF) => //;
-            rewrite HgF; exact: HsumLt.
-        lra.
-      rewrite (proj2 Hc).
+      rewrite -HM /fexp /FLX_exp.
       have Hle : pow (g + 1 - p) <= pow (g - Z.of_nat (size l)).
         by apply: bpow_le; lia.
       have Hs2 : sumRabs l <= uls eps - pow (g - Z.of_nat (size l)).
@@ -363,6 +350,20 @@ have [HM|HM] := Rle_lt_or_eq_dec _ _ Hae.
       lra.
     by rewrite -H2; lra.
   + by apply: pred_lt_id; rewrite H2; have := bpow_gt_0 beta (g + 1); lra.
+Qed.
+
+(* Reusable block bound (paper Thm 2): the first term emitted by VSEB from a  *)
+(* nonzero remainder [eps] over an F-nonoverlap tail has magnitude [< 2|eps|].*)
+(* F-nonoverlap enters only through the mass bound it implies.                *)
+Lemma vsebAux_head_lt eps l :
+  (Z.of_nat (size l).+2 <= p + 1)%Z ->
+  format eps -> {in l, forall z, format z} -> Fnonoverlap (eps :: l) ->
+  eps <> 0 -> Rabs (nth 0 (vsebAux eps l) 0) < 2 * Rabs eps.
+Proof.
+move=> Hsz epsF lF Fno epsn0.
+apply: vsebAux_head_lt_mass => //.
+have H := Fnonoverlap_consE epsn0 Fno.
+by apply: Fnonoverlap_aux_sumRabs.
 Qed.
 
 (* Core of Thm 2, by induction on the tail [l] of [eps :: l] (paper's running *)
@@ -392,7 +393,16 @@ case: l' IH lF Fno Hsz => [|e2 l''] IH lF Fno Hsz.
   move=> [|i] /= Hi; last by move: Hi; rewrite ltnS ltnS ltn0.
   (* |y1| < ulp y0: the 2Sum error is <= half an ulp of the high word.        *)
   have Hm := magnitude_TwoSum epsF Fe; rewrite E1 /= in Hm.
-  have Hy : 0 < ulp y0 by apply: ulp_gt_0.
+  (* Under FLX [ulp 0 = 0], so [0 < ulp y0] is NOT free: [y0 = 0] is real     *)
+  (* here ([2Sum(x, -x) = (0, 0)], reached from the legitimate Theorem-6      *)
+  (* input [[x; -x]]).  The zero guard covers it, and [Hm] itself decides     *)
+  (* which way: if [y0 = 0] then [Hm] reads [Rabs y1 <= 0], so [y1 = 0].      *)
+  case: (Req_dec y1 0) => [y10|y1n0]; first by left.
+  right.
+  have y0n0 : y0 <> 0.
+    by move=> y00; apply: y1n0; move: Hm;
+       rewrite y00 ulp_FLX_0; split_Rabs; lra.
+  have Hy : 0 < ulp y0 by rewrite ulp_neq_0 //; apply: bpow_gt_0.
   by lra.
 (* General step: [2Sum(eps, e) = (r, et)].                                    *)
 rewrite vsebAux_consS; case E1 : (TwoSum eps e) => [r et].
@@ -441,6 +451,8 @@ have Hrec : Pnonoverlap (vsebAux et (e2 :: l'')).
 move=> [|i] /= Hi.
   (* Head: emitted [r = y_j] vs next [y_{j+1}].  [ulp r >= 2 |et|]            *)
   (* ([magnitude_TwoSum]) and [|y_{j+1}| < 2 |et|] ([vsebAux_head_lt]).       *)
+  (* The zero guard is not needed here: [et <> 0] forces [ulp r > 0].         *)
+  right.
   have Hulp : 2 * Rabs et <= ulp r.
     by have Hm := magnitude_TwoSum epsF Fe; rewrite E1 /= in Hm; lra.
   have Hnext : Rabs (nth 0 (vsebAux et (e2 :: l'')) 0) < 2 * Rabs et.

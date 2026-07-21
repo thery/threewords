@@ -3,7 +3,7 @@
 (* P-nonoverlapping.  The record, its projectors [tw0]/[tw1]/[tw2] and value  *)
 (* [TWval], the predicate [isTW], the list view [TW2l], and that an [isTW] is *)
 (* magnitude-sorted / P-nonoverlapping / made of floats.  Generic over the    *)
-(* precision [p] and minimal exponent [emin]; built on [Nonoverlap].          *)
+(* precision [p]; built on [Nonoverlap].                                     *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -23,7 +23,6 @@ Unset Printing Implicit Defensive.
 Section TWR.
 
 Variable p : Z.
-Variable emin : Z.
 Hypothesis Hp2 : (1 < p)%Z.
 
 Let beta := radix2.
@@ -33,12 +32,12 @@ Open Scope R_scope.
 Local Instance p_gt_0 : Prec_gt_0 p.
 Proof. now apply Z.lt_trans with (2 := Hp2). Qed.
 
-Local Notation fexp := (FLT_exp emin p).
+Local Notation fexp := (FLX_exp p).
 Local Notation format := (generic_format beta fexp).
 Local Notation ulp := (ulp beta fexp).
-Local Notation Pnonoverlap := (Pnonoverlap p emin).
-Local Notation pairwise_ulp := (pairwise_ulp p emin).
-Local Notation format_lt_ulp_le := (@format_lt_ulp_le p emin Hp2).
+Local Notation Pnonoverlap := (Pnonoverlap p).
+Local Notation pairwise_ulp := (pairwise_ulp p).
+Local Notation format_lt_ulp_le := (@format_lt_ulp_le p Hp2).
 
 Inductive twR := TWR (x0 x1 x2 : R).
 
@@ -56,36 +55,34 @@ Definition TWval (x : twR) : R := let: TWR x0 x1 x2 := x in x0 + x1 + x2.
 
 (* Definition 5: a triple-word number is a P-nonoverlapping triplet           *)
 (* of floating-point numbers.                                                 *)
+(* Under FLX [ulp 0 = 0], so the strict Priest bound has to carry the same    *)
+(* "successor is zero" guard as [Pnonoverlap] -- otherwise NO triple word     *)
+(* with a zero limb qualifies, [TWSum]'s own zero-padded output included.     *)
+(* This does not weaken the FLT reading, where [ulp 0 = pow emin] makes the   *)
+(* guard unreachable for a format successor.                                  *)
 Definition isTW (x : twR) : Prop :=
   let: TWR x0 x1 x2 := x in
-  [/\ format x0, format x1, format x2, Rabs x1 < ulp x0 & Rabs x2 < ulp x1].
+  [/\ format x0, format x1, format x2,
+      x1 = 0 \/ Rabs x1 < ulp x0 & x2 = 0 \/ Rabs x2 < ulp x1].
 
 (* ===========================================================================*)
 (*  Triple-word numbers as 3-element sequences                                *)
 (* ===========================================================================*)
 Definition TW2l x := let: TWR x0 x1 x2 := x in [:: x0; x1; x2].
 
-(* No-underflow assumption (paper: unlimited exponent range, "provided that   *)
-(* underflow and overflow do not occur"): every NONZERO limb of a triple-word *)
-(* is a normal float ([emin + p <= mag]).  The VecSum F-nonoverlap result     *)
-(* (paper Theorem 6) is false at the [emin] floor, so [TWSum]'s correctness   *)
-(* results carry this on both inputs (zeros are allowed -- they are the       *)
-(* interleaving zeros the paper removes).                                     *)
-Definition isTWnorm (x : twR) : Prop :=
-  forall z, z \in TW2l x -> z <> 0 -> (emin + p <= mag beta z)%Z.
-
 (* The merge precondition for a single TW: its three limbs are magnitude-     *)
 (* sorted.  Two applications of [format_lt_ulp_le] to the [isTW] conjuncts.   *)
 Lemma isTW_sorted_mag x : isTW x -> sorted_mag (TW2l x).
 Proof.
-by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|//]] _; 
-   apply: format_lt_ulp_le.
+by case: x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|//]] _;
+   [case: x1Lux0 => [->|H] | case: x2Lux1 => [->|H]];
+   rewrite ?Rabs_R0 //; try apply: Rabs_pos; apply: format_lt_ulp_le.
 Qed.
 
 (* A triple-word, viewed as a 3-element list, is P-nonoverlapping (Def. 5).   *)
 Lemma isTW_Pnonoverlap x : isTW x -> Pnonoverlap (TW2l x).
 Proof.
-by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|[]]].
+by case : x => x0 x1 x2 [x0F x1F x2F x1Lux0 x2Lux1] [|[|[]]] // _; right.
 Qed.
 
 (* The three limbs of a triple-word are floats (part of Def. 5).              *)

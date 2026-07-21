@@ -36,8 +36,6 @@ Unset Printing Implicit Defensive.
 Section TWAdd.
 
 Let p := 53%Z.
-Let emax := 1024%Z.
-Let emin := (3 - emax - p)%Z.
 
 Local Notation beta := radix2.
 
@@ -58,41 +56,31 @@ Local Notation u := (u p beta).
 (* broken by [choice] to even, [RN(-t) = -RN(t)]); see [TwoSum.v].            *)
 Variable choice : Z -> bool.
 Hypothesis choice_sym : forall x, choice x = ~~ choice (- (x + 1))%Z.
-
-Lemma emin_le_0 : (emin <= 0)%Z.
-Proof. by rewrite /emin /emax /p; lia. Qed.
+(* Ties-to-even is the paper's own assumption; Theorem 6 uses it three times  *)
+(* (see [Thm6.v]).                                                            *)
+Hypothesis Heven : ties_to_even choice.
 
 (* The triple-word predicate from [TWR.v], specialised to binary64.           *)
-Local Notation isTW := (isTW p emin).
-(* No-underflow assumption (paper: unlimited exponent range): nonzero limbs   *)
-(* are normal.  [TWSum]'s correctness (paper Theorem 6, via                   *)
-(* [vecSum_vseb_Pnonoverlap]) is false at the [emin] floor, so both inputs    *)
-(* carry it.                                                                  *)
-Local Notation isTWnorm := (isTWnorm p emin).
+Local Notation isTW := (isTW p).
 
 (* Triple-word addition (Algorithm 8) and its two theorems now live in        *)
-(* [TWSum.v], generic over [p]/[emin] under the precision bound [6 <= p].     *)
+(* [TWSum.v], generic over [p] under the precision bound [6 <= p].           *)
 (* At binary64 ([p = 53]) that bound is immediate, so we discharge it and     *)
 (* re-state the headline results with everything specialised.                 *)
 Lemma Hp6 : (6 <= p)%Z. Proof. by rewrite /p; lia. Qed.
 
-Local Notation TWSum := (TWSum p emin choice).
+Local Notation TWSum := (TWSum p choice).
 Local Notation errc :=
   (2 * (u * u * u) + 42 / 10 * (u * u * u * u)).
 
-(* The sum of two triple words is a triple word (paper Theorem, Section 5.1), *)
-(* under the paper's no-underflow ([isTWnorm]) and ties-to-even assumptions.  *)
-Theorem TWSum_isTW x y :
-  ties_to_even choice ->
-  isTW x -> isTW y -> isTWnorm x -> isTWnorm y -> isTW (TWSum x y).
-Proof. exact: (TWSum_isTW Hp2 emin_le_0 Hp6 choice_sym). Qed.
+(* The sum of two triple words is a triple word (paper Theorem, Section 5.1). *)
+Theorem TWSum_isTW x y : isTW x -> isTW y -> isTW (TWSum x y).
+Proof. exact: (TWSum_isTW Hp2 Hp6 choice_sym Heven). Qed.
 
 (* Its relative error is at most [errc = 2u^3 + 4.2u^4] (Ensure of Alg. 8).   *)
-Theorem TWSum_error x y :
-  ties_to_even choice ->
-  isTW x -> isTW y -> isTWnorm x -> isTWnorm y ->
+Theorem TWSum_error x y : isTW x -> isTW y ->
   Rabs (TWval (TWSum x y) - (TWval x + TWval y)) <=
     errc * Rabs (TWval x + TWval y).
-Proof. exact: (TWSum_error Hp2 emin_le_0 Hp6 choice_sym). Qed.
+Proof. exact: (TWSum_error Hp2 Hp6 choice_sym Heven). Qed.
 
 End TWAdd.

@@ -3,7 +3,7 @@
 (* properties: it preserves format, size and exact sum, and (for [Merge] of   *)
 (* the six triple-word limbs) yields a magnitude-sorted, pairwise-ulp         *)
 (* separated sequence -- the two preconditions of paper Theorem 6.  Generic   *)
-(* over [p]/[emin]; built on [Nonoverlap].                                    *)
+(* over [p]; built on [Nonoverlap].                                          *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -23,7 +23,6 @@ Unset Printing Implicit Defensive.
 Section Merge.
 
 Variable p : Z.
-Variable emin : Z.
 Hypothesis Hp2 : (1 < p)%Z.
 
 Local Notation beta := radix2.
@@ -34,13 +33,15 @@ Local Instance p_gt_0 : Prec_gt_0 p.
 Proof. now apply Z.lt_trans with (2 := Hp2). Qed.
 
 Local Notation pow e := (bpow beta e).
-Local Notation fexp := (FLT_exp emin p).
+Local Notation fexp := (FLX_exp p).
 Local Notation format := (generic_format beta fexp).
 Local Notation ulp := (ulp beta fexp).
-Local Notation Pnonoverlap := (Pnonoverlap p emin).
-Local Notation pairwise_ulp := (pairwise_ulp p emin).
-Local Notation format_lt_ulp_0 := (@format_lt_ulp_0 p emin Hp2).
-Local Notation format_lt_ulp_le := (@format_lt_ulp_le p emin Hp2).
+Local Notation Pnonoverlap := (Pnonoverlap p).
+Local Notation pairwise_ulp := (pairwise_ulp p).
+Local Notation format_lt_ulp_le := (@format_lt_ulp_le p Hp2).
+Local Notation guarded_ulp_le := (guarded_ulp_le Hp2).
+Local Notation guarded_ulp_abs_le := (@guarded_ulp_abs_le p).
+Local Notation guarded_ulp_trans := (guarded_ulp_trans Hp2).
 Local Notation Pnonoverlap_imp_pairwise_ul :=
   (Pnonoverlap_imp_pairwise_ul Hp2).
 
@@ -58,6 +59,24 @@ Fixpoint Merge (l1 : seq R) : seq R -> seq R :=
         then a1 :: Merge l1' l2
         else a2 :: Merge_aux l2'
     end.
+
+(* ---- controlled unfolding ------------------------------------------------ *)
+(* [Merge] is a nested fixpoint, so a bare [/=] exposes the inner             *)
+(* [Merge_aux] and makes every goal unreadable.  These three equations are    *)
+(* the ONLY way the definition should be unfolded: rewrite with them instead  *)
+(* of simplifying, and [Merge] stays folded in the goal.                      *)
+Lemma Merge_nil l : Merge [::] l = l.
+Proof. by case: l. Qed.
+
+Lemma Merge_nil_r l : Merge l [::] = l.
+Proof. by case: l. Qed.
+
+Lemma Merge_cons a1 l1 a2 l2 :
+  Merge (a1 :: l1) (a2 :: l2) =
+    if Rle_bool (Rabs a2) (Rabs a1)
+    then a1 :: Merge l1 (a2 :: l2)
+    else a2 :: Merge (a1 :: l1) l2.
+Proof. by []. Qed.
 
 Lemma format_Merge l1 l2 :
   {in l1, forall z, format z} -> {in l2, forall z, format z} -> 
@@ -83,18 +102,6 @@ elim: l1 l2 => /= [|a1 l1 IH1]; first by elim.
 elim => [/=|a2 l2 IH2]; first by rewrite addn0.
 case: Rle_bool => /=; first by rewrite IH1.
 by rewrite IH2 addnS.
-Qed.
-
-(* [Merge] is a permutation of its inputs, so its members are exactly their   *)
-(* union.  Used to thread element-wise side conditions (formatness, the       *)
-(* no-underflow normality) from the two triples to the merged sequence.       *)
-Lemma mem_Merge z l1 l2 : (z \in Merge l1 l2) = (z \in l1) || (z \in l2).
-Proof.
-elim: l1 l2 => [|a1 l1 IH1] l2 /=; first by case: l2.
-elim: l2 => [|a2 l2 IH2] /=; first by rewrite orbF.
-case: Rle_bool; rewrite !inE.
-  by rewrite IH1 !inE orbA.
-by rewrite IH2 !inE orbCA.
 Qed.
 
 (* ===========================================================================*)
@@ -190,12 +197,8 @@ elim: l1 l2 => /= [|a l1 IH1].
   elim => // b [|c [|d l2]] IH _ bl2F _ bl2P //.
   apply: pairwise_ulp_cons_inv.
     have /= cLub := bl2P 0%N isT.
-    apply: Rle_lt_trans cLub.
-    have /= := bl2P 1%N isT.
-    have [->/format_lt_ulp_0->//|y_neq0 dLuc] := Req_dec c 0; try lra.
-      by apply: bl2F; rewrite !inE eqxx !orbT.
-    apply: Rle_trans (Rlt_le _ _ dLuc) _.
-    apply: ulp_le_abs => //.
+    have /= dLuc := bl2P 1%N isT.
+    apply: (guarded_ulp_trans _ dLuc cLub).
     by apply: bl2F; rewrite !inE eqxx !orbT.
   apply: IH => //.
     by move=> z zIl; apply: bl2F; rewrite inE zIl orbT.
@@ -209,34 +212,27 @@ case: Rle_bool_spec => [bLa|aLb].
     by apply: Pnonoverlap_cons al1P.
   case: (l1) al1P al1F => //.
     case: (l2) bl2P bl2F => //= c l3 /(_ 0%N isT) /= cLub _ _ _ _.
-    apply: Rlt_le_trans cLub _.
-    by apply: (ulp_le beta fexp _ _ bLa).
+    by apply: guarded_ulp_le cLub bLa.
   move=> a1 l3.
   rewrite /=; case: Rle_bool_spec => /=.
     case: l3 => //=.
       move=> bLa1 /(_ 0%N isT) /= a1Lua _ _.
-      by apply: Rle_lt_trans bLa1 a1Lua.
+      by apply: guarded_ulp_abs_le bLa1 a1Lua.
     move=> a2 l3 bLa1 aa1a2l3P aa1a2l3F _.
     case: Rle_bool_spec => [bLa2|a2Lb] /=.
       have /(_ 0%N isT)/= a1Lua :=  aa1a2l3P.
-      apply: Rle_lt_trans (a1Lua).
       have /(_ 1%N isT)/= a2Lua1 :=  aa1a2l3P.
-      move: a2Lua1.
-      have [->/format_lt_ulp_0->|a1_neq0 a2Lua1] := Req_dec a1 0; try lra.
-        by apply: aa1a2l3F; rewrite !inE eqxx !orbT.
-      apply: Rle_trans (Rlt_le _ _ a2Lua1) _.
-      apply: ulp_le_abs => //.
+      apply: (guarded_ulp_trans _ a2Lua1 a1Lua).
       by apply: aa1a2l3F; rewrite !inE eqxx !orbT.
     have /(_ 0%N isT)/= a1Lua :=  aa1a2l3P.
-    by apply: Rle_lt_trans (a1Lua).
+    by apply: guarded_ulp_abs_le bLa1 a1Lua.
   move=> a1Lb aa1l3P aa1l3F.
   case: (l2) bl2F bl2P => /= [_ _ _|b1 l4 bb1F bb1P _] /=.
     by apply: (aa1l3P 0%N).
   case: Rle_bool_spec => [b1La1|a1Lb1] /=.
     by apply: (aa1l3P 0%N).
   have /(_ 0%N isT)/= b1Lub :=  bb1P.
-  apply: Rlt_le_trans b1Lub _.
-  by apply: (ulp_le beta fexp _ _ bLa).
+  by apply: guarded_ulp_le b1Lub bLa.
 apply: pairwise_ulp_cons1_inv.
   apply: IH2 => //.
     by move=> z zIl; apply: bl2F; rewrite inE zIl orbT.
@@ -244,35 +240,26 @@ apply: pairwise_ulp_cons1_inv.
 case: (l2) bl2F bl2P al1F al1P => /=.
   case: (l1) => // a1 l3 bF bP aa1l3F aa1l3P /= _.
   have /(_ 0%N isT)/= a1Lua :=  aa1l3P.
-  apply: Rlt_le_trans a1Lua _.
-  by apply: (ulp_le beta fexp _ _ (Rlt_le _ _ aLb)).
+  by apply: guarded_ulp_le a1Lua (Rlt_le _ _ aLb).
 move=> b1 l3.
 case: Rle_bool_spec => [b1La|aLb1] /=.
   case: (l1) => //= [_ /(_ 0%N isT) //|a1 l4].
-  case: Rle_bool_spec => [b1La1|a1Lb1]//=.  
+  case: Rle_bool_spec => [b1La1|a1Lb1]//=.
     move=> bb1l3F bb1l3P aa1l4F aa1l4P _.
     have /(_ 0%N isT)/= a1Lua :=  aa1l4P.
-    apply: Rlt_le_trans a1Lua _.
-    by apply: (ulp_le beta fexp _ _ (Rlt_le _ _ aLb)).
+    by apply: guarded_ulp_le a1Lua (Rlt_le _ _ aLb).
   case: l3 => /= [bb1F bb1P aa1l4F aa1l4P _|
                   b2 l3 bb1b2l3F bb1b2l3P aa1l4F aa1l4P _].
     by apply: (bb1P 0%N).
   by apply: (bb1b2l3P 0%N).
 case: l3 => /= [bb1F bb1P al1F al1P _|b2 l3 bb1b2l3F bb1b2l3P al1F al1P _].
-  apply: Rlt_trans aLb1 _.
-  by apply: (bb1P 0%N).
+  by apply: guarded_ulp_abs_le (Rlt_le _ _ aLb1) (bb1P 0%N isT).
 case: Rle_bool_spec => [b2La|aLb2]//=.
-  apply: Rlt_trans aLb1 _.
-  by apply: (bb1b2l3P 0%N).
+  by apply: guarded_ulp_abs_le (Rlt_le _ _ aLb1) (bb1b2l3P 0%N isT).
 have /(_ 1%N isT)/= b2Lub1 := bb1b2l3P.
-  apply: Rlt_le_trans b2Lub1 _.
-apply: (ulp_le beta fexp).
-apply: Rlt_le.
 have /(_ 0%N isT)/= b1Lub := bb1b2l3P.
-apply: Rlt_le_trans b1Lub _.
-apply: ulp_le_abs.
-  move=> b_eq0; move: aLb; rewrite b_eq0; split_Rabs; lra.
-by apply: bb1b2l3F; rewrite !inE eqxx.
+apply: (guarded_ulp_trans _ b2Lub1 b1Lub).
+by apply: bb1b2l3F; rewrite !inE eqxx !orbT.
 Qed.
 
 (* Merge is a permutation of its two inputs, so it preserves the exact sum.   *)

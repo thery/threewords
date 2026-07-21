@@ -1,7 +1,7 @@
 (* ---------------------------------------------------------------------------*)
 (* Algorithm 4 (VecSum) and the paper's Theorem 1 (its output is              *)
 (* F-nonoverlapping).  A general round-to-nearest building block, generic     *)
-(* over the precision [p] and minimal exponent [emin] (binary64 is fixed      *)
+(* over the precision [p] alone -- FLX (binary64 is fixed only in            *)
 (* only in [addition.v]); built on [TwoSum] and [Nonoverlap].                 *)
 (* ---------------------------------------------------------------------------*)
 
@@ -21,20 +21,20 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-(* Round-to-nearest TIES-TO-EVEN: the tie-breaking [choice] returns the       *)
-(* parity that makes the kept mantissa even.  Strictly stronger than the      *)
-(* symmetry [choice_sym] the rest of the development assumes; paper Theorem 6 *)
-(* ([vecSum_Thm6]) genuinely needs it (the same-binade running-sum bound lands*)
-(* on an exact rounding midpoint).                                            *)
+(* Round-to-nearest TIES-TO-EVEN, as a condition on the tie-breaking [choice]:*)
+(* on a tie, keep the even mantissa.  Strictly stronger than the symmetry     *)
+(* [choice_sym] the rest of the development assumes; paper Theorem 6 genuinely*)
+(* needs it (the same-binade running-sum bound lands on an exact rounding     *)
+(* midpoint).  The paper's [RN] means ties-to-even (Section 1), so this is    *)
+(* the paper's own assumption, not a strengthening of it -- it is the         *)
+(* development that was more general.                                         *)
 Definition ties_to_even (choice : Z -> bool) :=
   forall z : Z, choice z = ~~ Z.even z.
 
 Section SecVecSum.
 
 Variable p : Z.
-Variable emin : Z.
 Hypothesis Hp2 : (1 < p)%Z.
-Hypothesis emin_le_0 : (emin <= 0)%Z.
 
 Local Notation beta := radix2.
 Local Notation pow e := (bpow beta e).
@@ -54,44 +54,36 @@ Local Notation rnd := (Znearest choice).
 Local Instance valid_rnd : Valid_rnd rnd := valid_rnd_N choice.
 
 Local Notation float := (float radix2).
-Local Notation fexp := (FLT_exp emin p).
+Local Notation fexp := (FLX_exp p).
 Local Notation format := (generic_format beta fexp).
 Local Notation cexp := (cexp beta fexp).
 Local Notation mant := (scaled_mantissa beta fexp).
 Local Notation RND := (round beta fexp rnd).
 Local Notation ulp := (ulp beta fexp).
-Local Notation uls := (uls p emin).
-Local Notation error_le_half_ulp_RN :=
-  (@error_le_half_ulp_round beta (FLT_exp emin p)
-     (FLT_exp_valid emin p) (FLT_exp_monotone emin p) choice).
-Local Notation TwoSum_correct_RN :=
-  (@TwoSum_correct emin p choice Hp2 emin_le_0 choice_sym).
-
-Local Notation TwoSum := (TwoSum p emin choice).
-Local Notation TwoSum_hi := (TwoSum_hi p emin choice).
-Local Notation formatDWR := (formatDWR p emin).
-Local Notation magnitudeDWR := (magnitudeDWR p emin).
+Local Notation uls := (uls p).
+Local Notation TwoSum := (TwoSum p choice).
+Local Notation TwoSum_hi := (TwoSum_hi p choice).
+Local Notation formatDWR := (formatDWR p).
+Local Notation magnitudeDWR := (magnitudeDWR p).
 Local Notation format_TwoSum := (format_TwoSum Hp2 choice).
 Local Notation TwoSum_correct_loc :=
-  (TwoSum_correct_loc Hp2 emin_le_0 choice_sym).
+  (TwoSum_correct_loc Hp2 choice_sym).
 Local Notation magnitude_TwoSum :=
-  (magnitude_TwoSum Hp2 emin_le_0 choice_sym).
-Local Notation TwoSum_err_imul := (TwoSum_err_imul Hp2 emin_le_0 choice_sym).
+  (magnitude_TwoSum Hp2 choice_sym).
+Local Notation TwoSum_err_imul := (TwoSum_err_imul Hp2 choice_sym).
 Local Notation TwoSum_err_uls_ge :=
-  (TwoSum_err_uls_ge Hp2 emin_le_0 choice_sym).
+  (TwoSum_err_uls_ge Hp2 choice_sym).
 
-Local Notation Pnonoverlap := (Pnonoverlap p emin).
-Local Notation pairwise_ulp := (pairwise_ulp p emin).
-Local Notation Fnonoverlap := (Fnonoverlap p emin).
-Local Notation format_lt_ulp_0 := (@format_lt_ulp_0 p emin Hp2).
-Local Notation format_lt_ulp_le := (@format_lt_ulp_le p emin Hp2).
+Local Notation Pnonoverlap := (Pnonoverlap p).
+Local Notation pairwise_ulp := (pairwise_ulp p).
+Local Notation Fnonoverlap := (Fnonoverlap p).
+Local Notation format_lt_ulp_le := (@format_lt_ulp_le p Hp2).
 Local Notation Pnonoverlap_imp_pairwise_ul :=
   (Pnonoverlap_imp_pairwise_ul Hp2).
 Local Notation abs_le_ufp_norm := (abs_le_ufp_norm Hp2).
-Local Notation nu_of_lt_ulp := (nu_of_lt_ulp Hp2).
-Local Notation small_head_zero := (@small_head_zero p emin Hp2).
-Local Notation sumR_ufp_bound := (@sumR_ufp_bound p emin Hp2).
-Local Notation nth_step_zero := (@nth_step_zero p emin Hp2).
+Local Notation small_head_zero := (@small_head_zero p Hp2).
+Local Notation sumR_ufp_bound := (@sumR_ufp_bound p Hp2).
+Local Notation nth_step_zero := (@nth_step_zero p Hp2).
 
 (* [p] is symbolic here (concrete only in [addition.v]), so the base-2 power  *)
 (* identity that used to hold by computation needs [IZR_Zpower] ([0 <= p]).   *)
@@ -141,6 +133,10 @@ case: (IH ll1 d) => // [z2 z2Icl|].
   by apply: blF; rewrite inE z2Icl orbT.
 by move=> ll1F dF; apply: ll1F.
 Qed.
+
+(* The head of the output IS the final running sum [s_0].                     *)
+Lemma vecSum_nth0 l : nth 0 (vecSum l) 0 = (vecSumAux l).2.
+Proof. by rewrite /vecSum; case: (vecSumAux l). Qed.
 
 Lemma vecSumAux_cons a b l :
   vecSumAux [::a, b & l] =
@@ -269,19 +265,17 @@ Qed.
 (* leftmost bit, i.e. the largest power of two <= |x| (for x <> 0).  Paper    *)
 (* Theorem 1 / Corollary 1 (p.3) state the VecSum input conditions with it.   *)
 Definition repr (k : Z) (x : R) : Prop :=
-  (emin <= k - p + 1)%Z /\
   exists2 M : Z, (Z.abs M < 2 ^ p)%Z & x = IZR M * pow (k - p + 1)%Z.
 
-(* Being [repr]-esentable at [k] makes [x] an FLT float: it is [F2R] of the   *)
-(* integer float [Float M (k-p+1)], whose mantissa is < 2^p and whose exponent*)
-(* is >= emin.                                                                *)
+(* Being [repr]-esentable at [k] makes [x] a float: it is [F2R] of the       *)
+(* integer float [Float M (k-p+1)], whose mantissa is < 2^p (under FLX there  *)
+(* is no constraint on the exponent).                                        *)
 Lemma repr_format k x : repr k x -> format x.
 Proof.
-move=> [Hemin [M Mlt ->]].
-apply: generic_format_FLT; exists (Float beta M (k - p + 1)%Z).
+move=> [M Mlt ->].
+apply: generic_format_FLX; exists (Float beta M (k - p + 1)%Z).
 - by rewrite /F2R.
-- exact: Mlt.
-exact: Hemin.
+by exact: Mlt.
 Qed.
 
 (* Hypotheses of Theorem 1 on inputs [l] with a chosen exponent map [k]:      *)
@@ -306,7 +300,7 @@ case=> Hrepr Hgap Hlast.
 (*                              = (2 - 2u) 2^(k_j).                           *)
 have Hx : forall j, (j < size l)%N ->
   Rabs (nth 0 l j) <= (2 - 2 * u) * pow (k j).
-  move=> j jLs; have [_ [M Mlt ->]] := Hrepr j jLs.
+  move=> j jLs; have [M Mlt ->] := Hrepr j jLs.
   rewrite Rabs_mult (Rabs_pos_eq _ (bpow_ge_0 _ _)) -abs_IZR.
   have I2p := IZR_2powp.
   have Hkj : pow (k j) = pow (p - 1) * pow (k j - p + 1)
@@ -346,7 +340,6 @@ have [Hi2|Hi2] := eqVneq i.+2 (size l).
 (* step: the suffix has >= 2 elements, so s_{i+1} = RN(x_{i+1} + s_{i+2}).    *)
 have iLs' : (i < size l)%N := ltn_trans (ltnSn i) iLs.
 have Hi2lt : (i.+2 < size l)%N by rewrite ltn_neqAle Hi2 iLs.
-have [Hemin _] := Hrepr i iLs'.
 have Hd1 : drop i.+1 l = nth 0 l i.+1 :: drop i.+2 l by rewrite (drop_nth 0).
 have Hd2 : drop i.+2 l = nth 0 l i.+2 :: drop i.+3 l
   by rewrite (drop_nth 0) // Hi2lt.
@@ -371,9 +364,8 @@ have Meq : (2 - 2 * u) * pow (k i) = IZR (2 ^ p - 1) * pow (k i - p + 1).
   rewrite Hki -Rmult_assoc; congr (_ * _).
   by rewrite minus_IZR I2p Hpp; nra.
 have FB : format ((2 - 2 * u) * pow (k i)).
-  rewrite Meq; apply: generic_format_FLT.
-  exists (Float beta (2 ^ p - 1) (k i - p + 1));
-    [by rewrite /F2R /= | | exact: Hemin].
+  rewrite Meq; apply: generic_format_FLX.
+  exists (Float beta (2 ^ p - 1) (k i - p + 1)); first by rewrite /F2R /=.
   rewrite [Fnum _]/=; have h : (0 < 2 ^ p)%Z by apply: Z.pow_pos_nonneg; lia.
   rewrite Z.abs_eq; last by lia.
   by change (2 ^ p - 1 < 2 ^ p)%Z; lia.
@@ -439,12 +431,14 @@ Qed.
 (* exact sum has magnitude below [2^(e0+2)]).  This is the tight per-step     *)
 (* error bound behind [Herr] (the paper's [2 u^2 2^(k_{i-1})] would be a      *)
 (* factor [2^p] too small: a single 2Sum error can reach [~u 2^(k_i)]).       *)
+(* The running-sum hypothesis is [|s| <= 2 pow e0], NOT [(2-2u) pow e0]: the  *)
+(* Theorem-6 run bound [vecSum_run_ufp] only delivers the former, and the     *)
+(* slack is not needed ([Rabs x < pow (e0+1)] is already strict).             *)
 Lemma magnitude_vecSum_err x s e0 : format x -> format s ->
   Rabs x < pow (e0 + 1) -> Rabs s <= 2 * pow e0 ->
-  (emin <= e0 - p + 1)%Z ->
   Rabs (dwl (TwoSum x s)) <= 2 * u * pow e0.
 Proof.
-move=> Fx Fs Hx Hs Hemin.
+move=> Fx Fs Hx Hs.
 have Hc : dwh (TwoSum x s) + dwl (TwoSum x s) = x + s
   by exact: TwoSum_correct_loc Fx Fs.
 rewrite TwoSum_hi in Hc.
@@ -460,10 +454,10 @@ have Hz : Rabs (x + s) < pow (e0 + 2).
   lra.
 have Hulp : ulp (x + s) <= pow (e0 + 2 - p).
   have [z0|z0] := Req_dec (x + s) 0.
-    by rewrite z0 ulp_FLT_0; apply: bpow_le; lia.
-  rewrite ulp_neq_0 //; apply: bpow_le; rewrite /cexp /FLT_exp.
+    by rewrite z0 ulp_FLX_0; apply: bpow_ge_0.
+  rewrite ulp_neq_0 //; apply: bpow_le; rewrite /cexp /FLX_exp.
   have Hm : (mag beta (x + s) <= e0 + 2)%Z by apply: mag_le_bpow.
-  lia.
+  by rewrite /fexp; lia.
 apply: (Rle_trans _ (/ 2 * ulp (x + s))).
   by apply: error_le_half_ulp.
 apply: Rle_trans (_ : / 2 * pow (e0 + 2 - p) <= _).
@@ -493,7 +487,7 @@ have Hrun := VecSum_run_bound Hk.
 have [Hrepr _ _] := Hk.
 move=> j jLs.
 have jLl : (j < size l)%N := ltn_trans (ltnSn j) jLs.
-have [Hemin [M HM Hxeq]] := Hrepr j jLl.
+have [M HM Hxeq] := Hrepr j jLl.
 have -> : nth 0 (vecSum l) j.+1 = nth 0 (vecSumAux l).1 j
   by rewrite /vecSum; case: (vecSumAux l).
 rewrite vecSumAux_nth1 //.
@@ -507,10 +501,11 @@ apply: magnitude_vecSum_err.
   apply: Rmult_lt_compat_r; first exact: bpow_gt_0.
   have -> : pow p = IZR (2 ^ p) by rewrite IZR_2powp.
   by apply: IZR_lt.
-- apply: Rle_trans (Hrun j jLs) _.
-  have u_ge_0 : 0 <= u by rewrite uE; apply: bpow_ge_0.
-  have := bpow_gt_0 beta (k j); nra.
-- exact: Hemin.
+(* [VecSum_run_bound] gives the sharper [(2-2u) pow (k j)]; relax it to the   *)
+(* [2 pow (k j)] that [magnitude_vecSum_err] now asks for.                    *)
+apply: Rle_trans (Hrun j jLs) _.
+have Hu : 0 < u by rewrite uE; apply: bpow_gt_0.
+have := bpow_gt_0 beta (k j); nra.
 Qed.
 
 (* Prefix/suffix split of the VecSum walk (paper: "e_i, ..., e_0 and s_0      *)
@@ -596,9 +591,10 @@ have gE : uls xi = pow (cexp xi + Z.of_nat (trZ (Ztrunc (mant xi)))).
 set g := (cexp xi + Z.of_nat (trZ (Ztrunc (mant xi))))%Z.
 case: (Rle_lt_dec (Rabs e) (/ 2 * uls xi)) => [//|Hgt]; exfalso.
 have Hur : uls xi < ulp r by lra.
-have Hemin : pow emin <= uls xi.
-  by apply: (is_imul_uls_ge Fxi Hni (is_imul_pow_emin Fxi)).
-have rn0 : r <> 0 by move=> r0; move: Hur; rewrite r0 ulp_FLT_0; lra.
+have rn0 : r <> 0.
+  move=> r0; move: Hur; rewrite r0 ulp_FLX_0.
+  suff : 0 < uls xi by lra.
+  by rewrite gE; apply: bpow_gt_0.
 have Hur2 : ulp r = pow (cexp r) by rewrite ulp_neq_0.
 have Hcexp : (g + 1 <= cexp r)%Z.
   suff : (g < cexp r)%Z by lia.
@@ -643,7 +639,7 @@ have Hex : exists2 w, (w < t)%N & ~ is_imul (nth 0 l w) (pow (g + 1)).
   by rewrite size_take_min ltn_min i'Lt i'Sz.
 have [w wLt Hw] := Hex.
 have Hkw : (k w <= g + p - 1)%Z.
-  have [_ [M HM HxM]] := Hrepr w (ltn_trans wLt Ht').
+  have [M HM HxM] := Hrepr w (ltn_trans wLt Ht').
   case: (Z_le_gt_dec (k w) (g + p - 1)) => // Hgtw.
   case: Hw.
   apply: is_imul_pow_le (_ : is_imul (nth 0 l w) (pow (k w - p + 1))) _;
@@ -727,7 +723,7 @@ have an0 : a <> 0.
   by lra.
 have Hle : Rabs (nth 0 es 0) <= / 2 * uls s.
   have H : (1 < size (s :: es))%N by rewrite /= ltnS.
-  exact: (Fnonoverlap_imm Hp2 Fses H sn0).
+  by apply: (Fnonoverlap_imm Fses H sn0).
 have Hulsei : uls s <= uls ei1.
   have -> : ei1 = dwl (TwoSum a s) by rewrite E.
   by apply: (TwoSum_err_uls_ge Fa Fs an0 sn0 Hulsle); rewrite E.
@@ -735,27 +731,36 @@ apply: Rle_trans Hle _.
 by have := Hulsei; lra.
 Qed.
 
-(* Reusable pieces for building the exponent map of paper Corollary 1.        *)
+(* Relaxed exponent hypothesis (paper Corollary 1): each [x_i] is [repr] at   *)
+(* [k_i], the [k_i] are non-increasing, and drop by at least 1 every two      *)
+(* steps -- i.e. at most one "overlap" (equal-magnitude consecutive pair),    *)
+(* never two in a row.  This is what [sorted_mag] + [pairwise_ulp] provide and*)
+(* what [Merge] guarantees on the six merged terms.  The two-step strict drop *)
+(* is only required at nonzero entries: in a [sorted_mag] list the zeros are  *)
+(* trailing, and a strict drop through a zero cannot be met at all under FLX  *)
+(* ([ulp 0 = 0]), so the guard keeps the hypothesis true.                    *)
+Definition Thm1_hyp_wk (k : nat -> Z) (l : seq R) : Prop :=
+  [/\ (forall i, (i < size l)%N -> repr (k i) (nth 0 l i)),
+      (forall i, (i.+1 < size l)%N -> (k i.+1 <= k i)%Z) &
+      (forall i, (i.+2 < size l)%N -> nth 0 l i.+2 <> 0 ->
+         (k i.+2 + 1 <= k i)%Z) ].
+
+(* Reusable pieces for PIECE 1 (building the relaxed exponent map).           *)
 
 (* Converse of [repr_format] at the canonical exponent: a nonzero float is    *)
 (* [repr] at [cexp x + p - 1] (so [k - p + 1 = cexp x]), with mantissa        *)
-(* [Ztrunc (mant x)] (bounded by [2^p] and [>= emin] by the FLT format).      *)
+(* [Ztrunc (mant x)] (bounded by [2^p] by the format).                       *)
 Lemma repr_canonical x : format x -> x <> 0 -> repr (cexp x + p - 1) x.
 Proof.
-move=> xF xn0; split.
-  by rewrite (_ : (cexp x + p - 1 - p + 1)%Z = cexp x); [apply: Z.le_max_r|lia].
+move=> xF xn0.
 exists (Ztrunc (mant x)).
   have Hm2 : (Z.abs (Ztrunc (mant x)) <= 2 ^ p - 1)%Z :=
-    Fast2Sum_robust_flt.FLT_mant_le Hp2 xF.
+    Fast2Sum_robust_flx.FLX_mant_le Hp2 xF.
   by lia.
 rewrite (_ : (cexp x + p - 1 - p + 1)%Z = cexp x); last by lia.
 have H := scaled_mantissa_mult_bpow beta fexp x.
 by rewrite -{1}H {1}(scaled_mantissa_generic beta fexp x xF).
 Qed.
-
-(* The canonical exponent [cexp x] is never below [emin] ([FLT_exp] uses max).*)
-Lemma cexp_ge_emin x : (emin <= cexp x)%Z.
-Proof. by apply: Z.le_max_r. Qed.
 
 (* In a magnitude-sorted list the zeros are trailing: the predecessor of a    *)
 (* nonzero entry is itself nonzero.                                           *)
@@ -769,194 +774,178 @@ by apply/Rabs_eq_R0; have := Rabs_pos (nth 0 l i.+1); lra.
 Qed.
 
 (* If [y] is nonzero and strictly below [ulp x], then its canonical exponent  *)
-(* is strictly below [x]'s.  (When [cexp x = emin], [|y| < ulp x = 2^emin] is *)
-(* impossible for a nonzero float, by [alpha_lB].)                            *)
+(* is strictly below [x]'s.                                                  *)
 Lemma cexp_lt_ulp {x y : R} : format y -> x <> 0 -> y <> 0 ->
   Rabs y < ulp x -> (cexp y < cexp x)%Z.
 Proof.
 move=> Fy xn0 yn0 Hlt.
 have Hux : ulp x = pow (cexp x) by rewrite ulp_neq_0.
 have Hmag : (mag beta y <= cexp x)%Z by apply: mag_le_bpow => //; rewrite -Hux.
-have Hemin_lt : (emin < cexp x)%Z.
-  apply: (lt_bpow beta); apply: Rle_lt_trans (alpha_lB Fy yn0) _.
-  by rewrite -Hux.
-have Hc2 : cexp y = Z.max (mag beta y - p) emin by [].
-by rewrite Hc2; apply: Z.max_lub_lt; lia.
+have Hc2 : cexp y = (mag beta y - p)%Z by [].
+by rewrite Hc2; lia.
 Qed.
 
-(* =========================================================================  *)
-(*  Paper Corollary 1                                                         *)
-(*                                                                            *)
-(*  The paper reduces Corollary 1 to Theorem 1 ([VecSum_Thm1], proved above)  *)
-(*  by exhibiting a "bumped" exponent map.  Let [I] (here the boolean         *)
-(*  predicate [inI]) be the set of "overlap" indices; it has no two           *)
-(*  consecutive elements and lies in [[1, n-2]].  The construction is         *)
-(*    k_i = e_{x_i}                     for i not in I,                       *)
-(*    k_i = max (k_{i+1} + 1, e_{x_i})  for i in I,                           *)
-(*  where [e_{x_i} = cexp x_i + p - 1] is the canonical exponent.             *)
-(* =========================================================================  *)
+Fixpoint cmin_aux z (l : seq R) : Z := 
+  if l is f :: l1 then 
+    if Req_bool f 0 then cmin_aux z l1 else cmin_aux (Z.min z (cexp f)) l1
+  else z.
 
-(* Hypotheses of paper Corollary 1 on the input list [l] (Section 2.1).       *)
-(* [inI] is the overlap set [I]; the conjuncts are, in order:                 *)
-(*  - [I] lies in [[1, n-2]];                                                 *)
-(*  - [I] has no two consecutive indices;                                     *)
-(*  - off [I]: the strict ufp gap  [ufp(x_{i+1}) <= 1/2 ufp(x_i)];            *)
-(*  - on  [I]: the overlap bound   [ufp(x_{i+1}) <= 2^(p-2) uls(x_i)];        *)
-(*  - on  [I]: the 2-step quarter gap  [ufp(x_{i+1}) <= 1/4 ufp(x_{i-1})].    *)
-(* The paper assumes an UNLIMITED exponent range ("provided underflow and     *)
-(* overflow do not occur"): we transcribe that as (i) the interleaving zeros  *)
-(* removed -- the list is zero-free -- and (ii) every entry is normal         *)
-(* ([emin + p <= mag x_i], so [cexp x_i = mag x_i - p] and [ufp x_i =         *)
-(* 2^(cexp x_i + p - 1)]).  Without it Theorem 1's strict exponent gap is     *)
-(* unsatisfiable at the [emin] floor (subnormal interior overlaps).           *)
-Definition Cor1_hyp (l : seq R) : Prop :=
-  [/\ {in l, forall z, format z},
-      (forall i, (i < size l)%N -> nth 0 l i <> 0),
-      (forall i, (i < size l)%N -> (emin + p <= mag beta (nth (0:R) l i))%Z) &
-   exists inI : nat -> bool,
-    [/\ (forall i, inI i -> (0 < i)%N /\ (i.+1 < size l)%N),
-        (forall i, inI i -> ~~ inI i.+1),
-        (forall i, (i.+1 < size l)%N -> ~~ inI i ->
-           2 * ufp (nth 0 l i.+1) <= ufp (nth 0 l i)),
-        (forall i, inI i ->
-           ufp (nth 0 l i.+1) <= pow (p - 2) * uls (nth 0 l i)) &
-        (forall i, inI i -> 4 * ufp (nth 0 l i.+1) <= ufp (nth 0 l i.-1)) ]].
-
-(* MAIN STEP (paper Corollary 1): the bumped exponent map exists and meets    *)
-(* the hypotheses [Thm1_hyp] of Theorem 1.  Proof to discharge, following the *)
-(* paper: build [k] as above (after removing interleaving zeros); then        *)
-(*  - repr:  [2^(k_{i+1}-p+2) | x_i] and [2^(e_{x_i}-p+1) | x_i] give         *)
-(*    [2^(k_i-p+1) | x_i], and [|x_i| <= 2.2^(e_{x_i})] gives [|x_i| <=       *)
-(*    2.2^(k_i)] -- i.e. [repr (k i) x_i] (uses [repr_canonical] off [I]);    *)
-(*  - gap:   for [i, i+1] off [I], [k_{i+1} <= k_i - 1]; for [i] in [I],      *)
-(*    [k_{i+1} <= k_i - 1] and [e_{x_i} <= k_{i-1}-1], [k_{i+1} <= k_{i-1}-2],*)
-(*    hence [k_i <= k_{i-1} - 1].                                             *)
-Lemma Cor1_bump_Thm1_hyp l : Cor1_hyp l -> exists k, Thm1_hyp k l.
+Lemma cmin_aux_le z l: (cmin_aux z l <= z)%Z.
 Proof.
-move=> [Hfmt Hnz Hnorm [inI [HI Hcons Hoff Hon1 Hon2]]].
-pose ex := fun i => (cexp (nth (0:R) l i) + p - 1)%Z.
-pose k := fun i => if inI i then Z.max (ex i) (ex i.+1 + 1) else ex i.
+elim: l z => //= [z|f l IH /= z]; first by lia.
+case: Req_bool_spec => // _.
+by apply: Z.le_trans (IH _) _; lia.
+Qed.
+
+Lemma cmin_aux_correct z l i : 
+  nth (0 : R) l i <> 0 -> (cmin_aux z l <= cexp (nth (0 : R) l i))%Z.
+Proof.
+elim: l i z => /= [i z|f l IH [|i] /= z]; first by rewrite nth_nil; case.
+  case: Req_bool_spec => // f_neq0 _.
+  by apply: Z.le_trans (@cmin_aux_le _ _) _; lia.
+case: Req_bool_spec => // _ nth_neq0; first by apply: IH.
+by apply: IH.
+Qed.
+
+Fixpoint cmin (l : seq R) := 
+  if l is f :: l1 then 
+    if Req_bool f 0 then cmin l1 else cmin_aux (cexp f) l1
+  else 0%Z.
+
+Lemma cmin_correct l i : 
+  nth (0 : R) l i <> 0 -> (cmin l <= cexp (nth (0 : R) l i))%Z.
+Proof.
+elim: l i => /= [i |f l IH [|i] /=]; first by rewrite nth_nil; case.
+  case: Req_bool_spec => // f_neq0 _.
+  by apply: cmin_aux_le.
+case: Req_bool_spec => // _ nth_neq0; first by apply: IH.
+by apply: cmin_aux_correct.
+Qed.
+
+
+(* PIECE 1: build the relaxed exponent map from the concrete hypotheses.  Take*)
+(* [k i := cexp (nth 0 l i) + p - 1] on nonzero entries (so [repr] holds via  *)
+(* [repr_canonical]) and any fixed value on zeros.  [sorted_mag] gives       *)
+(* [cexp] non-increasing ([cexp_le]) hence [k i.+1 <= k i]; [pairwise_ulp]    *)
+(* gives [cexp (nth i.+2) < cexp (nth i)] ([cexp_lt_ulp]) hence the two-step  *)
+(* strict drop.  The two-step drop is only claimed at nonzero entries (zeros  *)
+(* are trailing, and near the underflow floor the strict drop cannot hold).   *)
+Lemma sorted_pairwise_k l :
+  {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
+  exists k, Thm1_hyp_wk k l.
+Proof.
+move=> lF lM lP.
+pose k := fun (i : nat) =>
+   if Req_bool (nth (0 : R) l i) 0 then (cmin l + p - 1)%Z
+   else (cexp (nth (0 : R) l i) + p - 1)%Z.
 have Fnth : forall i, (i < size l)%N -> format (nth (0:R) l i).
-  by move=> i Hi; apply: Hfmt; apply: mem_nth.
-have Hcx : forall i, (i < size l)%N ->
-    cexp (nth (0:R) l i) = (mag beta (nth (0:R) l i) - p)%Z.
-  move=> i Hi; rewrite /cexp /fexp /FLT_exp Z.max_l //.
-  by have := Hnorm i Hi; lia.
-have Hufp : forall i, (i < size l)%N -> ufp (nth (0:R) l i) = pow (ex i).
-  by move=> i Hi; rewrite /ufp /ex (Hcx i Hi); congr bpow; lia.
-exists k.
-(* The paper's ufp gaps, re-read as exponent gaps (entries are normal).       *)
-have Hoff' : forall i, (i.+1 < size l)%N -> ~~ inI i -> (ex i.+1 + 1 <= ex i)%Z.
-  move=> i Hi HnI; have iLs : (i < size l)%N by apply: ltnW.
-  apply: (le_bpow beta); rewrite bpow_plus bpow_1 /=.
-  by have := Hoff i Hi HnI; rewrite (Hufp _ Hi) (Hufp _ iLs); lra.
-have Hon2' : forall i, inI i -> (ex i.+1 + 2 <= ex i.-1)%Z.
-  move=> i HiI; have [i0 i1s] := HI i HiI.
-  have iLs : (i < size l)%N by apply: ltn_trans (ltnSn i) i1s.
-  have im1 : (i.-1 < size l)%N by apply: leq_ltn_trans (leq_pred i) iLs.
-  apply: (le_bpow beta).
-  have E4 : pow 2 = 4 by rewrite /= /Z.pow_pos /=; lra.
-  rewrite bpow_plus E4.
-  by have := Hon2 i HiI; rewrite (Hufp _ i1s) (Hufp _ im1); lra.
-(* The overlap bound gives the divisibility [2^(cexp x_{i+1}+1) | x_i].       *)
-have Hdiv : forall i, inI i ->
-    is_imul (nth (0:R) l i) (pow (cexp (nth (0:R) l i.+1) + 1)).
-  move=> i HiI; have [i0 i1s] := HI i HiI.
-  have iLs : (i < size l)%N by apply: ltn_trans (ltnSn i) i1s.
-  have Fxi := Fnth i iLs.
-  have xin0 : nth (0:R) l i <> 0 by apply: Hnz.
-  have gE : uls (nth (0:R) l i) =
-      pow (cexp (nth (0:R) l i)
-             + Z.of_nat (trZ (Ztrunc (mant (nth (0:R) l i))))).
-    by rewrite /uls; case: Req_bool_spec => // /xin0.
-  have Hle : pow (cexp (nth (0:R) l i.+1) + 1) <= uls (nth (0:R) l i).
-    have H1 := Hon1 i HiI; rewrite (Hufp _ i1s) in H1.
-    have exeq : ex i.+1 = (cexp (nth (0:R) l i.+1) + p - 1)%Z by rewrite /ex.
-    rewrite exeq in H1.
-    have Hsplit : pow (cexp (nth (0:R) l i.+1) + p - 1) =
-        pow (p - 2) * pow (cexp (nth (0:R) l i.+1) + 1).
-      by rewrite -bpow_plus; congr bpow; lia.
-    rewrite Hsplit in H1; have := bpow_gt_0 beta (p-2); nra.
-  apply: is_imul_pow_le.
-    by have H := uls_imul Fxi; rewrite gE in H; exact: H.
-  by apply: (le_bpow beta); rewrite -gE; exact: Hle.
-(* The strict interior gap [k_{i+1} + 1 <= k_i] (paper's four cases).         *)
-have Hgap : forall i, (i.+2 < size l)%N -> (k i.+1 + 1 <= k i)%Z.
-  move=> i Hi.
-  have i1s : (i.+1 < size l)%N by apply: ltn_trans (ltnSn i.+1) Hi.
-  rewrite /k.
-  case E : (inI i); case E1 : (inI i.+1).
-  - by move: (Hcons i E); rewrite E1.
-  - by apply: Z.le_max_r.
-  - have A := Hoff' i i1s (negbT E).
-    have B : (ex i.+2 + 2 <= ex i)%Z := Hon2' i.+1 E1.
-    suff H : (Z.max (ex i.+1) (ex i.+2 + 1) <= ex i - 1)%Z by lia.
-    by apply: Z.max_lub; lia.
-  - by have := Hoff' i i1s (negbT E); lia.
-(* The last pair is weak: index [i.+1] cannot be in [I].                      *)
-have Hlast : forall i, i.+2 = size l -> (k i.+1 <= k i)%Z.
-  move=> i Hi.
-  have i1s : (i.+1 < size l)%N by rewrite -Hi; apply: ltnSn.
-  have Hn1 : ~~ inI i.+1.
-    by apply/negP => Hc; have := (HI _ Hc).2; rewrite -Hi ltnn.
-  rewrite /k (negbTE Hn1).
-  case E : (inI i).
-  - by have := Z.le_max_r (ex i) (ex i.+1 + 1); lia.
-  - by have := Hoff' i i1s (negbT E); lia.
-split; [ | exact: Hgap | exact: Hlast].
-(* [repr (k i) x_i]: [x_i] is a multiple of [2^(k_i-p+1)] with mantissa <2^p. *)
-move=> i Hi.
-have Fxi := Fnth i Hi.
-have Hkge : (ex i <= k i)%Z.
-  by rewrite /k; case: (inI i); [apply: Z.le_max_l | apply: Z.le_refl].
-have Hisimul : is_imul (nth (0:R) l i) (pow (k i - p + 1)).
-  rewrite /k; case E : (inI i); last first.
-    have -> : (ex i - p + 1 = cexp (nth (0:R) l i))%Z by rewrite /ex; lia.
-    exact: format_imul_cexp Fxi.
-  case: (Z.max_spec (ex i) (ex i.+1 + 1)) => [[_ ->]|[_ ->]].
-    have -> : (ex i.+1 + 1 - p + 1 = cexp (nth (0:R) l i.+1) + 1)%Z
-      by rewrite /ex; lia.
-    exact: Hdiv i E.
-  have -> : (ex i - p + 1 = cexp (nth (0:R) l i))%Z by rewrite /ex; lia.
-  exact: format_imul_cexp Fxi.
-split.
-  by move: Hkge (@cexp_ge_emin (nth (0:R) l i)); rewrite /ex; lia.
-have [z Hz] := Hisimul.
-exists z; last exact: Hz.
-apply: lt_IZR; rewrite abs_IZR IZR_2powp.
-have Hb := bpow_mag_gt beta (nth (0:R) l i).
-have Hrw : Rabs (nth (0:R) l i) = Rabs (IZR z) * pow (k i - p + 1).
-  by rewrite {1}Hz Rabs_mult (Rabs_pos_eq _ (bpow_ge_0 _ _)).
-rewrite Hrw in Hb.
-have Hmle : pow (mag beta (nth (0:R) l i)) <= pow p * pow (k i - p + 1).
-  rewrite -bpow_plus; apply: bpow_le.
-  by move: Hkge (Hcx i Hi); rewrite /ex; lia.
-have Hpos := bpow_gt_0 beta (k i - p + 1).
-nra.
+  by move=> i Hi; apply: lF; apply: mem_nth.
+have kE_z : forall i, nth (0:R) l i = 0 -> k i = (cmin l + p - 1)%Z.
+  by move=> i Hi; rewrite /k Hi; case: Req_bool_spec.
+have kE_nz : forall i, nth (0:R) l i <> 0 ->
+    k i = (cexp (nth (0:R) l i) + p - 1)%Z.
+  by move=> i Hi; rewrite /k; case: Req_bool_spec.
+exists k; split.
+- move=> i Hi.
+  case: (Req_dec (nth (0:R) l i) 0) => [Hz|Hnz]; last first.
+    by rewrite (kE_nz i Hnz); apply: repr_canonical => //; exact: Fnth.
+  rewrite (kE_z i Hz) Hz.
+  exists 0%Z; last by rewrite Rmult_0_l.
+  by rewrite Z.abs_0; apply: Z.pow_pos_nonneg; lia.
+- move=> i Hi.
+  case: (Req_dec (nth (0:R) l i.+1) 0) => [Hz1|Hnz1].
+    rewrite (kE_z _ Hz1).
+    case: (Req_dec (nth (0:R) l i) 0) => [Hz0|Hnz0].
+      by rewrite (kE_z _ Hz0); lia.
+    rewrite (kE_nz _ Hnz0).
+    suff : (cmin l <= cexp (nth 0%R l i))%Z by lia.
+    by apply: cmin_correct.
+  have Hnz0 := sorted_mag_pred_neq0 lM Hi Hnz1.
+  rewrite (kE_nz _ Hnz1) (kE_nz _ Hnz0).
+  suff: (cexp (nth (0:R) l i.+1) <= cexp (nth (0:R) l i))%Z by lia.
+  by apply: Fast2Sum_robust_flx.cexp_le => //; exact: (lM i Hi).
+- move=> i Hi Hnz2.
+  have Hi1 : (i.+1 < size l)%N by apply: ltn_trans (ltnSn i.+1) Hi.
+  have Hnz1 := sorted_mag_pred_neq0 lM Hi Hnz2.
+  have Hnz0 := sorted_mag_pred_neq0 lM Hi1 Hnz1.
+  rewrite (kE_nz _ Hnz2) (kE_nz _ Hnz0).
+  suff: (cexp (nth (0:R) l i.+2) < cexp (nth (0:R) l i))%Z by lia.
+  (* [Hnz2] rules out the zero guard, recovering the strict pairwise bound.   *)
+  by exact: (cexp_lt_ulp (Fnth i.+2 Hi) Hnz0 Hnz2
+              (pairwise_ulp_lt lP Hi Hnz2)).
 Qed.
 
-(* Paper Corollary 1: [VecSum l] is F-nonoverlapping (wIZ) with the same sum. *)
-(* Assembled from the bump [Cor1_bump_Thm1_hyp] and Theorem 1 [VecSum_Thm1].  *)
-Lemma vecSum_Fnonoverlap l :
-  Cor1_hyp l -> Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
+(* PIECE 2 (to prove): the separation under the relaxed gap -- the core of    *)
+(* paper Corollary 1, the analogue of [vecSum_sep] for [Thm1_hyp_wk].  Sketch:*)
+(* rerun the [vecSum_sep] contradiction (run bound -> per-step error bound -> *)
+(* an input [x_w], [w < t], off the [2^(g+1)] grid, via [vecSumAux_split] +   *)
+(* [vecSumAux_imul]) with the constants doubled (equal-magnitude pairs) and   *)
+(* the final [k]-inequality adapted: [x_w] off the grid gives [k_w <= k_t]; if*)
+(* [w <= t-2] the 2-step strict drop [k_{i.+2}+1 <= k_i] gives [k_w > k_t]    *)
+(* (contradiction), and [w = t-1] is impossible since an equal-magnitude      *)
+(* predecessor on the same grid cannot be the off-grid input.                 *)
+Lemma vecSum_sep_wk k l : Thm1_hyp_wk k l ->
+  forall i j, (i < j)%N -> (j < size (vecSum l))%N ->
+    nth 0 (vecSum l) i <> 0 ->
+    Rabs (nth 0 (vecSum l) j) <= / 2 * uls (nth 0 (vecSum l) i).
 Proof.
-move=> Hc; have [k Hk] := Cor1_bump_Thm1_hyp Hc.
-exact: VecSum_Thm1 Hk.
+Admitted.
+
+(* The separation conjunct of Theorem 1 on the concrete input hypotheses      *)
+(* [sorted_mag l] + [pairwise_ulp l] (paper Corollary 1), assembled from the  *)
+(* two pieces above: build the relaxed [k], peel the recursive [Fnonoverlap]  *)
+(* off with [Fnonoverlap_allpairs], and apply the separation [vecSum_sep_wk]. *)
+Lemma vecSum_Fnonoverlap_sep l :
+  {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
+  Fnonoverlap (vecSum l).
+Proof.
+move=> lF lM lP; have [k Hk] := sorted_pairwise_k lF lM lP.
+by apply: Fnonoverlap_allpairs; apply: (vecSum_sep_wk Hk).
 Qed.
 
-(* The F-nonoverlap conjunct alone (used by the downstream [VSEB] chain).     *)
-Lemma vecSum_Fnonoverlap_sep l : Cor1_hyp l -> Fnonoverlap (vecSum l).
-Proof. by move=> Hc; case: (vecSum_Fnonoverlap Hc). Qed.
+(* Theorem 1 (VecSum), on the concrete input separation: [vecSum l] is        *)
+(* F-nonoverlapping AND has the same exact sum.  Assembles the divisibility   *)
+(* core [vecSum_Fnonoverlap_sep] with [vecSum_sum] (a chain of exact 2Sums).  *)
+Lemma vecSum_Fnonoverlap l :
+  {in l, forall z, format z} -> sorted_mag l -> pairwise_ulp l ->
+  Fnonoverlap (vecSum l) /\ sumR (vecSum l) = sumR l.
+Proof.
+move=> lF lM lP; split; last by apply: vecSum_sum.
+exact: vecSum_Fnonoverlap_sep lF lM lP.
+Qed.
+
+(* ===========================================================================*)
+(*  Toward paper Theorem 6 (ported from the FLT development).                 *)
+(*                                                                            *)
+(*  NB the [emin] scaffolding of the FLT versions is GONE here: [emin <= e-p] *)
+(*  in [RN_midpoint_even], and the no-underflow hypothesis                    *)
+(*  [emin + p <= mag (nth l i)] in the two bounds below, all disappear -- FLX *)
+(*  IS the paper's model (unlimited exponent range), so these statements are  *)
+(*  the paper's, unpatched.                                                   *)
+(* ===========================================================================*)
+
+(* FLX analogue of [Pff2Flocq.round_N_opp_sym], which is FLT-only (it is      *)
+(* stated for [round_flt]).  A symmetric tie-breaking [choice] makes          *)
+(* round-to-nearest odd: [round_N_opp] flips [choice] to                      *)
+(* [fun t => ~~ choice (-(t+1))], which [choice_sym] says is [choice] again,  *)
+(* pointwise -- so [round_ext] closes it without functional extensionality.   *)
+Lemma RN_opp_sym x : RND (- x) = - RND x.
+Proof.
+rewrite round_N_opp; congr (- _).
+apply: round_ext => t.
+rewrite /Znearest; case: Rcompare => //.
+by rewrite -choice_sym.
+Qed.
 
 (* Round-to-nearest ties-to-even sends the exact midpoint [pow e + pow(e-p)]  *)
 (* (halfway between the even float [pow e] and its successor) DOWN to [pow e].*)
 (* This is the one place paper Theorem 6 needs ties-to-even (see              *)
 (* [vecSum_run_ufp]'s same-binade case): a general symmetric [choice] could   *)
 (* round it up.                                                               *)
-Lemma RN_midpoint_even e : ties_to_even choice -> (emin <= e - p)%Z ->
+Lemma RN_midpoint_even e : ties_to_even choice ->
   RND (pow e + pow (e - p)) = pow e.
 Proof.
-move=> Heven Hem.
+move=> Heven.
 have Hpe := bpow_gt_0 beta e.
 have Hpep := bpow_gt_0 beta (e - p).
 have Hmagx : mag beta (pow e + pow (e - p)) = (e + 1)%Z :> Z.
@@ -967,7 +956,7 @@ have Hmagx : mag beta (pow e + pow (e - p)) = (e + 1)%Z :> Z.
   have : pow (e - p) < pow e by apply: bpow_lt; lia.
   lra.
 have Hcexp : cexp (pow e + pow (e - p)) = (e + 1 - p)%Z.
-  by rewrite /cexp Hmagx /FLT_exp Z.max_l //; lia.
+  by rewrite /cexp Hmagx /FLX_exp.
 have Hpm1 : pow (-1)%Z = / 2 by rewrite /= /Z.pow_pos /=; lra.
 have Hpp1 : pow (p - 1) = IZR (2 ^ (p - 1)).
   have -> : (2 = radix2 :> Z)%Z by [].
@@ -1008,23 +997,23 @@ have -> : choice (2 ^ (p - 1)) = false by rewrite Heven Heven2.
 exact: HRD.
 Qed.
 
-(* Paper Theorem 6, step (a): the running high word [s_j = (vecSumAux         *)
-(* (drop j l)).2] of a VecSum on a magnitude-sorted, pairwise-ulp separated,  *)
-(* zero-free, normal sequence obeys [|s_j| <= 4 ufp(x_j)] and (for [j >= 1])  *)
-(* [|s_j| <= 2 ufp(x_{j-1})], by coupled downward induction.  The same-binade *)
-(* step (no strict exponent drop) uses [pairwise_ulp] to shrink the tail and  *)
-(* [RN_midpoint_even] for the boundary tie.                                   *)
+(* Paper Theorem 6, step (a) / the draft's step *1 (see [doc/thm6.md] 5.1):   *)
+(* the running high word [s_j = (vecSumAux (drop j l)).2] of a VecSum on a    *)
+(* magnitude-sorted, pairwise-ulp separated, zero-free sequence obeys         *)
+(* [|s_j| <= 4 ufp(x_j)] and (for [j >= 1]) [|s_j| <= 2 ufp(x_{j-1})], by     *)
+(* coupled downward induction.  The same-binade step (no strict exponent      *)
+(* drop) uses [pairwise_ulp] to shrink the tail and [RN_midpoint_even] for    *)
+(* the boundary tie -- the draft's "after rounding (ties-to-even)".           *)
 Lemma vecSum_run_ufp (l : seq R) :
   ties_to_even choice ->
   {in l, forall z, format z} ->
   (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
-  (forall i, (i < size l)%N -> (emin + p <= mag beta (nth (0:R) l i))%Z) ->
   sorted_mag l -> pairwise_ulp l ->
   forall j, (j < size l)%N ->
     Rabs (vecSumAux (drop j l)).2 <= 4 * ufp (nth (0:R) l j) /\
     ((0 < j)%N -> Rabs (vecSumAux (drop j l)).2 <= 2 * ufp (nth (0:R) l j.-1)).
 Proof.
-move=> Heven Hfmt Hnz Hnorm Hsort Hpair.
+move=> Heven Hfmt Hnz Hsort Hpair.
 have Fnth : forall i, (i < size l)%N -> format (nth (0:R) l i).
   by move=> i Hi; apply: Hfmt; apply: mem_nth.
 have ufpE : forall i, ufp (nth (0:R) l i) = pow (mag beta (nth (0:R) l i) - 1).
@@ -1032,7 +1021,7 @@ have ufpE : forall i, ufp (nth (0:R) l i) = pow (mag beta (nth (0:R) l i) - 1).
 have ulpE : forall i, (i < size l)%N ->
     ulp (nth (0:R) l i) = pow (mag beta (nth (0:R) l i) - p).
   move=> i Hi; rewrite ulp_neq_0; last exact: Hnz.
-  by rewrite /cexp /FLT_exp Z.max_l //; have := Hnorm i Hi; lia.
+  by rewrite /cexp /FLX_exp.
 have magmon : forall i, (i.+1 < size l)%N ->
     (mag beta (nth (0:R) l i.+1) <= mag beta (nth (0:R) l i))%Z.
   by move=> i Hi; apply: mag_le_abs; [exact: Hnz i.+1 Hi | exact: Hsort i Hi].
@@ -1041,7 +1030,7 @@ have Fufp4 : forall i, (i < size l)%N -> format (4 * ufp (nth (0:R) l i)).
   move=> i Hi.
   have E4 : (4:R) = pow 2 by rewrite /= /Z.pow_pos /=; lra.
   rewrite ufpE E4 -bpow_plus.
-  apply: generic_format_bpow; rewrite /FLT_exp; have := Hnorm i Hi; lia.
+  by apply: generic_format_bpow; rewrite /FLX_exp; lia.
 move=> j; have [d le_d] := ubnP (size l - j).
 elim: d j le_d => // d IHd j; rewrite ltnS => le_d Hj.
 have Fx := Fnth j Hj.
@@ -1086,8 +1075,10 @@ have [Hne|Heq] :=
   have HulpM := ulpE j Hj.
   have Hs1 : Rabs (vecSumAux (drop j.+1 l)).2 <= 2 * ulp (nth (0:R) l j).
     apply: Rle_trans IHB _.
+    (* [Hnz] rules out the zero guard on [pairwise_ulp].                      *)
     have Hp1 : Rabs (nth (0:R) l j.+1) < ulp (nth (0:R) l j.-1).
-      by move: (Hpair j.-1); rewrite (prednK j0) => /(_ Hj1).
+      move: (Hpair j.-1); rewrite (prednK j0) => /(_ Hj1) -[Hz|//].
+      by case: (Hnz j.+1 Hj1).
     have Hmg1 : (mag beta (nth (0:R) l j.+1) <= mag beta (nth (0:R) l j) - p)%Z.
       apply: mag_le_bpow; first exact: Hnz j.+1 Hj1.
       apply: Rlt_le_trans Hp1 _.
@@ -1106,9 +1097,8 @@ have [Hne|Heq] :=
   have Ht : 2 * ufp (nth (0:R) l j.-1) = pow (mag beta (nth (0:R) l j)).
     by rewrite (ufpE j.-1) -Hne E2 -bpow_plus; congr bpow; lia.
   rewrite Ht.
-  have Hem : (emin <= mag beta (nth (0:R) l j) - p)%Z
-    by have := Hnorm j Hj; lia.
-  have Htie := RN_midpoint_even Heven Hem.
+  (* The [(emin <= mag - p)] side condition of the FLT version is gone.       *)
+  have Htie := RN_midpoint_even (mag beta (nth (0:R) l j)) Heven.
   rewrite -HulpM in Htie.
   have Hup : RND (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2)
       <= pow (mag beta (nth (0:R) l j)).
@@ -1116,8 +1106,7 @@ have [Hne|Heq] :=
     have := Rle_abs (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2); lra.
   have Hlo : - pow (mag beta (nth (0:R) l j))
       <= RND (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2).
-    have Hopp := round_N_opp_sym emin p choice choice_sym
-      (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2).
+    have Hopp := RN_opp_sym (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2).
     suff Hs2 : RND (- (nth (0:R) l j + (vecSumAux (drop j.+1 l)).2))
         <= pow (mag beta (nth (0:R) l j)) by move: Hs2; rewrite Hopp; lra.
     rewrite -Htie; apply: round_le.
@@ -1130,26 +1119,24 @@ have E4 : (4:R) = pow 2 by rewrite /= /Z.pow_pos /=; lra.
 by rewrite E4 E2 -!bpow_plus; apply: bpow_le; lia.
 Qed.
 
-(* Step (b) of Theorem 6: the per-step error bound in [ufp] form.  Each VecSum *)
-(* error [e_i = nth (vecSum l) i.+1] is the low word of the 2Sum of [x_i] with *)
-(* the tail running sum [s_{i+1}]; [magnitude_vecSum_err] bounds it from       *)
-(* [|x_i| < 2 ufp(x_i)] and the run-bound [|s_{i+1}| <= 2 ufp(x_i)]            *)
-(* ([vecSum_run_ufp], second conjunct at [j = i.+1]).  Mirrors                 *)
-(* [vecSum_err_bound] but keyed to [ufp] rather than the Theorem-1 exponent    *)
-(* map [k].                                                                    *)
+(* Step (b) of Theorem 6 / the draft's "What is more, we still have           *)
+(* [|e_i| <= 2u ufp(x_{i-1})]" (see [doc/thm6.md] 5.1).  Each VecSum error    *)
+(* [e_i = nth (vecSum l) i.+1] is the low word of the 2Sum of [x_i] with the  *)
+(* tail running sum [s_{i+1}]; [magnitude_vecSum_err] bounds it from          *)
+(* [|x_i| < 2 ufp(x_i)] and the run bound [|s_{i+1}| <= 2 ufp(x_i)]           *)
+(* ([vecSum_run_ufp], second conjunct at [j = i.+1]).                         *)
 Lemma vecSum_err_ufp (l : seq R) :
   ties_to_even choice ->
   {in l, forall z, format z} ->
   (forall i, (i < size l)%N -> nth (0:R) l i <> 0) ->
-  (forall i, (i < size l)%N -> (emin + p <= mag beta (nth (0:R) l i))%Z) ->
   sorted_mag l -> pairwise_ulp l ->
   forall i, (i.+1 < size l)%N ->
     Rabs (nth (0:R) (vecSum l) i.+1) <= 2 * u * ufp (nth (0:R) l i).
 Proof.
-move=> Heven Hfmt Hnz Hnorm Hsort Hpair i Hi.
+move=> Heven Hfmt Hnz Hsort Hpair i Hi.
 have iLl : (i < size l)%N := ltn_trans (ltnSn i) Hi.
 have Fx : format (nth (0:R) l i) by apply: Hfmt; apply: mem_nth.
-have Hrun := vecSum_run_ufp Heven Hfmt Hnz Hnorm Hsort Hpair.
+have Hrun := vecSum_run_ufp Heven Hfmt Hnz Hsort Hpair.
 have -> : nth (0:R) (vecSum l) i.+1 = nth (0:R) (vecSumAux l).1 i
   by rewrite /vecSum; case: (vecSumAux l).
 rewrite vecSumAux_nth1 //.
@@ -1162,31 +1149,6 @@ rewrite /ufp; apply: magnitude_vecSum_err.
   by apply: bpow_mag_gt.
 - have [_ /(_ (ltn0Sn i))] := Hrun i.+1 Hi.
   by rewrite /ufp /=.
-- by have := Hnorm i iLl; lia.
 Qed.
-
-(* ===========================================================================*)
-(*  Toward paper Theorem 6.                                                   *)
-(* ===========================================================================*)
-(* IMPORTANT.  An earlier version of this file stated Theorem 6 as            *)
-(* "[Fnonoverlap (vecSum l)] for magnitude-sorted, pairwise-ulp [l] of size   *)
-(* [<= 6]".  That statement is FALSE: the RAW VecSum output need not be       *)
-(* F-nonoverlapping.  Machine-checked counterexample (see [CEThm6.v], [p=4]): *)
-(*   [l = [15; 15; 15/16; 15/16]]  satisfies every hypothesis, yet            *)
-(*   [vecSum l = [32; -1; 7/8; 0]] and [|7/8| > 1/2 uls(-1) = 1/2].           *)
-(* The paper's own 7-input example likewise has a VecSum output               *)
-(* [(e_i) = u, u^2, u^2, ...] that is not F-nonoverlapping.                   *)
-(*                                                                            *)
-(* The paper's ACTUAL Theorem 6 conclusion is weaker: [VSEB (VecSum x_0..x_5)]*)
-(* is P-nonoverlapping (for [p >= 4]).  VSEB repairs the overlap -- e.g. on   *)
-(* the counterexample [vseb [32;-1;7/8;0] = [32;-1/8;0]], which IS            *)
-(* P-nonoverlapping (the [2Sum(-1, 7/8) = (-1/8, 0)] step collapses the bad   *)
-(* pair).  That coupled statement lives in [TWSum.v] as                       *)
-(* [vecSum_vseb_Pnonoverlap] (it needs both [vecSum] and [vseb]).             *)
-(*                                                                            *)
-(* The reusable building blocks stay here and are proved (Qed):               *)
-(*  - [vecSum_run_ufp] (running-sum bound, step (a) of the paper sketch);     *)
-(*  - [vecSum_err_ufp] (per-step error bound, step (b));                      *)
-(*  - [RN_midpoint_even] (the ties-to-even boundary tie used by (a)).         *)
 
 End SecVecSum.

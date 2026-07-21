@@ -27,7 +27,7 @@ Flocq's FLX), `u = 2^{-p}`.
 | 3 | 2Prod(a,b) (2, FMA) — error of FP mult | correctness | — |
 | 4 | VecSum(x₀…x_{n-1}) (6n−6) | **Thm 1** (F-nonoverlap wIZ) + **Cor 1** | ✓ `VecSum.vecSum_Fnonoverlap_core`, `vecSum_Fnonoverlap` (Cor 1) |
 | 5 | VSEB(e₀…e_{n-1}) (6n−6, n−2 tests) | **Thm 2** (P-nonoverlap) | ✓ `VSEB.v` |
-|   |   | **Thm 3** (rel. error of keeping first `k` terms ≤ `2u^k + 4.2u^{k+1}`, `p≥6`) | k=3 only, via `TWSum_error` |
+|   |   | **Thm 3** (rel. error of keeping first `k` terms ≤ `2u^k + 4.2u^{k+1}`, `p≥6`) | ✓ `Nonoverlap.Pnonoverlap_truncate_error` (general `k`; `TWSum_error` = its `k=3`) |
 
 ## §3–5 Conversions and addition
 
@@ -62,10 +62,11 @@ formalised (only needed for multiplication).
 ## Summary
 
 **Formalised: the complete addition path.** Basic blocks Fast2Sum + 2Sum
-(Alg 1, 2), VecSum with Theorem 1 and Corollary 1 (Alg 4), VSEB with Theorem 2
-(Alg 5), and TWSum with Theorem 6 and its `2u³+4.2u⁴` error bound (Alg 8),
+(Alg 1, 2); VecSum with Theorem 1 and Corollary 1 (Alg 4); VSEB with Theorem 2
+and the general Theorem 3 truncation bound (Alg 5); ToTW with Theorem 4
+(Alg 6); and TWSum with Theorem 6 and its `2u³+4.2u⁴` error bound (Alg 8),
 instantiated at binary64. All zero-admit.
 
-**Not formalised:** 2Prod (Alg 3), the conversion RoundTW (Alg 7 / Thm 5), the general Theorem 3 error bound (only its `k=3` instance is used),
+**Not formalised:** 2Prod (Alg 3), the conversion RoundTW (Alg 7 / Thm 5),
 and the entire multiply/divide/reciprocal/sqrt half of the paper (Alg 9–18 /
 Thm 7–11).

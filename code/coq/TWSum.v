@@ -136,11 +136,75 @@ Definition ToTW (a b c : R) : twR :=
 (* THE content of Theorem 4 (doc/thm4.md, the [(e1,e2)] argument): the        *)
 (* VecSum of [d0; d1; c] is F-nonoverlapping.  [(e0,e1)] is free from the     *)
 (* 2Sum half-ulp bound; [(e1,e2)] is a divisibility/ulp contradiction.        *)
+(* Theorem 4 core (paper p.5), case [e_1 <> 0]: the last VecSum error [e_2] =  *)
+(* error of [2Sum(d1,c)] is [<= 1/2 uls(e_1)].  [Rabs d1 <= 1/2 ulp d0] is the *)
+(* DW property of [(d0,d1) = 2Sum(a,b)].                                       *)
+Lemma ToTW_e1e2 (d0 d1 c s1 s0 e1 e2 : R) :
+  ties_to_even choice -> format d0 -> format d1 -> format c ->
+  TwoSum d1 c = DWR s1 e2 -> TwoSum d0 s1 = DWR s0 e1 ->
+  Rabs d1 <= / 2 * ulp d0 -> e1 <> 0 ->
+  Rabs e2 <= / 2 * uls e1.
+Proof.
+Admitted.
+
+(* Theorem 4 core, case [e_1 = 0]: the same bound against the surviving high  *)
+(* word [s_0 = e_0] ("the same reasoning with [e_0] instead of [e_1]").        *)
+Lemma ToTW_e1zero (d0 d1 c s1 s0 e1 e2 : R) :
+  ties_to_even choice -> format d0 -> format d1 -> format c ->
+  TwoSum d1 c = DWR s1 e2 -> TwoSum d0 s1 = DWR s0 e1 ->
+  Rabs d1 <= / 2 * ulp d0 -> s0 <> 0 -> e1 = 0 ->
+  Rabs e2 <= / 2 * uls s0.
+Proof.
+Admitted.
+
 Lemma ToTW_vecSum_Fnonoverlap a b c :
   ties_to_even choice -> format a -> format b -> format c ->
   Fnonoverlap (vecSum [:: dwh (TwoSum a b); dwl (TwoSum a b); c]).
 Proof.
-Admitted.
+move=> Heven Fa Fb Fc.
+have Fd0 : format (dwh (TwoSum a b))
+  by have := format_TwoSum Fa Fb; case: (TwoSum a b) => ? ? [].
+have Fd1 : format (dwl (TwoSum a b))
+  by have := format_TwoSum Fa Fb; case: (TwoSum a b) => ? ? [].
+have Hd1 : Rabs (dwl (TwoSum a b)) <= / 2 * ulp (dwh (TwoSum a b)).
+  have := magnitude_TwoSum Fa Fb.
+  by case: (TwoSum a b) => sh sl; rewrite /magnitudeDWR /dwh /dwl; lra.
+set d0 := dwh (TwoSum a b).
+set d1 := dwl (TwoSum a b).
+have Hvs : vecSum [:: d0; d1; c] =
+  let: DWR s1 e2 := TwoSum d1 c in
+  let: DWR s0 e1 := TwoSum d0 s1 in [:: s0; e1; e2].
+  rewrite /vecSum !vecSumAux_cons /=.
+  by case: (TwoSum d1 c) => s1 e2; case: (TwoSum d0 s1) => s0 e1.
+rewrite Hvs.
+case E2 : (TwoSum d1 c) => [s1 e2].
+case E1 : (TwoSum d0 s1) => [s0 e1].
+have Fs1 : format s1 by have := format_TwoSum Fd1 Fc; rewrite E2; case.
+have Fe1 : format e1 by have := format_TwoSum Fd0 Fs1; rewrite E1; case.
+have Hm1 : Rabs e1 <= / 2 * ulp s0.
+  have := magnitude_TwoSum Fd0 Fs1; rewrite E1 /magnitudeDWR; lra.
+have HA : s0 <> 0 -> Rabs e1 <= / 2 * uls s0.
+  move=> _; apply: Rle_trans Hm1 _.
+  suff : ulp s0 <= uls s0 by lra.
+  exact: ulp_le_ulps.
+have HI : e1 <> 0 -> Rabs e2 <= / 2 * uls e1
+  by move=> H; apply: (ToTW_e1e2 Heven Fd0 Fd1 Fc E2 E1 Hd1 H).
+have HII : s0 <> 0 -> e1 = 0 -> Rabs e2 <= / 2 * uls s0
+  by move=> H H0; apply: (ToTW_e1zero Heven Fd0 Fd1 Fc E2 E1 Hd1 H H0).
+have Huls_mono : e1 <> 0 -> uls e1 <= uls s0.
+  move=> e1n0.
+  apply: Rle_trans (uls_le_abs Fe1 e1n0) _.
+  apply: Rle_trans Hm1 _.
+  have Hx : ulp s0 <= uls s0 by exact: ulp_le_ulps.
+  have Hu0 : 0 <= ulp s0 by apply: ulp_ge_0.
+  lra.
+apply: Fnonoverlap_allpairs => i j iLj jLs ni0.
+move: iLj jLs ni0.
+case: i => [|[|[|i']]]; case: j => [|[|[|j']]] //= _ _ ni0.
+case: (Req_dec e1 0) => [e1z|e1n0]; first by apply: HII.
+apply: Rle_trans (HI e1n0) _.
+have := Huls_mono e1n0; lra.
+Qed.
 
 (* Paper Theorem 4: [ToTW a b c] is a triple word (p >= 4; here p >= 6).      *)
 (* Reduction to Theorem 2, mirroring [TWSum_isTW].                            *)

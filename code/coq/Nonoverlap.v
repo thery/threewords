@@ -1,9 +1,9 @@
 (* ---------------------------------------------------------------------------*)
 (* Separation predicates on sequences of floats and the list-sum [sumR],      *)
-(* split out of [Addition.v]: P-nonoverlapping (Priest, Def. 1), magnitude    *)
+(* split out of the addition development: P-nonoverlapping (Priest, Def. 1), magnitude    *)
 (* order [sorted_mag], and the pairwise-ulp separation, with their head/tail  *)
 (* manipulation lemmas.  Generic over the precision [p] and minimal exponent  *)
-(* binary64 is fixed only in [Addition.v].                                   *)
+(* the development is generic in [p] (binary64 = [p = 53]).                                   *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.

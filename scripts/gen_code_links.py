@@ -55,7 +55,7 @@ COVERAGE = [
      [("Thm 5", R("RoundTW_correct", "TWSum.v"))], "skel"),
     ("8",     "TWSum",     R("TWSum", "TWSum.v"),
      [("Thm 6", R("vecSum_vseb_Pnonoverlap", "Thm6.v")),
-      ("error", R("TWSum_error", "Addition.v"))], "done"),
+      ("error", R("TWSum_error", "TWSum.v"))], "done"),
     ("9–10",  "3Prod (TW×TW)", None,
      [("Thm 7", None)], "no"),
     ("11–12", "3Prod (DW×TW)", None,

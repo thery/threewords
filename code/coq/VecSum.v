@@ -2,7 +2,7 @@
 (* Algorithm 4 (VecSum) and the paper's Theorem 1 (its output is              *)
 (* F-nonoverlapping).  A general round-to-nearest building block, generic     *)
 (* over the precision [p] alone -- FLX (binary64 is fixed only in            *)
-(* only in [Addition.v]); built on [TwoSum] and [Nonoverlap].                 *)
+(* only when instantiated ([p = 53] = binary64)); built on [TwoSum] and [Nonoverlap].                 *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -85,7 +85,7 @@ Local Notation small_head_zero := (@small_head_zero p Hp2).
 Local Notation sumR_ufp_bound := (@sumR_ufp_bound p Hp2).
 Local Notation nth_step_zero := (@nth_step_zero p Hp2).
 
-(* [p] is symbolic here (concrete only in [Addition.v]), so the base-2 power  *)
+(* [p] is symbolic here (concrete only when instantiated ([p = 53] = binary64)), so the base-2 power  *)
 (* identity that used to hold by computation needs [IZR_Zpower] ([0 <= p]).   *)
 Lemma IZR_2powp : IZR (2 ^ p) = pow p.
 Proof.

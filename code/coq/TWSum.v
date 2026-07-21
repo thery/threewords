@@ -33,7 +33,7 @@ Hypothesis Hp2 : (1 < p)%Z.
 (* The correctness of triple-word addition needs enough precision (paper      *)
 (* Section 5: [p >= 4] for Theorem 6, [p >= 6] for the Theorem-3 truncation   *)
 (* and [size < p + 1] for six merged terms).  [p >= 6] covers all of them;    *)
-(* binary64 ([p = 53]) satisfies it in [Addition.v].                          *)
+(* binary64 ([p = 53]) satisfies it; the development is generic in [p].                          *)
 Hypothesis Hp6 : (6 <= p)%Z.
 
 (* [Thm6.v] is stated for [4 <= p]; here [6 <= p].                           *)
@@ -359,6 +359,14 @@ Definition RoundTW (x0 x1 x2 : R) : R :=
       else RND (x0 + x1)
     else RND (x0 + x1)
   else RND (x0 + x1).
+
+(* A float plus a perturbation strictly below 1/4 ulp rounds back to the      *)
+(* float.  [1/4] (not [1/2]) because at a power of two the predecessor is     *)
+(* only [1/2 ulp] away, so its midpoint is [1/4 ulp] below.                   *)
+Lemma RN_add_lt_quarter (f d : R) :
+  format f -> Rabs d < / 4 * ulp f -> RND (f + d) = f.
+Proof.
+Admitted.
 
 (* Helper A (paper's "if [x0+x1] is a FP number ..."): a float plus a tail    *)
 (* below half its ulp rounds back to the float.                               *)

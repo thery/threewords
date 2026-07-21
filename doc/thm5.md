@@ -115,3 +115,25 @@ So the honest helper interfaces are:
   `|x₂| < ulp x₁ ≤ |m − mid|` via the divisibility above;
 - `RN_add_mid m d : is_midpoint m -> Rabs d < ½ ulp(round_DN m) -> RN(m+d) = RU/RD/RN m by sign of d`, with `|x₂| < ulp x₁ ≤ ½ ulp g` (again `2 ulp x₁ ≤ ulp x₀`);
 - `RoundTW_add_float`: `2 ulp x₁ ≤ ulp(x₀+x₁)`, so `|x₂| < ½ ulp(x₀+x₁)` and the float rounds back to itself.
+
+## Fill status (in progress)
+
+Skeleton merged (`RoundTW` def + `is_midpoint` + 5 helper/theorem admits, plus
+the foundational `RN_add_lt_quarter`). Order of attack when resuming:
+
+1. **`RN_add_lt_quarter`** (`format f -> |d| < ¼ ulp f -> RN(f+d) = f`) — the
+   foundational rounding lemma. Provable via `round_N_le_midp` /
+   `round_N_ge_midp`; the one obligation is the gap facts
+   `f + ½ ulp f ≤ succ f` and `pred f ≤ f − ½ ulp f`. The **toward-zero** gap
+   is `½ ulp` (not `ulp`) at a power of two — use `pred_plus_ulp`
+   (`pred g + ulp(pred g) = g`, `g>0`) + `ulp_pred_pos` (its second disjunct
+   `g = pow(mag g − 1)` gives `ulp(pred g) = ½ ulp g`); reduce `f<0` by
+   `succ_opp`/`pred_opp`/`ulp_opp`. A `Prec_gt_0 p` instance is in scope
+   (`TWSum.v` `p_gt_0`), so `FLX_exp_valid` etc. resolve by typeclass.
+2. `RoundTW_add_float` (needs `Rabs x1 < ulp x0` added to its hyps; then
+   `|x2| < ulp x1 ≤ 2u ulp(x0+x1) ≤ ¼ ulp(x0+x1)`, apply `RN_add_lt_quarter`).
+3. `RN_add_notmid` / `RN_add_mid` (restated with the `|d| < |m − mid|` /
+   `< ½ ulp(round_DN m)` bounds — see "Refined bounds" above).
+4. `RoundTW_cond` — the tie-detector, the hard core (where `p ≥ 4` enters).
+5. `RoundTW_correct` — assembly (`format(x0+x1)` case first, then
+   midpoint/non-midpoint via `RoundTW_cond`).

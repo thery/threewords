@@ -5,7 +5,8 @@ computation of elementary functions in IEEE‑754 binary64 (double precision)
 floating-point arithmetic, using *double-word* (and triple-word) representations.
 The development formally verifies the algorithms and error bounds behind a
 correctly-rounded `pow` function (`x^y`), together with its building blocks for
-the logarithm and exponential.
+the logarithm and exponential (in `example/`), and a **complete** verification
+of triple-word addition — including the paper's Theorem 6 — in `code/`.
 
 Authors: Laurent Théry, Laurence Rideau — MIT License.
 
@@ -16,8 +17,8 @@ doc/      research papers describing the algorithms and their proofs
 example/  the elementary-function development
           coq/       the Rocq/Coq sources (algorithms, tables, supporting lemmas)
           TWFalcon/  upstream C reference implementation of the arithmetic
-code/     triple-word arithmetic, with a self-contained build (in progress)
-          coq/       addition.v and the supporting files it needs
+code/     triple-word arithmetic: a self-contained, complete verification
+          coq/       the triple-word chain, up to addition and its error bound
           ocaml/     reference OCaml implementation of the addition
           TWFalcon/  C extraction of the addition + a "TW contains zeros" test
 ```
@@ -81,19 +82,40 @@ drive the Rocq/Coq build. `pow.pdf` is a generated document for the development.
 
 ## `code/`
 
-Start of a formalisation of the triple-word algorithms of `doc/paper3.pdf`
+A **complete** formalisation of the triple-word addition of `doc/paper3.pdf`
 (Fabiano, Muller, Picot, *Algorithms for triple-word arithmetic*, IEEE TC 2019).
+Both headline results — the sum of two triple words is a triple word, and its
+relative error is at most `2u³ + 4.2u⁴` — are proved, with the only axioms
+being classical logic, functional extensionality and the reals.
+
+The whole development is carried out in Flocq's **FLX** format (unbounded
+exponent range, `radix 2`, precision `p`), instantiated at `p = 53` for
+binary64 in `addition.v`. Working in FLX is what makes the central proof
+(Theorem 6) tractable: it lets the argument rescale so that a rounding unit is
+`u`, which is invalid once a real minimal exponent `emin` is present. See
+`doc/thm6.md` for why, and for the full proof.
 
 ### `code/coq/`
 
-Self-contained Rocq/Coq build: it bundles `addition.v` together with the
-supporting files it needs from `example/coq/` (`Nmore.v`, `Rmore.v`, `Fmore.v`,
-`Rstruct.v`, `MULTmore.v`, `Fast2Sum_robust_flt.v`, `prelim.v`) plus its own
-`Makefile` and `_CoqProject`, so it builds on its own with `cd code/coq && make`.
+Self-contained Rocq/Coq build: it bundles the triple-word files below together
+with the supporting files it needs from `example/coq/` (`Nmore.v`, `Rmore.v`,
+`Fmore.v`, `Rstruct.v`, `MULTmore.v`, `Fast2Sum_robust_flx.v`, `prelim.v`) plus
+its own `Makefile` and `_CoqProject`, so it builds on its own with
+`cd code/coq && make`. The build order (bottom of the stack first) is:
 
 | File | Contents |
 |------|----------|
-| `addition.v`  | Triple-word addition `TWSum` (Algorithm 8): the `Merge`/`VecSum`/`VSEB` building blocks, the algorithm, and the statements of its correctness (Theorem 6) and relative-error bound `2u³ + 4.2u⁴`. The proofs are currently sketched with `have` steps and `admit`s. |
+| `Uls.v`       | `uls x`, the weight of the rightmost nonzero bit of a float, its 2‑adic valuation helpers, and the `is_imul` "multiple of a power of two" machinery. |
+| `TwoSum.v`    | The error-free transform 2Sum (Algorithm 2): exactness, the format and half-ulp magnitude of its two words, and the divisibility of its error. |
+| `Nonoverlap.v`| Separation predicates on sequences of floats: P-nonoverlapping (Priest, Def. 1), the pairwise-ulp order, magnitude-sortedness, and the list sum `sumR`. |
+| `TWR.v`       | Triple-word numbers `twR` (Def. 5): a P-nonoverlapping triplet of floats, its projectors and real value. |
+| `Merge.v`     | Merge two magnitude-sorted float sequences into one; preserves format, size and exact sum, and yields the pairwise-ulp order for two triple words. |
+| `VecSum.v`    | Algorithm 4 (VecSum) and paper Theorem 1: its output is F-nonoverlapping. |
+| `VSEB.v`      | Algorithm 5 (VecSumErrBranch) and paper Theorem 2: its output is P-nonoverlapping. |
+| `Thm6.v`      | **Paper Theorem 6**: `VSEB (VecSum x₀ … x₅)` is P-nonoverlapping (`p ≥ 4`). The load-bearing result of the whole development; proved following `doc/thm6.md §5`. |
+| `CEThm6.v`    | A machine-checked counterexample showing Theorem 6 *cannot* be strengthened: the raw `VecSum` output is not F-nonoverlapping (input `[15;15;15/16;15/16]` at `p = 4` gives `[32;-1;7/8;0]`). VSEB is what repairs the overlap. |
+| `TWSum.v`     | Algorithm 8 (TWSum): the sum of two triple words. Its two correctness results — `TWSum_isTW` (the result is a triple word) and `TWSum_error` (relative error `≤ 2u³ + 4.2u⁴`). |
+| `addition.v`  | The binary64 instantiation (`p = 53`): `TWSum` and both theorems, specialised. |
 
 ### `code/ocaml/`
 

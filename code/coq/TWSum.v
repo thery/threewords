@@ -518,17 +518,132 @@ apply: is_imul_pow_le_abs; first by apply: is_imul_minus.
 by move=> H0; apply: Hab; lra.
 Qed.
 
-(* The tie-detector (the core of Algorithm 7): with [isTW]'s separation, the   *)
-(* directional branch is taken exactly when [x0+x1] is a midpoint -- i.e.       *)
-(* [x0+2x1] is exact and [RN(-(3/2u-2u^2) x0) <> x1] -- the special case        *)
-(* [x0 = 1+2u, x1 = -3/2 u] being the one non-midpoint with [x0+2x1] exact,     *)
-(* which [star] (the [<>] test) excludes because there [RN(-(3/2u-2u^2)x0)=x1]. *)
+(* --- Scale/sign normalisation for the tie-detector ------------------------ *)
+(* Every ingredient of [RoundTW_cond] is invariant under scaling by a power of *)
+(* two and under global sign change, so we may normalise [x0] into [[1,2)].    *)
+
+Lemma is_midpoint_scale x e : is_midpoint (x * pow e) <-> is_midpoint x.
+Proof.
+rewrite /is_midpoint !round_bpow_FLX //.
+have := bpow_gt_0 beta e; nra.
+Qed.
+
+Lemma is_midpoint_opp x : is_midpoint (- x) <-> is_midpoint x.
+Proof.
+rewrite /is_midpoint round_DN_opp round_UP_opp.
+by split; lra.
+Qed.
+
+(* Normalised core of the tie-detector: [x0] scaled into [[1,2)].  This is the *)
+(* delicate part (needs [p >= 4]): [x0+2x1] exact forces [x1] to a few concrete *)
+(* multiples of [u], and [star] separates the genuine midpoints from the single *)
+(* non-midpoint special case [x0 = 1+2u, x1 = -3/2 u].                          *)
+Lemma RoundTW_cond_norm y0 y1 :
+  format y0 -> format y1 -> 1 <= y0 < 2 -> Rabs y1 < ulp y0 ->
+  ~ format (y0 + y1) ->
+  (RND (y0 + 2 * y1) = y0 + 2 * y1 /\
+   RND (- (3 / 2 * u - 2 * (u * u)) * y0) <> y1) <-> is_midpoint (y0 + y1).
+Proof.
+Admitted.
+
 Lemma RoundTW_cond x0 x1 :
   format x0 -> format x1 -> (x1 = 0 \/ Rabs x1 < ulp x0) -> ~ format (x0 + x1) ->
   (RND (x0 + 2 * x1) = x0 + 2 * x1 /\
    RND (- (3 / 2 * u - 2 * (u * u)) * x0) <> x1) <-> is_midpoint (x0 + x1).
 Proof.
-Admitted.
+have RNo := @RN_sym p beta choice choice_sym.
+pose K := (3 / 2 * u - 2 * (u * u)).
+(* the whole statement is invariant under scaling by a power of two ... *)
+have scaleG : forall y0 y1 t,
+   ((RND (y0 * pow t + 2 * (y1 * pow t)) = y0 * pow t + 2 * (y1 * pow t) /\
+     RND (- K * (y0 * pow t)) <> y1 * pow t) <->
+        is_midpoint (y0 * pow t + y1 * pow t))
+   <->
+   ((RND (y0 + 2 * y1) = y0 + 2 * y1 /\ RND (- K * y0) <> y1) <->
+     is_midpoint (y0 + y1)).
+  move=> a b t; have pe := bpow_gt_0 beta t.
+  have -> : a * pow t + 2 * (b * pow t) = (a + 2 * b) * pow t by ring.
+  have -> : - K * (a * pow t) = (- K * a) * pow t by ring.
+  have -> : a * pow t + b * pow t = (a + b) * pow t by ring.
+  rewrite !round_bpow_FLX // is_midpoint_scale.
+  have e1 : (RND (a + 2 * b) * pow t = (a + 2 * b) * pow t) <->
+            (RND (a + 2 * b) = a + 2 * b) by split=> H; nra.
+  have e2 : (RND (- K * a) * pow t <> b * pow t) <-> (RND (- K * a) <> b)
+    by split=> H HH; apply: H; nra.
+  by rewrite e1 e2.
+(* ... and under global sign change. *)
+have signG : forall y0 y1,
+   ((RND (- y0 + 2 * (- y1)) = - y0 + 2 * (- y1) /\
+     RND (- K * (- y0)) <> - y1) <-> is_midpoint (- y0 + - y1))
+   <->
+   ((RND (y0 + 2 * y1) = y0 + 2 * y1 /\ RND (- K * y0) <> y1) <->
+      is_midpoint (y0 + y1)).
+  move=> a b.
+  have -> : - a + 2 * (- b) = -(a + 2 * b) by ring.
+  have -> : - K * (- a) = -(- K * a) by ring.
+  have -> : - a + - b = -(a + b) by ring.
+  rewrite !RNo is_midpoint_opp.
+  have e1 : (- RND (a + 2 * b) = -(a + 2 * b)) <->
+            (RND (a + 2 * b) = a + 2 * b) by split; lra.
+  have e2 : (- RND (- K * a) <> - b) <-> (RND (- K * a) <> b)
+    by split=> H HH; apply: H; lra.
+  by rewrite e1 e2.
+have Fscale : forall z k, format z -> format (z * pow k).
+  move=> z k Fz.
+  have <- : RND (z * pow k) = z * pow k by rewrite round_bpow_FLX // round_generic.
+  exact: generic_format_round.
+have ulp_scale : forall z k, z <> 0 -> ulp (z * pow k) = ulp z * pow k.
+  move=> z k zn0.
+  have zkn0 : z * pow k <> 0 by have := bpow_gt_0 beta k; nra.
+  rewrite (ulp_neq_0 _ _ _ zkn0) (ulp_neq_0 _ _ _ zn0) /cexp mag_mult_bpow //
+          /fexp -bpow_plus; congr bpow; lia.
+rewrite -/K.
+(* normalise a positive [a0] into [[1,2)] and apply [RoundTW_cond_norm] *)
+have norm : forall a0 a1, format a0 -> format a1 -> 0 < a0 -> a1 <> 0 ->
+    Rabs a1 < ulp a0 -> ~ format (a0 + a1) ->
+    (RND (a0 + 2 * a1) = a0 + 2 * a1 /\ RND (- K * a0) <> a1) <->
+       is_midpoint (a0 + a1).
+  move=> a0 a1 Fa0 Fa1 a0pos a1n0 Ha1 NFa.
+  have a0n0 : a0 <> 0 by lra.
+  pose t := (1 - mag beta a0)%Z.
+  rewrite -(scaleG a0 a1 t).
+  have pt := bpow_gt_0 beta t.
+  have magat : mag beta (a0 * pow t) = 1%Z :> Z by rewrite mag_mult_bpow // /t; lia.
+  have y0rng : 1 <= a0 * pow t < 2.
+    have an0 : a0 * pow t <> 0 by nra.
+    have Hle := bpow_mag_le beta (a0 * pow t) an0.
+    have Hgt := bpow_mag_gt beta (a0 * pow t).
+    move: Hle Hgt; rewrite magat Rabs_pos_eq; last nra.
+    have -> : (1 - 1 = 0)%Z by lia.
+    have -> : pow 0 = 1 by []; rewrite pow1E /=; lra.
+  apply: RoundTW_cond_norm.
+  - exact: Fscale.
+  - exact: Fscale.
+  - exact: y0rng.
+  - rewrite ulp_scale // Rabs_mult (Rabs_pos_eq (pow t)); last lra.
+    by nra.
+  - have -> : a0 * pow t + a1 * pow t = (a0 + a1) * pow t by ring.
+    move=> Fbad; apply: NFa.
+    have H := Fscale ((a0 + a1) * pow t) (- t)%Z Fbad.
+    move: H; rewrite Rmult_assoc -bpow_plus Z.add_opp_diag_r.
+    have -> : pow 0 = 1 by []; by rewrite Rmult_1_r.
+move=> Fx0 Fx1 H1 NFm.
+have x1n0 : x1 <> 0 by move=> x10; apply: NFm; rewrite x10 Rplus_0_r.
+have Hx1 : Rabs x1 < ulp x0 by case: H1 => // x10; case: x1n0.
+have x0n0 : x0 <> 0.
+  by move=> x00; move: Hx1; rewrite x00 ulp_FLX_0; have := Rabs_pos x1; lra.
+have [x0pos | x0lt] := Rlt_le_dec 0 x0; first exact: norm.
+have x0neg : 0 < - x0 by lra.
+rewrite -signG.
+apply: norm.
+- exact: generic_format_opp.
+- exact: generic_format_opp.
+- exact: x0neg.
+- by move=> H; apply: x1n0; lra.
+- by rewrite Rabs_Ropp ulp_opp.
+- rewrite -Ropp_plus_distr => Fbad; apply: NFm.
+  by have := generic_format_opp _ _ _ Fbad; rewrite Ropp_involutive.
+Qed.
 
 (* Paper Theorem 5. *)
 Lemma RoundTW_correct x0 x1 x2 :

@@ -124,7 +124,7 @@ Links point at the Rocq definition/theorem. ✅ proved · 🚧 skeleton (reducti
 |----:|--------------|---------|:------:|
 | 1 | Fast2Sum | [correctness](https://github.com/thery/threewords/blob/main/code/coq/Fast2Sum_robust_flx.v#L381) | ✅ |
 | 2 | [2Sum](https://github.com/thery/threewords/blob/main/code/coq/TwoSum.v#L67) | [correctness](https://github.com/thery/threewords/blob/main/code/coq/TwoSum.v#L465) | ✅ |
-| 3 | 2Prod (FMA) | — | ❌ |
+| 3 | [2Prod](https://github.com/thery/threewords/blob/main/code/coq/MULTmore.v#L149) | [correctness](https://github.com/thery/threewords/blob/main/code/coq/MULTmore.v#L152) | ✅ |
 | 4 | [VecSum](https://github.com/thery/threewords/blob/main/code/coq/VecSum.v#L110) | [Thm 1](https://github.com/thery/threewords/blob/main/code/coq/VecSum.v#L668) + [Cor 1](https://github.com/thery/threewords/blob/main/code/coq/VecSum.v#L855) | ✅ |
 | 5 | [VSEB](https://github.com/thery/threewords/blob/main/code/coq/VSEB.v#L118) | [Thm 2](https://github.com/thery/threewords/blob/main/code/coq/VSEB.v#L468) | ✅ |
 |  | keep-first-`k` error | [Thm 3](https://github.com/thery/threewords/blob/main/code/coq/Nonoverlap.v#L792) | ✅ |

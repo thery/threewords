@@ -142,6 +142,26 @@ Proof.
 exact: mult_error_FLX.
 Qed.
 
+(* Algorithm 3 (2Prod): the error-free transform for a product.  With an FMA   *)
+(* the second word is [fma(a, b, -RN(a*b)) = RN(a*b - RN(a*b))].  In FLX the    *)
+(* product error [a*b - RN(a*b)] is always a float ([mult_error_FLX], no        *)
+(* underflow), so the FMA is exact and [RN(a*b) + e = a*b] holds unconditionally.*)
+Definition TwoProd (a b : R) : R * R :=
+  let pr := RN (a * b) in (pr, RN (a * b - pr)).
+
+Lemma TwoProd_correct (a b : R) :
+  format a -> format b ->
+  let: (pr, e) := TwoProd a b in
+  [/\ pr = RN (a * b), pr + e = a * b, format pr & format e].
+Proof.
+move=> Fa Fb.
+have Fe : format (a * b - RN (a * b)).
+  by have := format_err_mul Fa Fb; move/generic_format_opp; rewrite Ropp_minus_distr.
+rewrite /TwoProd (round_generic _ _ _ _ Fe); split=> //.
+- ring.
+- exact: generic_format_round.
+Qed.
+
 Lemma imul_fexp_le (f : float) e : (e <= Fexp f)%Z -> is_imul f (pow e).
 Proof.
 case: f => mf ef /= eLef.

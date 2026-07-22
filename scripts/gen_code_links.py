@@ -56,8 +56,11 @@ COVERAGE = [
     ("8",     "TWSum",     R("TWSum", "TWSum.v"),
      [("Thm 6", R("vecSum_vseb_Pnonoverlap", "Thm6.v")),
       ("error", R("TWSum_error", "TWSum.v"))], "done"),
-    ("9–10",  "3Prod (TW×TW)", None,
-     [("Thm 7", None)], "no"),
+    ("9",     "3Prod^acc (TW×TW)", R("ThreeProd", "ThreeProd.v"),
+     [("Thm 7", R("ThreeProd_isTW", "ThreeProd.v")),
+      ("error", R("ThreeProd_error", "ThreeProd.v"))], "skel"),
+    ("10",    "3Prod^fast (TW×TW)", None,
+     [("err bound", None)], "no"),
     ("11–12", "3Prod (DW×TW)", None,
      [("Thm 8", None)], "no"),
     ("13",    "3Reci",     None,
@@ -100,7 +103,8 @@ def build_table():
     missing = []
     rows = [
         "Links point at the Rocq definition/theorem. "
-        "✅ proved · 🚧 skeleton (reduction proved, 1 admit) · ❌ not formalised.",
+        "✅ proved · 🚧 skeleton (definition + statements, proofs in progress) · "
+        "❌ not formalised.",
         "",
         "| Alg | Paper object | Theorem | Status |",
         "|----:|--------------|---------|:------:|",

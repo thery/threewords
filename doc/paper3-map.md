@@ -24,7 +24,7 @@ Flocq's FLX), `u = 2^{-p}`.
 |-----|------------|--------------------|-----------|
 | 1 | Fast2Sum(a,b) (3) — error of FP add, magnitudes known | correctness | ✓ `Fast2Sum_robust_flx.v` |
 | 2 | 2Sum(a,b) (6) — error of FP add | correctness | ✓ `TwoSum.v` |
-| 3 | 2Prod(a,b) (2, FMA) — error of FP mult | correctness | — |
+| 3 | 2Prod(a,b) (2, FMA) — error of FP mult | correctness | ✓ `MULTmore.TwoProd` / `TwoProd_correct` |
 | 4 | VecSum(x₀…x_{n-1}) (6n−6) | **Thm 1** (F-nonoverlap wIZ) + **Cor 1** | ✓ `VecSum.vecSum_Fnonoverlap_core`, `vecSum_Fnonoverlap` (Cor 1) |
 | 5 | VSEB(e₀…e_{n-1}) (6n−6, n−2 tests) | **Thm 2** (P-nonoverlap) | ✓ `VSEB.v` |
 |   |   | **Thm 3** (rel. error of keeping first `k` terms ≤ `2u^k + 4.2u^{k+1}`, `p≥6`) | ✓ `Nonoverlap.Pnonoverlap_truncate_error` (general `k`; `TWSum_error` = its `k=3`) |
@@ -34,7 +34,7 @@ Flocq's FLX), `u = 2^{-p}`.
 | Alg | Name (ops) | Theorem | Formalised |
 |-----|------------|---------|-----------|
 | 6 | ToTW(a,b,c) (21, 1 test) — 3 FP → TW | **Thm 4** (`p≥4`) | ✓ `ToTW_isTW` |
-| 7 | RoundTW(x₀,x₁,x₂) (3, 4 tests) — TW → nearest FP | **Thm 5** (`RoundTW(x̄)=RN(x̄)`, `p≥4`) | — |
+| 7 | RoundTW(x₀,x₁,x₂) (3, 4 tests) — TW → nearest FP | **Thm 5** (`RoundTW(x̄)=RN(x̄)`, `p≥4`) | ✓ `TWSum.RoundTW` / `RoundTW_correct` |
 | 8 | TWSum(x,y) (42, 8 tests) — sum of two TW | **Thm 6** (result is TW, `p≥4`) + error `2u³+4.2u⁴` | ✓ `TWSum_isTW` / `TWSum_error`; Thm 6 core = `Thm6.vecSum_vseb_Pnonoverlap` |
 
 **Note on Theorem 6 (`p≥4` is needed; ≤6 inputs is needed).** The raw VecSum
@@ -47,7 +47,7 @@ witness). See `doc/thm6.md`.
 
 | Alg | Name (ops) | Theorem | Formalised |
 |-----|------------|---------|-----------|
-| 9  | 3Prod^acc_{3,3}(x,y) (46, 2 tests) — TW × TW | **Thm 7** (err `28u³+107u⁴`, `p≥6`) | — |
+| 9  | 3Prod^acc_{3,3}(x,y) (46, 2 tests) — TW × TW | **Thm 7** (err `28u³+107u⁴`, `p≥6`) | 🚧 `ThreeProd`; `ThreeProd_isTW`/`ThreeProd_error` skeleton (`doc/thm7.md`) |
 | 10 | 3Prod^fast_{3,3}(x,y) (38, 1 test) | err `44u³+176u⁴` | — |
 | 11 | 3Prod^acc_{2,3}(x,y) (45, 2 tests) — DW × TW | **Thm 8** (err `10.5u³+39u⁴`, `p≥6`) | — |
 | 12 | 3Prod^fast_{2,3}(x,y) (37, 1 test) | err `18u³+75u⁴` | — |
@@ -67,6 +67,9 @@ and the general Theorem 3 truncation bound (Alg 5); ToTW with Theorem 4
 (Alg 6); and TWSum with Theorem 6 and its `2u³+4.2u⁴` error bound (Alg 8),
 instantiated at binary64. All zero-admit.
 
-**Not formalised:** 2Prod (Alg 3), the conversion RoundTW (Alg 7 / Thm 5),
-and the entire multiply/divide/reciprocal/sqrt half of the paper (Alg 9–18 /
-Thm 7–11).
+**In progress:** 3Prod^acc TW×TW (Alg 9 / Thm 7) — `ThreeProd` defined,
+`ThreeProd_isTW` / `ThreeProd_error` stated (skeleton, proofs to follow;
+`doc/thm7.md`).
+
+**Not formalised:** the rest of the multiply/divide/reciprocal/sqrt half of the
+paper (Alg 10–18 / Thm 8–11).

@@ -118,7 +118,7 @@ ln -s ../../scripts/pre-commit .git/hooks/pre-commit
 
 <!-- CODE-LINKS:START -->
 
-Links point at the Rocq definition/theorem. ✅ proved · 🚧 skeleton (reduction proved, 1 admit) · ❌ not formalised.
+Links point at the Rocq definition/theorem. ✅ proved · 🚧 skeleton (definition + statements, proofs in progress) · ❌ not formalised.
 
 | Alg | Paper object | Theorem | Status |
 |----:|--------------|---------|:------:|
@@ -131,7 +131,8 @@ Links point at the Rocq definition/theorem. ✅ proved · 🚧 skeleton (reducti
 | 6 | [ToTW](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L129) | [Thm 4](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L314) | ✅ |
 | 7 | [RoundTW](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L364) | [Thm 5](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L1031) | ✅ |
 | 8 | [TWSum](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L1209) | [Thm 6](https://github.com/thery/threewords/blob/main/code/coq/Thm6.v#L4365) + [error](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L1326) | ✅ |
-| 9–10 | 3Prod (TW×TW) | Thm 7 | ❌ |
+| 9 | [3Prod^acc (TW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L82) | [Thm 7](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L120) + [error](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L132) | 🚧 |
+| 10 | 3Prod^fast (TW×TW) | err bound | ❌ |
 | 11–12 | 3Prod (DW×TW) | Thm 8 | ❌ |
 | 13 | 3Reci | Thm 9 | ❌ |
 | 14 | 3Div | Thm 10 | ❌ |

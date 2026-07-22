@@ -518,17 +518,236 @@ apply: is_imul_pow_le_abs; first by apply: is_imul_minus.
 by move=> H0; apply: Hab; lra.
 Qed.
 
-(* The tie-detector (the core of Algorithm 7): with [isTW]'s separation, the   *)
-(* directional branch is taken exactly when [x0+x1] is a midpoint -- i.e.       *)
-(* [x0+2x1] is exact and [RN(-(3/2u-2u^2) x0) <> x1] -- the special case        *)
-(* [x0 = 1+2u, x1 = -3/2 u] being the one non-midpoint with [x0+2x1] exact,     *)
-(* which [star] (the [<>] test) excludes because there [RN(-(3/2u-2u^2)x0)=x1]. *)
+(* --- Scale/sign normalisation for the tie-detector ------------------------ *)
+(* Every ingredient of [RoundTW_cond] is invariant under scaling by a power of *)
+(* two and under global sign change, so we may normalise [x0] into [[1,2)].    *)
+
+Lemma is_midpoint_scale x e : is_midpoint (x * pow e) <-> is_midpoint x.
+Proof.
+rewrite /is_midpoint !round_bpow_FLX //.
+have := bpow_gt_0 beta e; nra.
+Qed.
+
+Lemma is_midpoint_opp x : is_midpoint (- x) <-> is_midpoint x.
+Proof.
+rewrite /is_midpoint round_DN_opp round_UP_opp.
+by split; lra.
+Qed.
+
+(* Normalised core of the tie-detector: [x0] scaled into [[1,2)].  This is the *)
+(* delicate part (needs [p >= 4]): [x0+2x1] exact forces [x1] to a few concrete *)
+(* multiples of [u], and [star] separates the genuine midpoints from the single *)
+(* non-midpoint special case [x0 = 1+2u, x1 = -3/2 u].                          *)
+Lemma RoundTW_cond_norm y0 y1 :
+  format y0 -> format y1 -> 1 <= y0 < 2 -> Rabs y1 < ulp y0 ->
+  ~ format (y0 + y1) ->
+  (RND (y0 + 2 * y1) = y0 + 2 * y1 /\
+   RND (- (3 / 2 * u - 2 * (u * u)) * y0) <> y1) <-> is_midpoint (y0 + y1).
+Proof.
+move=> Fy0 Fy1 y0rng Hy1 NFm.
+(* [y0 in [1,2)] so [ulp y0 = 2u]; [y1] is a nonzero float with [|y1| < 2u].   *)
+have u_pos : 0 < u by rewrite uE; apply: bpow_gt_0.
+have magy0 : mag beta y0 = 1%Z :> Z.
+  apply: mag_unique_pos.
+  have -> : pow (1 - 1) = 1 by rewrite (_ : (1 - 1 = 0)%Z) //.
+  by rewrite pow1E /=; lra.
+have Uy0 : ulp y0 = 2 * u.
+  rewrite ulp_neq_0; last lra.
+  rewrite /cexp /fexp magy0 uE (_ : (1 - p = - p + 1)%Z); last lia.
+  by rewrite bpow_plus pow1E /=; lra.
+have y1n0 : y1 <> 0 by move=> y10; apply: NFm; rewrite y10 Rplus_0_r.
+move: Hy1; rewrite Uy0 => Hy1.
+have y0mul : is_imul y0 (2 * u).
+  by have := format_imul_cexp Fy0; rewrite -ulp_neq_0; [rewrite Uy0 | lra].
+have twou_pos : 0 < 2 * u by lra.
+(* KEY REDUCTION: [x0+2x1] exact or [x0+x1] a midpoint both force [2 y1] to be *)
+(* a multiple of [u]; with [|y1| < 2u] this pins [y1] to six concrete values.  *)
+have y1vals : is_imul (2 * y1) u ->
+   y1 = u \/ y1 = - u \/ y1 = u / 2 \/ y1 = - (u / 2) \/
+   y1 = 3 * u / 2 \/ y1 = - (3 * u / 2).
+  move=> [k Hk].
+  have kabs : Rabs (IZR k) < 4.
+    have H4 : Rabs (IZR k * u) < 4 * u.
+      rewrite -Hk Rabs_mult (Rabs_pos_eq 2); last lra.
+      by move: Hy1; lra.
+    by move: H4; rewrite Rabs_mult (Rabs_pos_eq u); last lra; nra.
+  have kn0 : k <> 0%Z by move=> k0; move: Hk; rewrite k0 /= Rmult_0_l => H;
+    apply: y1n0; lra.
+  have kr : (k = -3 \/ k = -2 \/ k = -1 \/ k = 1 \/ k = 2 \/ k = 3)%Z.
+    move/Rabs_lt_inv: kabs => [H1 H2].
+    suff : (-4 < k < 4)%Z by lia.
+    by split; apply: lt_IZR; rewrite ?opp_IZR /=; lra.
+  move: Hk; case: kr => [->|[->|[->|[->|[->|->]]]]] Hk.
+  - by right; right; right; right; right; lra.
+  - by right; left; lra.
+  - by right; right; right; left; lra.
+  - by right; right; left; lra.
+  - by left; lra.
+  - by right; right; right; right; left; lra.
+have pm1 : pow (-1) = / 2.
+  have h1 : pow 1 = 2 by rewrite pow1E /=; lra.
+  have h2 : pow (-1) * pow 1 = 1.
+    rewrite -bpow_plus.
+    by have -> : (-1 + 1 = 0)%Z by [].
+  by move: h2; rewrite h1; lra.
+have four_u : 4 * u < / 2.
+  rewrite uE (_ : 4 = pow 2); last by rewrite /= IZR_Zpower_pos /=; lra.
+  rewrite -bpow_plus.
+  apply: Rlt_le_trans (_ : pow (-1) <= _); last by rewrite pm1; lra.
+  by apply: bpow_lt; lia.
+have imul_u : forall z, format z -> / 2 < z -> is_imul z u.
+  move=> z Fz Hz.
+  have magz : (- p <= cexp z)%Z.
+    rewrite /cexp /fexp; suff : (-1 < mag beta z)%Z by lia.
+    apply: mag_gt_bpow; rewrite Rabs_pos_eq; last lra.
+    by rewrite pm1; lra.
+  by rewrite uE; apply: (is_imul_pow_le (format_imul_cexp Fz) magz).
+have /Rabs_lt_inv[Hy1a Hy1b] := Hy1.
+have y2low : / 2 < y0 + 2 * y1 by lra.
+have y1low : / 2 < y0 + y1 by lra.
+have imul2_e : RND (y0 + 2 * y1) = y0 + 2 * y1 -> is_imul (2 * y1) u.
+  move=> Hex.
+  have F2 : format (y0 + 2 * y1) by rewrite -Hex; exact: generic_format_round.
+  have I2 := imul_u _ F2 y2low.
+  have I0 : is_imul y0 u by apply: imul_u => //; lra.
+  have := is_imul_minus I2 I0.
+  by have -> : y0 + 2 * y1 - y0 = 2 * y1 by ring.
+have ImP : forall j : Z, is_imul (pow j) (pow j) by move=> j; exists 1%Z; lra.
+have magm_nn : (0 <= mag beta (y0 + y1))%Z.
+  suff : (-1 < mag beta (y0 + y1))%Z by lia.
+  apply: mag_gt_bpow; rewrite Rabs_pos_eq; last lra.
+  by rewrite pm1; lra.
+have imul2_m : is_midpoint (y0 + y1) -> is_imul (2 * y1) u.
+  move=> Hmid.
+  have IRU : is_imul (RU (y0 + y1)) u.
+    apply: imul_u; first exact: generic_format_round.
+    by have [_ H2] := round_DN_UP_le beta (y0 + y1) (FLX_exp_valid p); lra.
+  have Iulp : is_imul (ulp (y0 + y1)) u.
+    rewrite ulp_neq_0; last lra.
+    by rewrite uE; apply: (is_imul_pow_le (ImP _)); rewrite /cexp /fexp; lia.
+  have IRD : is_imul (RD (y0 + y1)) u.
+    have HU := @round_UP_DN_ulp beta fexp (y0 + y1) NFm.
+    have -> : RD (y0 + y1) = RU (y0 + y1) - ulp (y0 + y1) by lra.
+    exact: is_imul_minus.
+  have I2y0 : is_imul (2 * y0) u.
+    have y0h : / 2 < y0 by lra.
+    have [z Hz] := imul_u _ Fy0 y0h.
+    by exists (2 * z)%Z; rewrite mult_IZR Hz; ring.
+  have := is_imul_minus (is_imul_add IRD IRU) I2y0.
+  by have -> : RD (y0 + y1) + RU (y0 + y1) - 2 * y0 = 2 * y1
+    by move: Hmid; rewrite /is_midpoint; lra.
+(* Remaining: check the six candidate values of [y1].  Case-map (u = 2^-p):    *)
+(*   y1 = u      : midpoint, exact;  star != by sign (RN(-K y0) <= 0 < u).     *)
+(*   y1 = -u     : if y0 = 1 excluded by NFm (1-u is a float); else midpoint,  *)
+(*                 exact, star != by magnitude (|RN(-K y0)| > u).              *)
+(*   y1 = u/2    : not a midpoint and y0+u inexact -> excluded either way.      *)
+(*   y1 = -u/2   : y0 = 1 -> midpoint (of [1-u,1]), exact (1-u); else inexact.  *)
+(*   y1 = 3u/2   : not a midpoint, y0+3u inexact -> excluded.                   *)
+(*   y1 = -3u/2  : y0 = 1 -> midpoint (of [1-2u,1-u]), exact (1-3u), star != ;  *)
+(*                 y0 = 1+2u -> NON-midpoint (m=1+u/2), exact (1-u), star =     *)
+(*                 (the special case, RN(-K y0) = y1) -> excluded by star;      *)
+(*                 other y0 -> inexact.                                         *)
+admit.
+Admitted.
+
 Lemma RoundTW_cond x0 x1 :
   format x0 -> format x1 -> (x1 = 0 \/ Rabs x1 < ulp x0) -> ~ format (x0 + x1) ->
   (RND (x0 + 2 * x1) = x0 + 2 * x1 /\
    RND (- (3 / 2 * u - 2 * (u * u)) * x0) <> x1) <-> is_midpoint (x0 + x1).
 Proof.
-Admitted.
+have RNo := @RN_sym p beta choice choice_sym.
+pose K := (3 / 2 * u - 2 * (u * u)).
+(* the whole statement is invariant under scaling by a power of two ... *)
+have scaleG : forall y0 y1 t,
+   ((RND (y0 * pow t + 2 * (y1 * pow t)) = y0 * pow t + 2 * (y1 * pow t) /\
+     RND (- K * (y0 * pow t)) <> y1 * pow t) <->
+        is_midpoint (y0 * pow t + y1 * pow t))
+   <->
+   ((RND (y0 + 2 * y1) = y0 + 2 * y1 /\ RND (- K * y0) <> y1) <->
+     is_midpoint (y0 + y1)).
+  move=> a b t; have pe := bpow_gt_0 beta t.
+  have -> : a * pow t + 2 * (b * pow t) = (a + 2 * b) * pow t by ring.
+  have -> : - K * (a * pow t) = (- K * a) * pow t by ring.
+  have -> : a * pow t + b * pow t = (a + b) * pow t by ring.
+  rewrite !round_bpow_FLX // is_midpoint_scale.
+  have e1 : (RND (a + 2 * b) * pow t = (a + 2 * b) * pow t) <->
+            (RND (a + 2 * b) = a + 2 * b) by split=> H; nra.
+  have e2 : (RND (- K * a) * pow t <> b * pow t) <-> (RND (- K * a) <> b)
+    by split=> H HH; apply: H; nra.
+  by rewrite e1 e2.
+(* ... and under global sign change. *)
+have signG : forall y0 y1,
+   ((RND (- y0 + 2 * (- y1)) = - y0 + 2 * (- y1) /\
+     RND (- K * (- y0)) <> - y1) <-> is_midpoint (- y0 + - y1))
+   <->
+   ((RND (y0 + 2 * y1) = y0 + 2 * y1 /\ RND (- K * y0) <> y1) <->
+      is_midpoint (y0 + y1)).
+  move=> a b.
+  have -> : - a + 2 * (- b) = -(a + 2 * b) by ring.
+  have -> : - K * (- a) = -(- K * a) by ring.
+  have -> : - a + - b = -(a + b) by ring.
+  rewrite !RNo is_midpoint_opp.
+  have e1 : (- RND (a + 2 * b) = -(a + 2 * b)) <->
+            (RND (a + 2 * b) = a + 2 * b) by split; lra.
+  have e2 : (- RND (- K * a) <> - b) <-> (RND (- K * a) <> b)
+    by split=> H HH; apply: H; lra.
+  by rewrite e1 e2.
+have Fscale : forall z k, format z -> format (z * pow k).
+  move=> z k Fz.
+  have <- : RND (z * pow k) = z * pow k by rewrite round_bpow_FLX // round_generic.
+  exact: generic_format_round.
+have ulp_scale : forall z k, z <> 0 -> ulp (z * pow k) = ulp z * pow k.
+  move=> z k zn0.
+  have zkn0 : z * pow k <> 0 by have := bpow_gt_0 beta k; nra.
+  rewrite (ulp_neq_0 _ _ _ zkn0) (ulp_neq_0 _ _ _ zn0) /cexp mag_mult_bpow //
+          /fexp -bpow_plus; congr bpow; lia.
+rewrite -/K.
+(* normalise a positive [a0] into [[1,2)] and apply [RoundTW_cond_norm] *)
+have norm : forall a0 a1, format a0 -> format a1 -> 0 < a0 -> a1 <> 0 ->
+    Rabs a1 < ulp a0 -> ~ format (a0 + a1) ->
+    (RND (a0 + 2 * a1) = a0 + 2 * a1 /\ RND (- K * a0) <> a1) <->
+       is_midpoint (a0 + a1).
+  move=> a0 a1 Fa0 Fa1 a0pos a1n0 Ha1 NFa.
+  have a0n0 : a0 <> 0 by lra.
+  pose t := (1 - mag beta a0)%Z.
+  rewrite -(scaleG a0 a1 t).
+  have pt := bpow_gt_0 beta t.
+  have magat : mag beta (a0 * pow t) = 1%Z :> Z by rewrite mag_mult_bpow // /t; lia.
+  have y0rng : 1 <= a0 * pow t < 2.
+    have an0 : a0 * pow t <> 0 by nra.
+    have Hle := bpow_mag_le beta (a0 * pow t) an0.
+    have Hgt := bpow_mag_gt beta (a0 * pow t).
+    move: Hle Hgt; rewrite magat Rabs_pos_eq; last nra.
+    have -> : (1 - 1 = 0)%Z by lia.
+    have -> : pow 0 = 1 by []; rewrite pow1E /=; lra.
+  apply: RoundTW_cond_norm.
+  - exact: Fscale.
+  - exact: Fscale.
+  - exact: y0rng.
+  - rewrite ulp_scale // Rabs_mult (Rabs_pos_eq (pow t)); last lra.
+    by nra.
+  - have -> : a0 * pow t + a1 * pow t = (a0 + a1) * pow t by ring.
+    move=> Fbad; apply: NFa.
+    have H := Fscale ((a0 + a1) * pow t) (- t)%Z Fbad.
+    move: H; rewrite Rmult_assoc -bpow_plus Z.add_opp_diag_r.
+    have -> : pow 0 = 1 by []; by rewrite Rmult_1_r.
+move=> Fx0 Fx1 H1 NFm.
+have x1n0 : x1 <> 0 by move=> x10; apply: NFm; rewrite x10 Rplus_0_r.
+have Hx1 : Rabs x1 < ulp x0 by case: H1 => // x10; case: x1n0.
+have x0n0 : x0 <> 0.
+  by move=> x00; move: Hx1; rewrite x00 ulp_FLX_0; have := Rabs_pos x1; lra.
+have [x0pos | x0lt] := Rlt_le_dec 0 x0; first exact: norm.
+have x0neg : 0 < - x0 by lra.
+rewrite -signG.
+apply: norm.
+- exact: generic_format_opp.
+- exact: generic_format_opp.
+- exact: x0neg.
+- by move=> H; apply: x1n0; lra.
+- by rewrite Rabs_Ropp ulp_opp.
+- rewrite -Ropp_plus_distr => Fbad; apply: NFm.
+  by have := generic_format_opp _ _ _ Fbad; rewrite Ropp_involutive.
+Qed.
 
 (* Paper Theorem 5. *)
 Lemma RoundTW_correct x0 x1 x2 :

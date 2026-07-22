@@ -52,7 +52,7 @@ COVERAGE = [
     ("6",     "ToTW",      R("ToTW", "TWSum.v"),
      [("Thm 4", R("ToTW_isTW", "TWSum.v"))], "done"),
     ("7",     "RoundTW",   R("RoundTW", "TWSum.v"),
-     [("Thm 5", R("RoundTW_correct", "TWSum.v"))], "skel"),
+     [("Thm 5", R("RoundTW_correct", "TWSum.v"))], "done"),
     ("8",     "TWSum",     R("TWSum", "TWSum.v"),
      [("Thm 6", R("vecSum_vseb_Pnonoverlap", "Thm6.v")),
       ("error", R("TWSum_error", "TWSum.v"))], "done"),

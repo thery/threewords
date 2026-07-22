@@ -636,19 +636,297 @@ have imul2_m : is_midpoint (y0 + y1) -> is_imul (2 * y1) u.
   have := is_imul_minus (is_imul_add IRD IRU) I2y0.
   by have -> : RD (y0 + y1) + RU (y0 + y1) - 2 * y0 = 2 * y1
     by move: Hmid; rewrite /is_midpoint; lra.
-(* Remaining: check the six candidate values of [y1].  Case-map (u = 2^-p):    *)
-(*   y1 = u      : midpoint, exact;  star != by sign (RN(-K y0) <= 0 < u).     *)
-(*   y1 = -u     : if y0 = 1 excluded by NFm (1-u is a float); else midpoint,  *)
-(*                 exact, star != by magnitude (|RN(-K y0)| > u).              *)
-(*   y1 = u/2    : not a midpoint and y0+u inexact -> excluded either way.      *)
-(*   y1 = -u/2   : y0 = 1 -> midpoint (of [1-u,1]), exact (1-u); else inexact.  *)
-(*   y1 = 3u/2   : not a midpoint, y0+3u inexact -> excluded.                   *)
-(*   y1 = -3u/2  : y0 = 1 -> midpoint (of [1-2u,1-u]), exact (1-3u), star != ;  *)
-(*                 y0 = 1+2u -> NON-midpoint (m=1+u/2), exact (1-u), star =     *)
-(*                 (the special case, RN(-K y0) = y1) -> excluded by star;      *)
-(*                 other y0 -> inexact.                                         *)
-admit.
-Admitted.
+(* --- Small reusable facts for the six-way case analysis (u = 2^-p) --------- *)
+have u_lt : u < 3 / 4 by lra.
+have Kpos : 0 < 3 / 2 * u - 2 * (u * u) by nra.
+have succy0 : succ beta fexp y0 = y0 + 2 * u by rewrite succ_eq_pos ?Uy0 //; lra.
+have starneg : RND (- (3 / 2 * u - 2 * (u * u)) * y0) <= 0.
+  rewrite -(round_0 beta fexp rnd); apply: round_le; nra.
+have ulp12 : forall v : R, 1 <= v < 2 -> ulp v = 2 * u.
+  move=> v vrng.
+  rewrite ulp_neq_0; last lra.
+  rewrite /cexp /fexp (_ : mag beta v = 1%Z :> Z); last first.
+    apply: mag_unique_pos.
+    have -> : pow (1 - 1) = 1 by rewrite (_ : (1 - 1 = 0)%Z) //.
+    by rewrite pow1E /=; lra.
+  by rewrite uE (_ : (1 - p = - p + 1)%Z); [rewrite bpow_plus pow1E /=; lra | lia].
+have ulphalf : forall v : R, / 2 <= v < 1 -> ulp v = u.
+  move=> v vrng.
+  rewrite ulp_neq_0; last lra.
+  rewrite /cexp /fexp (_ : mag beta v = 0%Z :> Z); last first.
+    apply: mag_unique_pos.
+    have -> : pow (0 - 1) = / 2 by rewrite (_ : (0 - 1 = -1)%Z) // pm1.
+    by rewrite (_ : pow 0 = 1) //; lra.
+  by rewrite uE; congr bpow; lia.
+have imul12 : forall w : R, format w -> 1 <= w < 2 -> is_imul w (2 * u).
+  move=> w Fw wrng.
+  by have := format_imul_cexp Fw; rewrite -ulp_neq_0; [rewrite ulp12 | lra].
+have not_imul_u_2u : ~ is_imul u (2 * u).
+  move=> [k Hk].
+  have : IZR (2 * k) = 1 by rewrite mult_IZR; nra.
+  by move/eq_IZR; lia.
+have midchar : forall g m : R, format g -> g < m < succ beta fexp g ->
+    (is_midpoint m <-> 2 * m = g + succ beta fexp g).
+  move=> g m Fg [Hgm Hmsg].
+  rewrite /is_midpoint.
+  have -> : RD m = g by apply: round_DN_eq => //; lra.
+  have -> : RU m = succ beta fexp g.
+    by apply: round_UP_eq; [exact: generic_format_succ | rewrite pred_succ //; lra].
+  by [].
+have fmt12 : forall w, is_imul w (2 * u) -> 1 <= w < 2 -> format w.
+  move=> w Iw wrng.
+  have I' : is_imul w (pow (1 - p)).
+    rewrite (_ : pow (1 - p) = 2 * u) //.
+    by rewrite uE (_ : (1 - p = - p + 1)%Z); [rewrite bpow_plus pow1E /=; lra | lia].
+  apply: (imul_cexp_format I').
+  rewrite /cexp /fexp (_ : mag beta w = 1%Z :> Z); first by lia.
+  apply: mag_unique_pos.
+  have -> : pow (1 - 1) = 1 by rewrite (_ : (1 - 1 = 0)%Z) //.
+  by rewrite pow1E /=; lra.
+have fmt_half : forall w, is_imul w u -> / 2 <= w < 1 -> format w.
+  move=> w Iw wrng.
+  have I' : is_imul w (pow (- p)) by rewrite -uE.
+  apply: (imul_cexp_format I').
+  rewrite /cexp /fexp (_ : mag beta w = 0%Z :> Z); first by lia.
+  apply: mag_unique_pos.
+  have -> : pow (0 - 1) = / 2 by rewrite (_ : (0 - 1 = -1)%Z) // pm1.
+  by rewrite (_ : pow 0 = 1) //; lra.
+have I2u : is_imul (2 * u) (2 * u) by exists 1%Z; lra.
+have Iu : is_imul u u by exists 1%Z; lra.
+have F1 : format (1 : R).
+  by rewrite (_ : (1 : R) = pow 0) //; apply: generic_format_bpow; rewrite /fexp; lia.
+have I1u : is_imul 1 u by apply: imul_u => //; lra.
+have two_u_pow : 2 * u = pow (1 - p).
+  by rewrite uE (_ : (1 - p = - p + 1)%Z); [rewrite bpow_plus pow1E /=; lra | lia].
+have I1_2u : is_imul 1 (2 * u) by apply: imul12; [exact F1 | lra].
+have mid_fmt : forall m, format m -> is_midpoint m.
+  by move=> m Fm; rewrite /is_midpoint !round_generic //; ring.
+have y0ge1 : y0 = 1 \/ 1 + 2 * u <= y0.
+  have [->|y0gt1] := Req_dec y0 1; [by left | right].
+  have Id : is_imul (y0 - 1) (pow (1 - p)) by rewrite -two_u_pow; apply: is_imul_minus.
+  have Hd0 : y0 - 1 <> 0 by lra.
+  by move: (is_imul_pow_le_abs Id Hd0); rewrite -two_u_pow (Rabs_pos_eq (y0 - 1)); lra.
+have I2_2u : is_imul 2 (2 * u).
+  rewrite two_u_pow (_ : (2 : R) = pow 1); last by rewrite pow1E /=; lra.
+  by apply: (is_imul_pow_le (ImP _)); lia.
+have y0le : y0 <= 2 - 2 * u.
+  have Id : is_imul (2 - y0) (pow (1 - p)) by rewrite -two_u_pow; apply: is_imul_minus.
+  have Hd0 : 2 - y0 <> 0 by lra.
+  by move: (is_imul_pow_le_abs Id Hd0); rewrite -two_u_pow (Rabs_pos_eq (2 - y0)); lra.
+have nfmt_off : forall d, ~ is_imul d (2 * u) -> 1 <= y0 + d < 2 -> ~ format (y0 + d).
+  move=> d Hd drng Fyd.
+  apply: Hd.
+  have I := is_imul_minus (imul12 _ Fyd drng) y0mul.
+  have -> : d = y0 + d - y0 by ring.
+  exact: I.
+have kill : forall d, ~ is_imul d (2 * u) -> 1 <= y0 + d < 2 ->
+    RND (y0 + d) = y0 + d -> False.
+  move=> d Hd drng Hexd.
+  apply: (nfmt_off d Hd drng).
+  by rewrite -Hexd; exact: generic_format_round.
+have nimul_u : ~ is_imul u (2 * u) := not_imul_u_2u.
+have nimul_nu : ~ is_imul (- u) (2 * u).
+  by move=> H; apply: nimul_u; have := is_imul_opp H; rewrite Ropp_involutive.
+have nimul_3u : ~ is_imul (3 * u) (2 * u).
+  move=> [k Hk].
+  have : IZR (2 * k) = 3 by rewrite mult_IZR; nra.
+  by move/eq_IZR; lia.
+have nimul_n3u : ~ is_imul (- (3 * u)) (2 * u).
+  by move=> H; apply: nimul_3u; have := is_imul_opp H; rewrite Ropp_involutive.
+(* The [3u/2] neighbourhood on the [2 u^2] grid: needed for the special case   *)
+(* and for the "star" magnitude bound.                                         *)
+have uu_pos : 0 < u * u by nra.
+have u3_pos : 0 < u * u * u by nra.
+have twouu_pow : 2 * (u * u) = pow (1 - 2 * p).
+  rewrite (_ : u * u = pow (- (2 * p))); last by rewrite uE -bpow_plus; congr bpow; lia.
+  rewrite (_ : (1 - 2 * p = 1 + - (2 * p))%Z); last lia.
+  by rewrite bpow_plus pow1E /=; lra.
+have up1_pow : u / 2 = pow (- p - 1).
+  by rewrite uE (_ : (- p - 1 = - p + -1)%Z); [rewrite bpow_plus pm1; lra | lia].
+have ulp_u2 : forall w, u <= w < 2 * u -> ulp w = 2 * (u * u).
+  move=> w wr.
+  rewrite ulp_neq_0; last lra.
+  rewrite /cexp /fexp (_ : mag beta w = (1 - p)%Z :> Z); last first.
+    apply: mag_unique_pos.
+    rewrite (_ : pow (1 - p - 1) = u); last by rewrite uE; congr bpow; lia.
+    rewrite (_ : pow (1 - p) = 2 * u); [lra |].
+    by rewrite uE (_ : (1 - p = - p + 1)%Z); [rewrite bpow_plus pow1E /=; lra | lia].
+  rewrite (_ : (1 - p - p = 1 - 2 * p)%Z); last lia.
+  by rewrite twouu_pow.
+have fmt_u2 : forall w, is_imul w (2 * (u * u)) -> u <= w < 2 * u -> format w.
+  move=> w Iw wr.
+  have I' : is_imul w (pow (1 - 2 * p)) by rewrite -twouu_pow.
+  apply: (imul_cexp_format I').
+  rewrite /cexp /fexp (_ : mag beta w = (1 - p)%Z :> Z); first lia.
+  apply: mag_unique_pos.
+  rewrite (_ : pow (1 - p - 1) = u); last by rewrite uE; congr bpow; lia.
+  rewrite (_ : pow (1 - p) = 2 * u); [lra |].
+  by rewrite uE (_ : (1 - p = - p + 1)%Z); [rewrite bpow_plus pow1E /=; lra | lia].
+have I32p : is_imul (3 * u / 2) (pow (- p - 1)) by rewrite -up1_pow; exists 3%Z; lra.
+have I32_2uu : is_imul (3 * u / 2) (2 * (u * u)).
+  by rewrite twouu_pow; apply: (is_imul_pow_le I32p); lia.
+have I2uu2 : is_imul (2 * (u * u)) (2 * (u * u)) by exists 1%Z; lra.
+have F32m : format (3 * u / 2 - 2 * (u * u)).
+  apply: fmt_u2.
+    by apply: is_imul_minus; [exact: I32_2uu | exact: I2uu2].
+  by nra.
+have F32n : format (- (3 * u / 2))
+  by apply: generic_format_opp; apply: fmt_u2; [exact: I32_2uu | nra].
+have ulp32 : ulp (3 * u / 2) = 2 * (u * u) by apply: ulp_u2; nra.
+have succ32m : succ beta fexp (3 * u / 2 - 2 * (u * u)) = 3 * u / 2
+  by rewrite succ_eq_pos ?ulp_u2; nra.
+have pred32 : pred beta fexp (3 * u / 2) = 3 * u / 2 - 2 * (u * u)
+  by rewrite -{1}succ32m pred_succ.
+have succ32 : succ beta fexp (3 * u / 2) = 3 * u / 2 + 2 * (u * u)
+  by rewrite succ_eq_pos ?ulp32; nra.
+have succn : succ beta fexp (- (3 * u / 2)) = - (3 * u / 2) + 2 * (u * u)
+  by rewrite succ_opp pred32; lra.
+have predn : pred beta fexp (- (3 * u / 2)) = - (3 * u / 2) - 2 * (u * u)
+  by rewrite pred_opp succ32; lra.
+(* [RN(-(3/2u-2u^2) y0)] is at most [-3u/2 + 2u^2] (round monotonicity from     *)
+(* [y0 >= 1], the value at [y0 = 1] being the float [-(3u/2 - 2u^2)]).          *)
+have Kval1 : RND (- (3 / 2 * u - 2 * (u * u)) * 1) = - (3 * u / 2) + 2 * (u * u).
+  rewrite Rmult_1_r.
+  have -> : - (3 / 2 * u - 2 * (u * u)) = - (3 * u / 2 - 2 * (u * u)) by field.
+  rewrite round_generic; first by field.
+  by apply: generic_format_opp.
+have starlt : RND (- (3 / 2 * u - 2 * (u * u)) * y0) <= - (3 * u / 2) + 2 * (u * u).
+  rewrite -Kval1; apply: round_le; nra.
+split.
+- (* FORWARD: exact /\ star <> y1 -> is_midpoint (y0 + y1) *)
+  move=> [Hex Hstar].
+  have Him := imul2_e Hex.
+  case: (y1vals Him) => [Hy1E|[Hy1E|[Hy1E|[Hy1E|[Hy1E|Hy1E]]]]];
+    rewrite Hy1E in Hex Hstar *.
+  + have Hpos : y0 < y0 + u < succ beta fexp y0 by rewrite succy0; lra.
+    by apply/(midchar _ _ Fy0 Hpos); rewrite succy0; lra.
+  + case: y0ge1 => [y0eq1 | y0ge].
+      rewrite y0eq1; apply: mid_fmt.
+      have -> : 1 + - u = 1 - u by ring.
+      by apply: fmt_half; [apply: is_imul_minus | move: four_u; lra].
+    have Fg : format (y0 - 2 * u) by apply: fmt12; [apply: is_imul_minus | lra].
+    have Hsg : succ beta fexp (y0 - 2 * u) = y0 by rewrite succ_eq_pos ?ulp12; lra.
+    have Hpos : y0 - 2 * u < y0 + - u < succ beta fexp (y0 - 2 * u)
+      by rewrite Hsg; lra.
+    by apply/(midchar _ _ Fg Hpos); rewrite Hsg; lra.
+  + exfalso; move: Hex; rewrite (_ : 2 * (u / 2) = u); last by field.
+    by move=> Hexu; apply: (kill u nimul_u); [lra | exact Hexu].
+  + case: y0ge1 => [y0eq1 | y0ge].
+      rewrite y0eq1.
+      have F1u : format (1 - u)
+        by apply: fmt_half; [apply: is_imul_minus | move: four_u; lra].
+      have Hsg : succ beta fexp (1 - u) = 1 by rewrite succ_eq_pos ?ulphalf; lra.
+      have Hpos : 1 - u < 1 + - (u / 2) < succ beta fexp (1 - u) by rewrite Hsg; lra.
+      by apply/(midchar _ _ F1u Hpos); rewrite Hsg; lra.
+    exfalso; move: Hex; rewrite (_ : 2 * - (u / 2) = - u); last by field.
+    by move=> Hexu; apply: (kill (- u) nimul_nu); [lra | exact Hexu].
+  + have pow2E : pow 2 = 4 by rewrite /= IZR_Zpower_pos /=; lra.
+    have [Hlt | Hge] := Rlt_le_dec (y0 + 3 * u) 2.
+      exfalso; move: Hex; rewrite (_ : 2 * (3 * u / 2) = 3 * u); last by field.
+      by move=> Hexu; apply: (kill (3 * u) nimul_3u); [lra | exact Hexu].
+    have y0e : y0 = 2 - 2 * u.
+      have Id : is_imul (2 - 2 * u - y0) (pow (1 - p)).
+        rewrite -two_u_pow; apply: is_imul_minus; last exact: y0mul.
+        by apply: is_imul_minus; [exact: I2_2u | exact: I2u].
+      have [Heq|Hne] := Req_dec (2 - 2 * u - y0) 0; first lra.
+      by move: (is_imul_pow_le_abs Id Hne); rewrite -two_u_pow Rabs_pos_eq; lra.
+    exfalso.
+    move: Hex; rewrite (_ : 2 * (3 * u / 2) = 3 * u); last by field.
+    rewrite y0e (_ : 2 - 2 * u + 3 * u = 2 + u); last by ring.
+    move=> Hex2.
+    have F2u : format (2 + u) by rewrite -Hex2; exact: generic_format_round.
+    have twou4_pow : 4 * u = pow (2 - p).
+      by rewrite uE (_ : (2 - p = - p + 2)%Z); [rewrite bpow_plus pow2E; lra | lia].
+    have ulp2u : ulp (2 + u) = 4 * u.
+      rewrite ulp_neq_0; last lra.
+      rewrite /cexp /fexp (_ : mag beta (2 + u) = 2%Z :> Z); last first.
+        apply: mag_unique_pos.
+        have -> : pow (2 - 1) = 2 by rewrite (_ : (2 - 1 = 1)%Z) // pow1E /=; lra.
+        by rewrite pow2E; lra.
+      by rewrite -twou4_pow.
+    have I2u4 : is_imul (2 + u) (4 * u).
+      by have := format_imul_cexp F2u; rewrite -ulp_neq_0; [rewrite ulp2u | lra].
+    have I2_4u : is_imul 2 (4 * u).
+      rewrite twou4_pow (_ : (2 : R) = pow 1); last by rewrite pow1E /=; lra.
+      by apply: (is_imul_pow_le (ImP _)); lia.
+    have nimul_u_4u : ~ is_imul u (4 * u).
+      move=> [k Hk]; have : IZR (4 * k) = 1 by rewrite mult_IZR; nra.
+      by move/eq_IZR; lia.
+    apply: nimul_u_4u.
+    have := is_imul_minus I2u4 I2_4u.
+    by have -> : 2 + u - 2 = u by ring.
+  + case: y0ge1 => [y0eq1 | y0ge].
+      rewrite y0eq1.
+      have I2uu : is_imul (2 * u) u by exists 2%Z; lra.
+      have F12u : format (1 - 2 * u).
+        by apply: fmt_half;
+          [apply: is_imul_minus; [exact: I1u | exact: I2uu] | move: four_u; lra].
+      have Hsg : succ beta fexp (1 - 2 * u) = 1 - u
+        by rewrite succ_eq_pos ?ulphalf; lra.
+      have Hpos : 1 - 2 * u < 1 + - (3 * u / 2) < succ beta fexp (1 - 2 * u)
+        by rewrite Hsg; lra.
+      by apply/(midchar _ _ F12u Hpos); rewrite Hsg; lra.
+    have [y0e2 | y0ne] := Req_dec y0 (1 + 2 * u); last first.
+      have y0ge4 : 1 + 4 * u <= y0.
+        have I12u : is_imul (1 + 2 * u) (2 * u)
+          by apply: is_imul_add; [exact: I1_2u | exact: I2u].
+        have Id : is_imul (y0 - (1 + 2 * u)) (pow (1 - p)).
+          by rewrite -two_u_pow; apply: is_imul_minus; [exact: y0mul | exact: I12u].
+        have Hd0 : y0 - (1 + 2 * u) <> 0 by lra.
+        by move: (is_imul_pow_le_abs Id Hd0);
+           rewrite -two_u_pow (Rabs_pos_eq (y0 - (1 + 2 * u))); lra.
+      exfalso; move: Hex; rewrite (_ : 2 * - (3 * u / 2) = - (3 * u)); last by field.
+      by move=> Hexu; apply: (kill (- (3 * u)) nimul_n3u); [lra | exact Hexu].
+    exfalso; apply: Hstar; rewrite y0e2.
+    have -> : - (3 / 2 * u - 2 * (u * u)) * (1 + 2 * u) =
+              - (3 * u / 2) + (- (u * u) + 4 * (u * u * u)) by field.
+    apply: RN_between_midp => //.
+      rewrite predn; lra.
+    by rewrite succn; nra.
+(* BACKWARD: is_midpoint (y0 + y1) -> exact /\ star <> y1 *)
+move=> Hmid.
+have Him := imul2_m Hmid.
+case: (y1vals Him) => [Hy1E|[Hy1E|[Hy1E|[Hy1E|[Hy1E|Hy1E]]]]];
+  rewrite Hy1E in Hmid NFm *.
+- split; last by move=> H; move: starneg; rewrite H; lra.
+  have F : format (y0 + 2 * u) by rewrite -succy0; apply: generic_format_succ.
+  by apply: round_generic.
+- case: y0ge1 => [y0eq1 | y0ge].
+    exfalso; apply: NFm; rewrite y0eq1.
+    have -> : 1 + - u = 1 - u by ring.
+    by apply: fmt_half; [apply: is_imul_minus | move: four_u; lra].
+  split; last by move=> H; move: starlt; rewrite H; nra.
+  have F : format (y0 - 2 * u) by apply: fmt12; [apply: is_imul_minus | lra].
+  have -> : y0 + 2 * - u = y0 - 2 * u by ring.
+  by apply: round_generic.
+- have Hpos : y0 < y0 + u / 2 < succ beta fexp y0 by rewrite succy0; lra.
+  by move: Hmid; rewrite (midchar _ _ Fy0 Hpos) succy0; lra.
+- case: y0ge1 => [y0eq1 | y0ge]; last first.
+    have Fg : format (y0 - 2 * u) by apply: fmt12; [apply: is_imul_minus | lra].
+    have Hsg : succ beta fexp (y0 - 2 * u) = y0 by rewrite succ_eq_pos ?ulp12; lra.
+    have Hpos : y0 - 2 * u < y0 + - (u / 2) < succ beta fexp (y0 - 2 * u)
+      by rewrite Hsg; lra.
+    by move: Hmid; rewrite (midchar _ _ Fg Hpos) Hsg; lra.
+  split; last by move=> H; move: starlt; rewrite H; nra.
+  have F : format (1 - u)
+    by apply: fmt_half; [apply: is_imul_minus | move: four_u; lra].
+  by rewrite y0eq1 (_ : 1 + 2 * - (u / 2) = 1 - u); [apply: round_generic | field].
+- have Hpos : y0 < y0 + 3 * u / 2 < succ beta fexp y0 by rewrite succy0; lra.
+  by move: Hmid; rewrite (midchar _ _ Fy0 Hpos) succy0; lra.
+- case: y0ge1 => [y0eq1 | y0ge]; last first.
+    have Fg : format (y0 - 2 * u) by apply: fmt12; [apply: is_imul_minus | lra].
+    have Hsg : succ beta fexp (y0 - 2 * u) = y0 by rewrite succ_eq_pos ?ulp12; lra.
+    have Hpos : y0 - 2 * u < y0 + - (3 * u / 2) < succ beta fexp (y0 - 2 * u)
+      by rewrite Hsg; lra.
+    by move: Hmid; rewrite (midchar _ _ Fg Hpos) Hsg; lra.
+  split; last first.
+    rewrite y0eq1 Kval1.
+    by move=> H; move: uu_pos; nra.
+  have I3u_u : is_imul (3 * u) u by exists 3%Z; lra.
+  have F13u : format (1 - 3 * u)
+    by apply: fmt_half; [apply: is_imul_minus | move: four_u; lra].
+  by rewrite y0eq1 (_ : 1 + 2 * - (3 * u / 2) = 1 - 3 * u); [apply: round_generic | field].
+Qed.
 
 Lemma RoundTW_cond x0 x1 :
   format x0 -> format x1 -> (x1 = 0 \/ Rabs x1 < ulp x0) -> ~ format (x0 + x1) ->

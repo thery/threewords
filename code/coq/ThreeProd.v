@@ -106,9 +106,51 @@ Definition ThreeProd (x y : twR) : twR :=
 (*  [b0]/[b1] divisibility in the Theorem-7 correctness case study.           *)
 (* ===========================================================================*)
 Lemma half_ulp_div_RN_add (x y : R) :
-  format x -> is_imul (RND (x + y)) (/ 2 * ulp x).
+  format x -> format y -> x <> 0 ->
+  is_imul (RND (x + y)) (/ 2 * ulp x).
 Proof.
-Admitted.
+move=> Fx Fy x_neq0.
+have He : / 2 * ulp x = pow (cexp x - 1).
+  rewrite ulp_neq_0 //.
+  have -> : / 2 = pow (-1) by rewrite /= /Z.pow_pos /=; lra.
+  by rewrite -bpow_plus; congr bpow; lia.
+rewrite He; set e := (cexp x - 1)%Z.
+(* [x] itself is a multiple of [pow (cexp x)], hence of [1/2 ulp x = pow e].  *)
+have Imx : is_imul x (pow e).
+  by apply: is_imul_pow_le (format_imul_cexp Fx) _; rewrite /e; lia.
+have [Ley|yLe] := Zle_or_lt e (cexp y).
+  (* [y] no smaller than [1/2 ulp x]: [x + y] is on the [pow e] grid, so      *)
+  (* [RN(x+y)] stays on it too.                                               *)
+  apply: is_imul_pow_round; apply: is_imul_add => //.
+  by apply: is_imul_pow_le (format_imul_cexp Fy) _.
+(* [y] strictly smaller (its ulp [<= 1/4 ulp x]): then [|y| < pow(mag x - 2)] *)
+(* and [|x| >= pow(mag x - 1) = 2 pow(mag x - 2)], so [|x + y|] -- and hence  *)
+(* [|RN(x+y)|] -- stays [>= pow(mag x - 2)].  Thus [mag(RN(x+y)) >= mag x-1]  *)
+(* and [cexp(RN(x+y)) >= e], making [RN(x+y)] a multiple of [pow e].          *)
+have [->|y0] := Req_dec y 0.
+  by rewrite Rplus_0_r (round_generic _ _ _ _ Fx).
+have Hy : Rabs y < pow (mag beta x - 2).
+  apply: (Rlt_le_trans _ (pow (mag beta y))); first by apply: bpow_mag_gt.
+  by apply: bpow_le; move: yLe; rewrite /e /cexp /fexp; lia.
+have Hx := bpow_mag_le beta x x_neq0.
+have E2 : pow (mag beta x - 1) = 2 * pow (mag beta x - 2).
+  have -> : (mag beta x - 1 = mag beta x - 2 + 1)%Z by lia.
+  by rewrite bpow_plus_1.
+have Hxy : pow (mag beta x - 2) <= Rabs (x + y).
+  have Ht := Rabs_triang_inv x (- y).
+  rewrite Rabs_Ropp in Ht.
+  have Hxy0 : x - - y = x + y by lra.
+  by rewrite Hxy0 in Ht; lra.
+have HR : pow (mag beta x - 2) <= Rabs (RND (x + y)).
+  by apply: Rabs_round_ge_bpow.
+have Fr : format (RND (x + y)) by apply: generic_format_round.
+apply: is_imul_pow_le (format_imul_cexp Fr) _.
+have cexpE z : cexp z = (mag beta z - p)%Z by rewrite /cexp /fexp; lia.
+rewrite /e !cexpE.
+suff : (mag beta x - 1 <= mag beta (RND (x + y)))%Z by lia.
+apply: mag_ge_bpow.
+by have -> : (mag beta x - 1 - 1 = mag beta x - 2)%Z by lia.
+Qed.
 
 (* ===========================================================================*)
 (*  Theorem 7, part 1: [ThreeProd x y] is a triple-word number (p >= 6).      *)

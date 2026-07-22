@@ -131,7 +131,7 @@ Links point at the Rocq definition/theorem. ✅ proved · 🚧 skeleton (definit
 | 6 | [ToTW](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L129) | [Thm 4](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L314) | ✅ |
 | 7 | [RoundTW](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L364) | [Thm 5](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L1031) | ✅ |
 | 8 | [TWSum](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L1209) | [Thm 6](https://github.com/thery/threewords/blob/main/code/coq/Thm6.v#L4365) + [error](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L1326) | ✅ |
-| 9 | [3Prod^acc (TW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L82) | [Thm 7](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L120) + [error](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L132) | 🚧 |
+| 9 | [3Prod^acc (TW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L82) | [Thm 7](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L162) + [error](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L174) | 🚧 |
 | 10 | 3Prod^fast (TW×TW) | err bound | ❌ |
 | 11–12 | 3Prod (DW×TW) | Thm 8 | ❌ |
 | 13 | 3Reci | Thm 9 | ❌ |

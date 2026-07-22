@@ -1,6 +1,8 @@
 # Theorem 7 — 3Prod (product of two triple words)
 
-> **STATUS (2026-07-22).** Skeleton stage. `doc/paper3.pdf` §6, p. 6–7.
+> **STATUS (2026-07-22).** Skeleton stage; **Lemma 1 (`half_ulp_div_RN_add`)
+> proved**. `ThreeProd_isTW` / `ThreeProd_error` still admitted.
+> `doc/paper3.pdf` §6, p. 6–7.
 > Setting FLX, `u = 2^{-p}`, `RN` = round-to-nearest (ties-to-even), `ufp`/`uls`
 > as in the paper. This is the FIRST algorithm of the multiplication half
 > (Alg 9–18 / Thm 7–11).
@@ -128,14 +130,20 @@ The bound is tight: at `p = 53` the witness (2) in the paper attains
 - **`ThreeProd_error`** — `|TWval (ThreeProd x y) − TWval x * TWval y| ≤
   (28u³ + 107u⁴) * |TWval x * TWval y|` (`p ≥ 6`). Sum of the six `εᵢ` bounds
   over `1 − 4u`, with `ε₅` from `Pnonoverlap_truncate_error` (Theorem 3, k = 3).
-- **Lemma 1** (`half_ulp_div_RN_add`): `½ ulp(x) ∣ RN(x + y)` — new, needed for
-  the `b₀,b₁` divisibility.
+- **Lemma 1** (`half_ulp_div_RN_add`, **proved**): for floats `x ≠ 0` and `y`,
+  `½ ulp(x) ∣ RN(x + y)`. (The `format y` and `x ≠ 0` hypotheses are essential:
+  the claim is false for a non-float `y`, e.g. `RN(1 + (1.5u − 1)) = 1.5u`, and
+  vacuous-but-wrong at `x = 0` where `ulp 0 = 0` in FLX.) Proof: if
+  `cexp y ≥ cexp x − 1` then `x + y` already sits on the `½ ulp(x)` grid; else
+  `|y|` is so small that `RN(x+y)` keeps magnitude `≥ mag x − 1`, so
+  `cexp(RN(x+y)) ≥ cexp x − 1`. Needed for the `b₀,b₁` divisibility.
 
 ## Plan (order of attack)
 
 1. Definition `ThreeProd` + the two theorem statements with `have`/`admit`
-   skeletons (this PR).
-2. §6.1 term bounds as named lemmas (`ThreeProd_bounds_*`).
-3. Lemma 1, then the four-case `I` study → F-nonoverlapping of the 4-term inner
-   VecSum → `ThreeProd_isTW`.
-4. The six `εᵢ` bounds → `ThreeProd_error`.
+   skeletons. ✅
+2. Lemma 1 (`half_ulp_div_RN_add`). ✅
+3. §6.1 term bounds as named lemmas (`ThreeProd_bounds_*`).
+4. The four-case `I` study → F-nonoverlapping of the 4-term inner VecSum →
+   `ThreeProd_isTW`.
+5. The six `εᵢ` bounds → `ThreeProd_error`.

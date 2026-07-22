@@ -347,17 +347,27 @@ Qed.
 (*  (paper Theorem 5).  See doc/thm5.md.                                      *)
 (* ===========================================================================*)
 
-(* [x0+x1] sits exactly halfway between its two nearest floats.               *)
+(* [x0+x1] sits exactly halfway between its two nearest floats, i.e. [m] is    *)
+(* the mean of its round-down and round-up (which for a non-float are the two  *)
+(* consecutive floats bracketing it).                                          *)
 Definition is_midpoint (m : R) : Prop :=
-  m - round beta fexp Zfloor m = / 2 * ulp (round beta fexp Zfloor m).
+  2 * m = round beta fexp Zfloor m + round beta fexp Zceil m.
 
+(* NOTE (2026-07): the inner test's polarity is FLIPPED with respect to        *)
+(* Algorithm 7 as printed in the paper.  As printed, the directional branch is  *)
+(* entered when [RN(-(3/2u-2u^2) x0) = x1]; that is incorrect -- it fires on the *)
+(* paper's "special" non-midpoint case and falls through to [RN(x0+x1)] on       *)
+(* genuine midpoints, ignoring [x2].  The correct condition takes the            *)
+(* directional branch when [x0+2x1] is exact AND [RN(-(3/2u-2u^2) x0) <> x1].    *)
+(* See doc/roundtw-erratum.md and doc/roundtw_bug.c for a verified counterexample*)
+(* (the triple-word [(1, u, u^2)] rounds wrongly under the printed condition).   *)
 Definition RoundTW (x0 x1 x2 : R) : R :=
   if Req_EM_T (RND (x0 + 2 * x1)) (x0 + 2 * x1) then
-    if Req_EM_T (RND (- (3 / 2 * u - 2 * (u * u)) * x0)) x1 then
+    if Req_EM_T (RND (- (3 / 2 * u - 2 * (u * u)) * x0)) x1 then RND (x0 + x1)
+    else
       if Rlt_le_dec 0 x2 then RU (x0 + x1)
       else if Rlt_le_dec x2 0 then RD (x0 + x1)
       else RND (x0 + x1)
-    else RND (x0 + x1)
   else RND (x0 + x1).
 
 (* A float plus a perturbation strictly below 1/4 ulp rounds back to the      *)
@@ -366,39 +376,157 @@ Definition RoundTW (x0 x1 x2 : R) : R :=
 Lemma RN_add_lt_quarter (f d : R) :
   format f -> Rabs d < / 4 * ulp f -> RND (f + d) = f.
 Proof.
-Admitted.
+have Vf : Valid_exp fexp by apply: FLX_exp_valid.
+(* The down-gap [f - pred f] is at least [1/2 ulp f]; at a power of two it is  *)
+(* exactly that (the predecessor's ulp is halved), elsewhere it is a full ulp. *)
+have gap_dn : forall y, format y -> 0 < y -> / 2 * ulp y <= y - pred beta fexp y.
+  move=> y Fy ypos.
+  have predpos : 0 < pred beta fexp y.
+    rewrite pred_eq_pos //; last lra.
+    suff : pred_pos beta fexp y <> 0.
+      have H1 := @pred_pos_ge_0 beta fexp Vf y ypos Fy; lra.
+    move=> Hz; have := @pred_pos_plus_ulp beta fexp Vf y ypos Fy.
+    by rewrite Hz ulp_FLX_0 Rplus_0_l => yeq; lra.
+  have Edp : y - pred beta fexp y = ulp (pred beta fexp y).
+    have := @pred_pos_plus_ulp beta fexp Vf y ypos Fy.
+    rewrite -(pred_eq_pos beta fexp y); [lra | lra].
+  rewrite Edp.
+  case: (@ulp_pred_pos beta fexp Vf y Fy predpos) => [Heq | ypow].
+    rewrite Heq; have := ulp_ge_0 beta fexp y; lra.
+  rewrite -Edp.
+  have -> : pred beta fexp y = y - pow (fexp (mag beta y - 1)).
+    by rewrite {1}ypow pred_bpow -ypow.
+  have Uy : ulp y = pow (fexp (mag beta y)).
+    by rewrite ulp_neq_0; [rewrite /cexp | lra].
+  rewrite Uy.
+  have -> : (fexp (mag beta y - 1) = fexp (mag beta y) - 1)%Z
+    by rewrite /FLX_exp; lia.
+  rewrite (bpow_plus _ _ (-1)) /=.
+  have := bpow_gt_0 beta (fexp (mag beta y)).
+  simpl; lra.
+move=> Ff Hd.
+have [feq0|f0] := Req_dec f 0.
+  move: Hd; rewrite feq0 ulp_FLX_0 Rmult_0_r => Hd0.
+  by have := Rabs_pos d; lra.
+have ulpf_pos : 0 < ulp f by apply: ulp_gt_0.
+(* Both neighbouring gaps are at least [1/2 ulp f], for either sign of [f].    *)
+have gapUP : / 2 * ulp f <= succ beta fexp f - f.
+  have [fpos|fneg] := Rle_lt_dec 0 f.
+    rewrite succ_eq_pos //; have := ulp_ge_0 beta fexp f; lra.
+  have E : succ beta fexp f = - pred beta fexp (- f).
+    by rewrite -{1}[f]Ropp_involutive succ_opp.
+  have Ff' := generic_format_opp beta fexp f Ff.
+  have fpos' : 0 < - f by lra.
+  have := gap_dn (- f) Ff' fpos'.
+  rewrite ulp_opp E; lra.
+have gapDN : / 2 * ulp f <= f - pred beta fexp f.
+  have [fpos|fneg] := Rle_lt_dec 0 f.
+    have fpos' : 0 < f by lra.
+    have := gap_dn f Ff fpos'; lra.
+  have E2 : pred beta fexp f = - succ beta fexp (- f).
+    by rewrite -{1}[f]Ropp_involutive pred_opp.
+  rewrite E2 succ_eq_pos; last lra.
+  by rewrite ulp_opp; have := ulp_ge_0 beta fexp f; lra.
+(* [|d| < 1/4 ulp f] keeps [f + d] strictly on [f]'s side of both midpoints.   *)
+have /Rabs_lt_inv[Hd1 Hd2] := Hd.
+apply: Rle_antisym.
+  apply: round_N_le_midp => //; lra.
+apply: round_N_ge_midp => //; lra.
+Qed.
 
 (* Helper A (paper's "if [x0+x1] is a FP number ..."): a float plus a tail    *)
 (* below half its ulp rounds back to the float.                               *)
 Lemma RoundTW_add_float x0 x1 x2 :
-  format x0 -> format x1 -> format x2 -> format (x0 + x1) ->
+  format x0 -> format x1 -> Rabs x1 < ulp x0 -> format (x0 + x1) ->
   Rabs x2 < ulp x1 -> RND (x0 + x1 + x2) = x0 + x1.
 Proof.
-Admitted.
+move=> Fx0 Fx1 Hx1 Fs Hx2.
+have x0n0 : x0 <> 0.
+  by move=> x00; move: Hx1; rewrite x00 ulp_FLX_0; have := Rabs_pos x1; lra.
+have x1n0 : x1 <> 0.
+  by move=> x10; move: Hx2; rewrite x10 ulp_FLX_0; have := Rabs_pos x2; lra.
+have sn0 : x0 + x1 <> 0.
+  move=> s0.
+  have Ex : x1 = - x0 by lra.
+  have := bpow_mag_le beta x0 x0n0.
+  move: Hx1; rewrite Ex Rabs_Ropp ulp_neq_0 // /cexp /fexp => Hx1'.
+  have : pow (mag beta x0 - p) <= pow (mag beta x0 - 1) by apply: bpow_le; lia.
+  lra.
+(* [|x1| < ulp x0] pins [x1] at least [p] binades below [x0] ...              *)
+have M1 : (mag beta x1 <= mag beta x0 - p)%Z.
+  have H := bpow_mag_le beta x1 x1n0.
+  move: Hx1; rewrite ulp_neq_0 // /cexp /fexp => Hx1'.
+  have HH : pow (mag beta x1 - 1) < pow (mag beta x0 - p) by lra.
+  by move/lt_bpow: HH; lia.
+(* ... while [x0 + x1] loses at most one binade off [x0].                     *)
+have M2 : (mag beta x0 - 1 <= mag beta (x0 + x1))%Z.
+  have Hlow : pow (mag beta x0 - 2) <= Rabs (x0 + x1).
+    have H0 := bpow_mag_le beta x0 x0n0.
+    have Ht := Rabs_triang_inv x0 (- x1).
+    rewrite Rabs_Ropp in Ht.
+    have Hs : Rabs (x0 - - x1) = Rabs (x0 + x1) by congr Rabs; ring.
+    rewrite Hs in Ht.
+    move: Hx1; rewrite ulp_neq_0 // /cexp /fexp => Hx1'.
+    have Hp2b : pow (mag beta x0 - p) <= pow (mag beta x0 - 2)
+      by apply: bpow_le; lia.
+    have Hhalf : pow (mag beta x0 - 2) + pow (mag beta x0 - 2) <=
+                 pow (mag beta x0 - 1).
+      have -> : (mag beta x0 - 1 = (mag beta x0 - 2) + 1)%Z by lia.
+      rewrite bpow_plus pow1E /=; lra.
+    lra.
+  have := mag_gt_bpow beta (x0 + x1) (mag beta x0 - 2) Hlow; lia.
+(* Hence [|x2| < ulp x1 <= 2u . ulp(x0+x1) < 1/4 ulp(x0+x1)] ([p >= 3]).       *)
+have Pm4 : pow (-2) = / 4.
+  by rewrite (bpow_opp beta 2) (_ : pow 2 = 4) //;
+     rewrite /= IZR_Zpower_pos /=; lra.
+have Hb : Rabs x2 < / 4 * ulp (x0 + x1).
+  have U1 : ulp x1 = pow (mag beta x1 - p) by rewrite ulp_neq_0 // /cexp /fexp.
+  have Us : ulp (x0 + x1) = pow (mag beta (x0 + x1) - p)
+    by rewrite ulp_neq_0 // /cexp /fexp.
+  have step1 : ulp x1 <= pow (mag beta x0 - 2 * p)
+    by rewrite U1; apply: bpow_le; lia.
+  have step2 : pow (mag beta x0 - 2 * p) <= / 4 * ulp (x0 + x1).
+    rewrite Us -Pm4 -bpow_plus; apply: bpow_le; lia.
+  lra.
+by apply: RN_add_lt_quarter.
+Qed.
 
-(* Helper B (non-midpoint): a tail below the distance to the midpoint cannot  *)
-(* change the rounding, so [RN(m + d) = RN m].                                *)
-Lemma RN_add_notmid (m d : R) :
-  ~ is_midpoint m -> ~ format m -> Rabs d < ulp m -> RND (m + d) = RND m.
+(* Helpers B/C (non-midpoint and midpoint), unified: a point strictly inside  *)
+(* the rounding cell of a float [f] -- i.e. strictly between the two midpoints *)
+(* [(pred f + f)/2] and [(f + succ f)/2] -- rounds to [f].  In the assembly    *)
+(* the divisibility of [x0+x1] and its cell boundaries by [ulp x1] gives the   *)
+(* two strict inequalities for [x = x0 + x1 + x2].                             *)
+Lemma RN_between_midp (f x : R) :
+  format f -> (pred beta fexp f + f) / 2 < x -> x < (f + succ beta fexp f) / 2 ->
+  RND x = f.
 Proof.
-Admitted.
+move=> Ff Hlo Hhi.
+apply: Rle_antisym.
+  by apply: round_N_le_midp.
+by apply: round_N_ge_midp => //; lra.
+Qed.
 
-(* Helper C (midpoint): at a midpoint the sign of the tail decides the        *)
-(* rounding -- [RU] when positive, [RD] when negative, [RN] when zero.        *)
-Lemma RN_add_mid (m d : R) :
-  is_midpoint m -> ~ format m -> Rabs d < ulp m ->
-  RND (m + d) = if Rlt_le_dec 0 d then RU m
-                else if Rlt_le_dec d 0 then RD m else RND m.
+(* Two distinct multiples of a grid [pow k] are at least [pow k] apart.  This  *)
+(* is the quantitative heart of the assembly: [x0+x1], its two neighbouring    *)
+(* floats and their midpoint are all multiples of [ulp x1], so the tail [x2]   *)
+(* (with [|x2| < ulp x1]) can never carry [x0+x1] across a rounding boundary.  *)
+Lemma is_imul_gap (a b : R) (k : Z) :
+  is_imul a (pow k) -> is_imul b (pow k) -> a <> b -> pow k <= Rabs (a - b).
 Proof.
-Admitted.
+move=> Ha Hb Hab.
+apply: is_imul_pow_le_abs; first by apply: is_imul_minus.
+by move=> H0; apply: Hab; lra.
+Qed.
 
-(* The tie-detector (the core of Algorithm 7): with [isTW]'s separation, the  *)
-(* algorithm's first condition is FALSE exactly when [x0+x1] is a midpoint   *)
-(* the special case [x0 = 1+2u, x1 = -3/2 u] being caught by [star].            *)
+(* The tie-detector (the core of Algorithm 7): with [isTW]'s separation, the   *)
+(* directional branch is taken exactly when [x0+x1] is a midpoint -- i.e.       *)
+(* [x0+2x1] is exact and [RN(-(3/2u-2u^2) x0) <> x1] -- the special case        *)
+(* [x0 = 1+2u, x1 = -3/2 u] being the one non-midpoint with [x0+2x1] exact,     *)
+(* which [star] (the [<>] test) excludes because there [RN(-(3/2u-2u^2)x0)=x1]. *)
 Lemma RoundTW_cond x0 x1 :
   format x0 -> format x1 -> (x1 = 0 \/ Rabs x1 < ulp x0) -> ~ format (x0 + x1) ->
   (RND (x0 + 2 * x1) = x0 + 2 * x1 /\
-   RND (- (3 / 2 * u - 2 * (u * u)) * x0) = x1) <-> is_midpoint (x0 + x1).
+   RND (- (3 / 2 * u - 2 * (u * u)) * x0) <> x1) <-> is_midpoint (x0 + x1).
 Proof.
 Admitted.
 
@@ -406,7 +534,177 @@ Admitted.
 Lemma RoundTW_correct x0 x1 x2 :
   isTW (TWR x0 x1 x2) -> RoundTW x0 x1 x2 = RND (x0 + x1 + x2).
 Proof.
-Admitted.
+move=> tw.
+have [Fx0 Fx1 Fx2 H1 H2] := tw.
+rewrite /RoundTW.
+(* Degenerate limbs: [x1 = 0] forces [x2 = 0] and every branch is [round x0].  *)
+have [x1z | x1nz] := H1.
+  move: H2; rewrite x1z ulp_FLX_0 => H2'.
+  have x2z : x2 = 0 by case: H2' => // H; have := Rabs_pos x2; lra.
+  rewrite x2z !Rplus_0_r Rmult_0_r Rplus_0_r.
+  have Rx0 : RND x0 = x0 by apply: round_generic.
+  have RUx0 : RU x0 = x0 by apply: round_generic.
+  have RDx0 : RD x0 = x0 by apply: round_generic.
+  by repeat case: Req_EM_T => *; repeat case: Rlt_le_dec => *;
+     rewrite ?Rx0 ?RUx0 ?RDx0.
+have [x1eq0 | x1n0] := Req_dec x1 0.
+  move: H2; rewrite x1eq0 ulp_FLX_0 => H2'.
+  have x2z : x2 = 0 by case: H2' => // H; have := Rabs_pos x2; lra.
+  rewrite x2z !Rplus_0_r Rmult_0_r Rplus_0_r.
+  have Rx0 : RND x0 = x0 by apply: round_generic.
+  have RUx0 : RU x0 = x0 by apply: round_generic.
+  have RDx0 : RD x0 = x0 by apply: round_generic.
+  by repeat case: Req_EM_T => *; repeat case: Rlt_le_dec => *;
+     rewrite ?Rx0 ?RUx0 ?RDx0.
+have Hx2 : Rabs x2 < ulp x1.
+  case: H2 => [->|//]; rewrite Rabs_R0; exact: ulp_gt_0.
+(* Case 1: [x0+x1] is a float -- Helper A, and every branch returns it.        *)
+have [Es | Ens] := Req_EM_T (RND (x0 + x1)) (x0 + x1).
+  have Fm : format (x0 + x1) by rewrite -Es; exact: generic_format_round.
+  have Hrhs : RND (x0 + x1 + x2) = x0 + x1 by apply: RoundTW_add_float.
+  rewrite Hrhs.
+  have RUm : RU (x0 + x1) = x0 + x1 by apply: round_generic.
+  have RDm : RD (x0 + x1) = x0 + x1 by apply: round_generic.
+  by repeat case: Req_EM_T => *; repeat case: Rlt_le_dec => *;
+     rewrite ?Es ?RUm ?RDm.
+(* Case 2: [x0+x1] not a float.  Set up the divisibility infrastructure: all   *)
+(* of [x0+x1], its two neighbouring floats [RD]/[RU] and their midpoint are     *)
+(* multiples of [ulp x1], while [|x2| < ulp x1].                                *)
+have NFm : ~ format (x0 + x1).
+  by move=> Ffm; apply: Ens; apply: round_generic.
+have x0n0 : x0 <> 0.
+  by move=> x00; move: x1nz; rewrite x00 ulp_FLX_0; have := Rabs_pos x1; lra.
+have M1 : (mag beta x1 <= mag beta x0 - p)%Z.
+  have H := bpow_mag_le beta x1 x1n0.
+  move: x1nz; rewrite ulp_neq_0 // /cexp /fexp => Hx1'.
+  have HH : pow (mag beta x1 - 1) < pow (mag beta x0 - p) by lra.
+  by move/lt_bpow: HH; lia.
+have M2 : (mag beta x0 - 1 <= mag beta (x0 + x1))%Z.
+  have Hlow : pow (mag beta x0 - 2) <= Rabs (x0 + x1).
+    have H0 := bpow_mag_le beta x0 x0n0.
+    have Ht := Rabs_triang_inv x0 (- x1).
+    rewrite Rabs_Ropp in Ht.
+    have Hs : Rabs (x0 - - x1) = Rabs (x0 + x1) by congr Rabs; ring.
+    rewrite Hs in Ht.
+    move: x1nz; rewrite ulp_neq_0 // /cexp /fexp => Hx1'.
+    have Hp2b : pow (mag beta x0 - p) <= pow (mag beta x0 - 2)
+      by apply: bpow_le; lia.
+    have Hhalf : pow (mag beta x0 - 2) + pow (mag beta x0 - 2) <=
+                 pow (mag beta x0 - 1).
+      have -> : (mag beta x0 - 1 = (mag beta x0 - 2) + 1)%Z by lia.
+      rewrite bpow_plus pow1E /=; lra.
+    lra.
+  have := mag_gt_bpow beta (x0 + x1) (mag beta x0 - 2) Hlow; lia.
+have Le10 : (cexp x1 <= cexp x0)%Z by rewrite /cexp /fexp; lia.
+have Imm : is_imul (x0 + x1) (pow (cexp x1)).
+  apply: is_imul_add; last exact: format_imul_cexp.
+  by apply: is_imul_pow_le (format_imul_cexp Fx0) _.
+have Img : is_imul (RD (x0 + x1)) (pow (cexp x1))
+  by apply: is_imul_pow_round.
+have Imu : is_imul (RU (x0 + x1)) (pow (cexp x1))
+  by apply: is_imul_pow_round.
+have Fg : format (RD (x0 + x1)) by apply: generic_format_round.
+have Fu : format (RU (x0 + x1)) by apply: generic_format_round.
+have Vf : Valid_exp fexp by apply: FLX_exp_valid.
+have [Hgm Hmu] := @round_DN_UP_lt beta fexp Vf (x0 + x1) NFm.
+have DUulp : RU (x0 + x1) = RD (x0 + x1) + ulp (x0 + x1)
+  by apply: round_UP_DN_ulp.
+have mn0 : x0 + x1 <> 0.
+  by move=> H0; apply: NFm; rewrite H0; exact: generic_format_0.
+have Uk : ulp x1 = pow (cexp x1) by rewrite ulp_neq_0.
+have ImPrefl : forall j : Z, is_imul (pow j) (pow j).
+  by move=> j; exists 1%Z; lra.
+have Le_mid : (cexp x1 <= cexp (x0 + x1) - 1)%Z by rewrite /cexp /fexp; lia.
+have gap_gm : pow (cexp x1) <= (x0 + x1) - RD (x0 + x1).
+  have := is_imul_gap Imm Img (Rgt_not_eq _ _ Hgm).
+  by rewrite Rabs_pos_eq; lra.
+have gap_mu : pow (cexp x1) <= RU (x0 + x1) - (x0 + x1).
+  have := is_imul_gap Imu Imm (Rgt_not_eq _ _ Hmu).
+  by rewrite Rabs_pos_eq; lra.
+have SG : succ beta fexp (RD (x0 + x1)) = RU (x0 + x1) by apply: succ_DN_eq_UP.
+have PU : pred beta fexp (RU (x0 + x1)) = RD (x0 + x1) by apply: pred_UP_eq_DN.
+have predg_le : pred beta fexp (RD (x0 + x1)) <= RD (x0 + x1) by apply: pred_le_id.
+have succu_ge : RU (x0 + x1) <= succ beta fexp (RU (x0 + x1)) by apply: succ_ge_id.
+have half_ulp : / 2 * ulp (x0 + x1) = pow (cexp (x0 + x1) - 1).
+  rewrite ulp_neq_0 //.
+  have -> : pow (cexp (x0 + x1)) = pow 1 * pow (cexp (x0 + x1) - 1).
+    by rewrite -bpow_plus; congr bpow; lia.
+  rewrite pow1E /=; lra.
+have Immid : is_imul ((RD (x0 + x1) + RU (x0 + x1)) / 2) (pow (cexp x1)).
+  have -> : (RD (x0 + x1) + RU (x0 + x1)) / 2 =
+            RD (x0 + x1) + / 2 * ulp (x0 + x1) by rewrite DUulp; field.
+  apply: is_imul_add => //.
+  by rewrite half_ulp; apply: is_imul_pow_le (ImPrefl _) Le_mid.
+have Hx2b : x2 < pow (cexp x1) by rewrite -Uk; move: (Rle_abs x2); lra.
+have Hx2a : - pow (cexp x1) < x2.
+  by rewrite -Uk; move: (Rabs_le_inv x2 (ulp x1));
+     have := Rle_abs (- x2); rewrite Rabs_Ropp; lra.
+have Npt : RND (x0 + x1) = RD (x0 + x1) \/ RND (x0 + x1) = RU (x0 + x1).
+  by apply: generic_N_pt_DN_or_UP => //; apply: round_N_pt.
+have gap_mid : x0 + x1 <> (RD (x0 + x1) + RU (x0 + x1)) / 2 ->
+               pow (cexp x1) <=
+               Rabs (x0 + x1 - (RD (x0 + x1) + RU (x0 + x1)) / 2).
+  by move=> Hne; apply: is_imul_gap.
+(* The three rounding outcomes for [x0+x1+x2], via [RN_between_midp].           *)
+have Hmid_pos : x0 + x1 = (RD (x0 + x1) + RU (x0 + x1)) / 2 -> 0 < x2 ->
+                RND (x0 + x1 + x2) = RU (x0 + x1).
+  move=> Hmeq Hpos; apply: RN_between_midp => //.
+    by rewrite PU; lra.
+  by move: gap_mu Hx2b succu_ge; lra.
+have Hmid_neg : x0 + x1 = (RD (x0 + x1) + RU (x0 + x1)) / 2 -> x2 < 0 ->
+                RND (x0 + x1 + x2) = RD (x0 + x1).
+  move=> Hmeq Hneg; apply: RN_between_midp => //.
+    by move: predg_le gap_gm Hx2a; lra.
+  by rewrite SG; lra.
+have Hnotmid_eq : x0 + x1 <> (RD (x0 + x1) + RU (x0 + x1)) / 2 ->
+                  RND (x0 + x1 + x2) = RND (x0 + x1).
+  move=> Hne; have Hg := gap_mid Hne.
+  have [Hlt | Hgt] := Rdichotomy _ _ Hne.
+    have Hmlt : (RD (x0 + x1) + RU (x0 + x1)) / 2 - (x0 + x1) >= pow (cexp x1).
+      by move: Hg; rewrite Rabs_left; lra.
+    have RD_eq : RND (x0 + x1) = RD (x0 + x1).
+      apply: Rle_antisym; last first.
+        by case: Npt => ->; move: DUulp (ulp_ge_0 beta fexp (x0 + x1)); lra.
+      by apply: round_N_le_midp => //; rewrite SG; lra.
+    rewrite RD_eq; apply: RN_between_midp => //.
+      by move: predg_le gap_gm Hx2a; lra.
+    by rewrite SG; move: Hmlt Hx2b; lra.
+  have Hmgt : (x0 + x1) - (RD (x0 + x1) + RU (x0 + x1)) / 2 >= pow (cexp x1).
+    by move: Hg; rewrite Rabs_pos_eq; lra.
+  have RU_eq : RND (x0 + x1) = RU (x0 + x1).
+    apply: Rle_antisym.
+      by case: Npt => ->; move: DUulp (ulp_ge_0 beta fexp (x0 + x1)); lra.
+    by apply: round_N_ge_midp => //; rewrite PU; lra.
+  rewrite RU_eq; apply: RN_between_midp => //.
+    by rewrite PU; move: Hmgt Hx2a; lra.
+  by move: gap_mu Hx2b succu_ge; lra.
+(* Tie-detector: the algorithm's first condition is false iff [x0+x1] is a      *)
+(* midpoint; assemble the branches accordingly.                                 *)
+have Hcond := RoundTW_cond Fx0 Fx1 H1 NFm.
+have [Hmid | Hnmid] := Req_dec (2 * (x0 + x1)) (RD (x0 + x1) + RU (x0 + x1)).
+  have Hmeq : x0 + x1 = (RD (x0 + x1) + RU (x0 + x1)) / 2 by lra.
+  have [C1 C2] := proj2 Hcond Hmid.
+  case: (Req_EM_T (RND (x0 + 2 * x1)) (x0 + 2 * x1)) => [e1 | ne1]; last first.
+    by case: (ne1 C1).
+  case: (Req_EM_T (RND (- (3 / 2 * u - 2 * (u * u)) * x0)) x1) => [e2 | ne2].
+    by case: (C2 e2).
+  rewrite /=.
+  case: (Rlt_le_dec 0 x2) => [Hpos | Hle].
+    by rewrite (Hmid_pos Hmeq Hpos).
+  case: (Rlt_le_dec x2 0) => [Hneg | Hge].
+    by rewrite (Hmid_neg Hmeq Hneg).
+  rewrite /=.
+  have Ez : x2 = 0 by lra.
+  by rewrite Ez Rplus_0_r.
+have Hne : x0 + x1 <> (RD (x0 + x1) + RU (x0 + x1)) / 2 by lra.
+rewrite (Hnotmid_eq Hne).
+case: (Req_EM_T (RND (x0 + 2 * x1)) (x0 + 2 * x1)) => [e1 | ne1];
+    last by rewrite /=.
+case: (Req_EM_T (RND (- (3 / 2 * u - 2 * (u * u)) * x0)) x1) => [e2 | ne2].
+  by rewrite /=.
+rewrite /=.
+by exfalso; apply: Hnmid; exact: (proj1 Hcond (conj e1 ne2)).
+Qed.
 
 (* ===========================================================================*)
 (*  Algorithm 8: TWSum -- the sum of two triple-word numbers.                 *)

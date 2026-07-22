@@ -544,6 +544,110 @@ Lemma RoundTW_cond_norm y0 y1 :
   (RND (y0 + 2 * y1) = y0 + 2 * y1 /\
    RND (- (3 / 2 * u - 2 * (u * u)) * y0) <> y1) <-> is_midpoint (y0 + y1).
 Proof.
+move=> Fy0 Fy1 y0rng Hy1 NFm.
+(* [y0 in [1,2)] so [ulp y0 = 2u]; [y1] is a nonzero float with [|y1| < 2u].   *)
+have u_pos : 0 < u by rewrite uE; apply: bpow_gt_0.
+have magy0 : mag beta y0 = 1%Z :> Z.
+  apply: mag_unique_pos.
+  have -> : pow (1 - 1) = 1 by rewrite (_ : (1 - 1 = 0)%Z) //.
+  by rewrite pow1E /=; lra.
+have Uy0 : ulp y0 = 2 * u.
+  rewrite ulp_neq_0; last lra.
+  rewrite /cexp /fexp magy0 uE (_ : (1 - p = - p + 1)%Z); last lia.
+  by rewrite bpow_plus pow1E /=; lra.
+have y1n0 : y1 <> 0 by move=> y10; apply: NFm; rewrite y10 Rplus_0_r.
+move: Hy1; rewrite Uy0 => Hy1.
+have y0mul : is_imul y0 (2 * u).
+  by have := format_imul_cexp Fy0; rewrite -ulp_neq_0; [rewrite Uy0 | lra].
+have twou_pos : 0 < 2 * u by lra.
+(* KEY REDUCTION: [x0+2x1] exact or [x0+x1] a midpoint both force [2 y1] to be *)
+(* a multiple of [u]; with [|y1| < 2u] this pins [y1] to six concrete values.  *)
+have y1vals : is_imul (2 * y1) u ->
+   y1 = u \/ y1 = - u \/ y1 = u / 2 \/ y1 = - (u / 2) \/
+   y1 = 3 * u / 2 \/ y1 = - (3 * u / 2).
+  move=> [k Hk].
+  have kabs : Rabs (IZR k) < 4.
+    have H4 : Rabs (IZR k * u) < 4 * u.
+      rewrite -Hk Rabs_mult (Rabs_pos_eq 2); last lra.
+      by move: Hy1; lra.
+    by move: H4; rewrite Rabs_mult (Rabs_pos_eq u); last lra; nra.
+  have kn0 : k <> 0%Z by move=> k0; move: Hk; rewrite k0 /= Rmult_0_l => H;
+    apply: y1n0; lra.
+  have kr : (k = -3 \/ k = -2 \/ k = -1 \/ k = 1 \/ k = 2 \/ k = 3)%Z.
+    move/Rabs_lt_inv: kabs => [H1 H2].
+    suff : (-4 < k < 4)%Z by lia.
+    by split; apply: lt_IZR; rewrite ?opp_IZR /=; lra.
+  move: Hk; case: kr => [->|[->|[->|[->|[->|->]]]]] Hk.
+  - by right; right; right; right; right; lra.
+  - by right; left; lra.
+  - by right; right; right; left; lra.
+  - by right; right; left; lra.
+  - by left; lra.
+  - by right; right; right; right; left; lra.
+have pm1 : pow (-1) = / 2.
+  have h1 : pow 1 = 2 by rewrite pow1E /=; lra.
+  have h2 : pow (-1) * pow 1 = 1.
+    rewrite -bpow_plus.
+    by have -> : (-1 + 1 = 0)%Z by [].
+  by move: h2; rewrite h1; lra.
+have four_u : 4 * u < / 2.
+  rewrite uE (_ : 4 = pow 2); last by rewrite /= IZR_Zpower_pos /=; lra.
+  rewrite -bpow_plus.
+  apply: Rlt_le_trans (_ : pow (-1) <= _); last by rewrite pm1; lra.
+  by apply: bpow_lt; lia.
+have imul_u : forall z, format z -> / 2 < z -> is_imul z u.
+  move=> z Fz Hz.
+  have magz : (- p <= cexp z)%Z.
+    rewrite /cexp /fexp; suff : (-1 < mag beta z)%Z by lia.
+    apply: mag_gt_bpow; rewrite Rabs_pos_eq; last lra.
+    by rewrite pm1; lra.
+  by rewrite uE; apply: (is_imul_pow_le (format_imul_cexp Fz) magz).
+have /Rabs_lt_inv[Hy1a Hy1b] := Hy1.
+have y2low : / 2 < y0 + 2 * y1 by lra.
+have y1low : / 2 < y0 + y1 by lra.
+have imul2_e : RND (y0 + 2 * y1) = y0 + 2 * y1 -> is_imul (2 * y1) u.
+  move=> Hex.
+  have F2 : format (y0 + 2 * y1) by rewrite -Hex; exact: generic_format_round.
+  have I2 := imul_u _ F2 y2low.
+  have I0 : is_imul y0 u by apply: imul_u => //; lra.
+  have := is_imul_minus I2 I0.
+  by have -> : y0 + 2 * y1 - y0 = 2 * y1 by ring.
+have ImP : forall j : Z, is_imul (pow j) (pow j) by move=> j; exists 1%Z; lra.
+have magm_nn : (0 <= mag beta (y0 + y1))%Z.
+  suff : (-1 < mag beta (y0 + y1))%Z by lia.
+  apply: mag_gt_bpow; rewrite Rabs_pos_eq; last lra.
+  by rewrite pm1; lra.
+have imul2_m : is_midpoint (y0 + y1) -> is_imul (2 * y1) u.
+  move=> Hmid.
+  have IRU : is_imul (RU (y0 + y1)) u.
+    apply: imul_u; first exact: generic_format_round.
+    by have [_ H2] := round_DN_UP_le beta (y0 + y1) (FLX_exp_valid p); lra.
+  have Iulp : is_imul (ulp (y0 + y1)) u.
+    rewrite ulp_neq_0; last lra.
+    by rewrite uE; apply: (is_imul_pow_le (ImP _)); rewrite /cexp /fexp; lia.
+  have IRD : is_imul (RD (y0 + y1)) u.
+    have HU := @round_UP_DN_ulp beta fexp (y0 + y1) NFm.
+    have -> : RD (y0 + y1) = RU (y0 + y1) - ulp (y0 + y1) by lra.
+    exact: is_imul_minus.
+  have I2y0 : is_imul (2 * y0) u.
+    have y0h : / 2 < y0 by lra.
+    have [z Hz] := imul_u _ Fy0 y0h.
+    by exists (2 * z)%Z; rewrite mult_IZR Hz; ring.
+  have := is_imul_minus (is_imul_add IRD IRU) I2y0.
+  by have -> : RD (y0 + y1) + RU (y0 + y1) - 2 * y0 = 2 * y1
+    by move: Hmid; rewrite /is_midpoint; lra.
+(* Remaining: check the six candidate values of [y1].  Case-map (u = 2^-p):    *)
+(*   y1 = u      : midpoint, exact;  star != by sign (RN(-K y0) <= 0 < u).     *)
+(*   y1 = -u     : if y0 = 1 excluded by NFm (1-u is a float); else midpoint,  *)
+(*                 exact, star != by magnitude (|RN(-K y0)| > u).              *)
+(*   y1 = u/2    : not a midpoint and y0+u inexact -> excluded either way.      *)
+(*   y1 = -u/2   : y0 = 1 -> midpoint (of [1-u,1]), exact (1-u); else inexact.  *)
+(*   y1 = 3u/2   : not a midpoint, y0+3u inexact -> excluded.                   *)
+(*   y1 = -3u/2  : y0 = 1 -> midpoint (of [1-2u,1-u]), exact (1-3u), star != ;  *)
+(*                 y0 = 1+2u -> NON-midpoint (m=1+u/2), exact (1-u), star =     *)
+(*                 (the special case, RN(-K y0) = y1) -> excluded by star;      *)
+(*                 other y0 -> inexact.                                         *)
+admit.
 Admitted.
 
 Lemma RoundTW_cond x0 x1 :

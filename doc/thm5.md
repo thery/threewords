@@ -1,5 +1,14 @@
 # Theorem 5 — RoundTW (round a triple word to the nearest float)
 
+> **STATUS (2026-07-22).** `RN_add_lt_quarter`, `RoundTW_add_float`,
+> `is_imul_gap`, `RN_between_midp` (replacing the vague `RN_add_notmid`/
+> `RN_add_mid` placeholders) and `RoundTW_correct` are **proved**. One admit
+> remains: `RoundTW_cond` (the tie-detector). **A bug was found**: Algorithm 7's
+> inner `(⋆)` test polarity is inverted — the directional branch must fire on
+> `RN(-(3/2u-2u²)x0) <> x1`, not `= x1`. `RoundTW`/`RoundTW_cond` in `TWSum.v`
+> now use the corrected condition. See `doc/roundtw-erratum.md` and
+> `doc/roundtw_bug.c` for the verified counterexample `(1, u, u²)`.
+
 Companion doc. Source: `doc/paper3.pdf` §4, p. 5. Setting FLX, `u = 2^{-p}`,
 `RN` = round-to-nearest (ties-to-even), `RU`/`RD` = round toward `+∞`/`−∞`.
 

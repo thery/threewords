@@ -1482,6 +1482,24 @@ by split; [apply: Hfmt; rewrite !inE eqxx
          | apply: (Hno 0%N) | apply: (Hno 1%N)].
 Qed.
 
+(* Peeling the last 2Sum of a 5-element VecSum: [c, d] merge into [s3 =          *)
+(* dwh(TwoSum c d)] with error [dwl(TwoSum c d)] emitted last.  So the actual    *)
+(* [vecSum [z00p;b0;b1;c;z3]] is [vecSum [z00p;b0;b1;s3]] with [e4] appended --  *)
+(* the paper's reduction to [VecSum(z00p,b0,b1,s3)] plus the trailing [e4].      *)
+Lemma vecSum_split5 a b0 b1 c d :
+  vecSum [:: a; b0; b1; c; d] =
+  vecSum [:: a; b0; b1; dwh (TwoSum c d)] ++ [:: dwl (TwoSum c d)].
+Proof.
+rewrite /vecSum.
+case E : (TwoSum c d) => [s ecd].
+rewrite !vecSumAux_cons.
+have -> : vecSumAux [:: d] = ([::], d) by [].
+have -> : vecSumAux [:: s] = ([::], s) by [].
+rewrite E !dwlE.
+by case: (TwoSum b1 s) => sb1 eb1; case: (TwoSum b0 sb1) => sb0 eb0;
+   case: (TwoSum a sb0) => sa ea.
+Qed.
+
 (* The [star] head-emit step: when [RN(e0 + e1) = e0] (the top-of-VecSum        *)
 (* property) and [e1 <> 0], VSEB emits [e0] and continues on the tail.  This    *)
 (* is the [e1 <> 0] half of the paper's [(r0, VSEB(2)) = VSEB(3)] identity.     *)

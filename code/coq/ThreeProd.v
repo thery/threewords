@@ -11,8 +11,9 @@
 (* PROVED, reduced by the FLX WLOG (scale-invariance [ThreeProd_scale] and     *)
 (* sign-invariance [ThreeProd_opp]/[_opp_r], the paper's "1 <= x0, y0 < 2") to *)
 (* their normalised forms [ThreeProd_isTW_norm]/[ThreeProd_error_norm], which  *)
-(* still carry the Section-6.2 mathematics and are [Admitted] (with the        *)
-(* Section-6.1 [z00p] bounds) pending; see doc/thm7.md.                       *)
+(* still carry the Section-6.2 mathematics and are [Admitted].  The full        *)
+(* Section-6.1 term bounds are proved (product/error/FMA limbs); see            *)
+(* doc/thm7.md.                                                               *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -879,6 +880,252 @@ have Hx2 := tw_norm_x2 Nx.
 have := Rabs_pos x2.
 case: Ny => _ Hy0l _ _ _.
 by rewrite Rabs_mult (Rabs_pos_eq y0); [nra | lra].
+Qed.
+
+(* [u^2 = pow(-2p)], [4u^2 = pow(2-2p)], and a float multiple of [u^2].       *)
+Lemma u2_pow : u * u = pow (- (2 * p)).
+Proof. by rewrite u_pow -bpow_plus; congr bpow; lia. Qed.
+
+Lemma pow_2m2p : pow (2 - 2 * p) = 4 * (u * u).
+Proof.
+rewrite (_ : (2 - 2 * p = 2 + - (2 * p))%Z); last by lia.
+by rewrite bpow_plus u2_pow /= /Z.pow_pos /=; lra.
+Qed.
+
+Lemma format_imul_u2 k : (Z.abs k < 2 ^ p)%Z -> format (IZR k * (u * u)).
+Proof. by move=> Hk; rewrite u2_pow; apply: format_mult_pow. Qed.
+
+(* [2^p >= 64] (from [p >= 6]); clears the [Z.abs k < 2^p] side-conditions.    *)
+Fact two_p_ge_64 : (64 <= 2 ^ p)%Z.
+Proof.
+apply: (Z.le_trans _ (2 ^ 6)); first by [].
+by apply: Z.pow_le_mono_r; lia.
+Qed.
+
+(* Master rounding bound: a value [<= k u^2] rounds to [<= k u^2] ([k < 2^p]). *)
+Lemma round_le_imul_u2 w k :
+  (Z.abs k < 2 ^ p)%Z -> Rabs w <= IZR k * (u * u) ->
+  Rabs (RND w) <= IZR k * (u * u).
+Proof. by move=> Hk Hw; apply: Rabs_round_le_r => //; apply: format_imul_u2. Qed.
+
+(* [8u = pow(3-p)] and [8u^2 = pow(3-2p)], used for the [b2] 2Sum-error bound. *)
+Lemma pow_3mp : pow (3 - p) = 8 * u.
+Proof.
+rewrite (_ : (3 - p = 3 + - p)%Z); last by lia.
+by rewrite bpow_plus u_pow /= /Z.pow_pos /=; lra.
+Qed.
+
+Lemma pow_3m2p : pow (3 - 2 * p) = 8 * (u * u).
+Proof.
+rewrite (_ : (3 - 2 * p = 3 + - (2 * p))%Z); last by lia.
+by rewrite bpow_plus u2_pow /= /Z.pow_pos /=; lra.
+Qed.
+
+(* [vecSum] of a 3-list, unfolded: [b0], [b1] (the [z00m + a] 2Sum) and [b2]   *)
+(* (the [z01p + z10p] 2Sum error).                                             *)
+Lemma vecSum3 a b c :
+  format a -> format b -> format c ->
+  vecSum [:: a; b; c] =
+  [:: RND (a + RND (b + c)); a + RND (b + c) - RND (a + RND (b + c));
+      b + c - RND (b + c)].
+Proof.
+move=> Fa Fb Fc.
+rewrite /vecSum !vecSumAux_cons.
+have -> : vecSumAux [:: c] = ([::], c) by [].
+case Ebc : (TwoSum b c) => [s1 e1].
+case Eac : (TwoSum a s1) => [s0 e0].
+have Hs1 : s1 = RND (b + c) by move: (TwoSum_hi p choice b c); rewrite Ebc.
+move: (TwoSum_correct_loc Hp2 choice_sym Fb Fc); rewrite Ebc => Hbc.
+have Fs1 : format s1 by rewrite Hs1; apply: generic_format_round.
+have Hs0 : s0 = RND (a + s1) by move: (TwoSum_hi p choice a s1); rewrite Eac.
+move: (TwoSum_correct_loc Hp2 choice_sym Fa Fs1); rewrite Eac => Hac.
+have -> : s0 = RND (a + RND (b + c)) by rewrite Hs0 Hs1.
+have -> : e0 = a + RND (b + c) - RND (a + RND (b + c)) by rewrite -Hs1 -Hs0; lra.
+have -> : e1 = b + c - RND (b + c) by rewrite -Hs1; lra.
+by [].
+Qed.
+
+(* Leading product error [z00m = x0 y0 - RN(x0 y0)]: [|z00m| <= 2u].          *)
+Lemma z00m_bound x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  Rabs (x0 * y0 - RND (x0 * y0)) <= 2 * u.
+Proof.
+move=> Nx Ny.
+have Hu0 : 0 < u by apply: u_gt_0.
+case: (Nx) => _ Hx0l Hx0r _ _.
+case: (Ny) => _ Hy0l Hy0r _ _.
+have Hn0 : x0 * y0 <> 0 by nra.
+have Hulp : ulp (x0 * y0) <= 4 * u.
+  rewrite ulp_neq_0 // /cexp /fexp -pow_2mp; apply: bpow_le.
+  suff : (mag beta (x0 * y0) <= 2)%Z by lia.
+  apply: mag_le_bpow => //.
+  rewrite Rabs_pos_eq; last by nra.
+  have -> : pow 2 = 4 by rewrite /= /Z.pow_pos /=; lra.
+  nra.
+have He : Rabs (RND (x0 * y0) - x0 * y0) <= / 2 * ulp (x0 * y0)
+  by apply: error_le_half_ulp.
+rewrite Rabs_minus_sym; lra.
+Qed.
+
+(* ... and [z00m] is a multiple of [4u^2] (whence [uls z00m >= 4u^2]).        *)
+Lemma z00m_imul x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  is_imul (x0 * y0 - RND (x0 * y0)) (4 * (u * u)).
+Proof.
+move=> Nx Ny.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hulpx := tw_norm_ulp0 Nx.
+have Hulpy := tw_norm_ulp0 Ny.
+case: (Nx) => -[Fx0 _ _] Hx0l Hx0r _ _.
+case: (Ny) => -[Fy0 _ _] Hy0l Hy0r _ _.
+have x0n0 : x0 <> 0 by lra.
+have y0n0 : y0 <> 0 by lra.
+have Ix0 : is_imul x0 (pow (1 - p)).
+  have Hc : pow (cexp x0) = pow (1 - p) by rewrite -ulp_neq_0 // Hulpx pow_1mp.
+  by rewrite -Hc; apply: format_imul_cexp.
+have Iy0 : is_imul y0 (pow (1 - p)).
+  have Hc : pow (cexp y0) = pow (1 - p) by rewrite -ulp_neq_0 // Hulpy pow_1mp.
+  by rewrite -Hc; apply: format_imul_cexp.
+rewrite -pow_2m2p.
+have Ip : is_imul (x0 * y0) (pow (2 - 2 * p)).
+  have := is_imul_mul Ix0 Iy0.
+  by rewrite -bpow_plus (_ : (1 - p + (1 - p) = 2 - 2 * p)%Z); last by lia.
+apply: is_imul_minus => //.
+by apply: is_imul_pow_round.
+Qed.
+
+(* Cross product errors [z01m], [z10m]: [<= 2u^2].                            *)
+Lemma z01m_bound x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  Rabs (x0 * y1 - RND (x0 * y1)) <= 2 * (u * u).
+Proof.
+move=> Nx Ny.
+have Hu0 : 0 < u by apply: u_gt_0.
+case: (Nx) => _ Hx0l Hx0r _ _.
+have Hy1 := tw_norm_x1 Ny.
+have Hprod : Rabs (x0 * y1) < 4 * u.
+  rewrite Rabs_mult (Rabs_pos_eq x0); last by lra.
+  have := Rabs_pos y1; nra.
+case: (Req_dec (x0 * y1) 0) => [Hz|Hn0].
+  by rewrite Hz round_0 Rminus_0_r Rabs_R0; nra.
+have Hulp : ulp (x0 * y1) <= 4 * (u * u).
+  rewrite ulp_neq_0 // /cexp /fexp -pow_2m2p; apply: bpow_le.
+  suff : (mag beta (x0 * y1) <= 2 - p)%Z by lia.
+  by apply: mag_le_bpow => //; rewrite pow_2mp.
+have He : Rabs (RND (x0 * y1) - x0 * y1) <= / 2 * ulp (x0 * y1)
+  by apply: error_le_half_ulp.
+rewrite Rabs_minus_sym; lra.
+Qed.
+
+Lemma z10m_bound x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  Rabs (x1 * y0 - RND (x1 * y0)) <= 2 * (u * u).
+Proof.
+move=> Nx Ny.
+have Hu0 : 0 < u by apply: u_gt_0.
+case: (Ny) => _ Hy0l Hy0r _ _.
+have Hx1 := tw_norm_x1 Nx.
+have Hprod : Rabs (x1 * y0) < 4 * u.
+  rewrite Rabs_mult (Rabs_pos_eq y0); last by lra.
+  have := Rabs_pos x1; nra.
+case: (Req_dec (x1 * y0) 0) => [Hz|Hn0].
+  by rewrite Hz round_0 Rminus_0_r Rabs_R0; nra.
+have Hulp : ulp (x1 * y0) <= 4 * (u * u).
+  rewrite ulp_neq_0 // /cexp /fexp -pow_2m2p; apply: bpow_le.
+  suff : (mag beta (x1 * y0) <= 2 - p)%Z by lia.
+  by apply: mag_le_bpow => //; rewrite pow_2mp.
+have He : Rabs (RND (x1 * y0) - x1 * y0) <= / 2 * ulp (x1 * y0)
+  by apply: error_le_half_ulp.
+rewrite Rabs_minus_sym; lra.
+Qed.
+
+(* The FMA terms [z31 = RN(z10m + x0 y2)], [z32 = RN(z01m + x2 y0)]: [<= 6u^2].*)
+Lemma z31_bound z10m x0 y2 :
+  Rabs z10m <= 2 * (u * u) -> Rabs (x0 * y2) < 4 * (u * u) ->
+  Rabs (RND (z10m + x0 * y2)) <= 6 * (u * u).
+Proof.
+move=> H1 H2.
+have F6 : format (6 * (u * u)).
+  by apply: (format_imul_u2 (k := 6)); have := two_p_ge_64; lia.
+apply: Rabs_round_le_r => //.
+by have := Rabs_triang z10m (x0 * y2); lra.
+Qed.
+
+Lemma z32_bound z01m x2 y0 :
+  Rabs z01m <= 2 * (u * u) -> Rabs (x2 * y0) < 4 * (u * u) ->
+  Rabs (RND (z01m + x2 * y0)) <= 6 * (u * u).
+Proof.
+move=> H1 H2.
+have F6 : format (6 * (u * u)).
+  by apply: (format_imul_u2 (k := 6)); have := two_p_ge_64; lia.
+apply: Rabs_round_le_r => //.
+by have := Rabs_triang z01m (x2 * y0); lra.
+Qed.
+
+(* [z3 = RN(z31 + z32)]: [<= 12u^2].                                          *)
+Lemma z3_bound z31 z32 :
+  Rabs z31 <= 6 * (u * u) -> Rabs z32 <= 6 * (u * u) ->
+  Rabs (RND (z31 + z32)) <= 12 * (u * u).
+Proof.
+move=> H1 H2.
+have F12 : format (12 * (u * u)).
+  by apply: (format_imul_u2 (k := 12)); have := two_p_ge_64; lia.
+apply: Rabs_round_le_r => //.
+by have := Rabs_triang z31 z32; lra.
+Qed.
+
+(* [b2 = z01p + z10p - RN(z01p + z10p)] (the third VecSum limb): [<= 4u^2].    *)
+Lemma b2_bound x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  Rabs (RND (x0 * y1) + RND (x1 * y0) - RND (RND (x0 * y1) + RND (x1 * y0)))
+    <= 4 * (u * u).
+Proof.
+move=> Nx Ny.
+have Hu0 : 0 < u by apply: u_gt_0.
+set s := RND (x0 * y1) + RND (x1 * y0).
+have Hz01 := z01p_bound Nx Ny.
+have Hz10 := z10p_bound Nx Ny.
+have Hs8 : Rabs s <= 8 * u.
+  by rewrite /s; have := Rabs_triang (RND (x0 * y1)) (RND (x1 * y0)); lra.
+case: (Rlt_le_dec (Rabs s) (8 * u)) => Hs; last first.
+  have Heq : Rabs s = 8 * u by lra.
+  have Fs : format s.
+    have Hor : s = 8 * u \/ s = - (8 * u) by split_Rabs; lra.
+    have F8 : format (8 * u) by rewrite -pow_3mp; apply: format_pow.
+    by case: Hor => ->; [ | apply: generic_format_opp].
+  by rewrite (round_generic _ _ _ _ Fs) Rminus_diag Rabs_R0; nra.
+case: (Req_dec s 0) => [->|sn0].
+  by rewrite round_0 Rminus_0_r Rabs_R0; nra.
+have Hulp : ulp s <= 8 * (u * u).
+  rewrite ulp_neq_0 // /cexp /fexp -pow_3m2p; apply: bpow_le.
+  suff : (mag beta s <= 3 - p)%Z by lia.
+  by apply: mag_le_bpow => //; rewrite pow_3mp.
+have He : Rabs (RND s - s) <= / 2 * ulp s by apply: error_le_half_ulp.
+rewrite Rabs_minus_sym; lra.
+Qed.
+
+(* [c = RN(b2 + x1 y1)]: [<= 8u^2].                                           *)
+Lemma c_bound b2 x1 y1 :
+  Rabs b2 <= 4 * (u * u) -> Rabs (x1 * y1) < 4 * (u * u) ->
+  Rabs (RND (b2 + x1 * y1)) <= 8 * (u * u).
+Proof.
+move=> H1 H2.
+have F8 : format (8 * (u * u)).
+  by apply: (format_imul_u2 (k := 8)); have := two_p_ge_64; lia.
+apply: Rabs_round_le_r => //.
+by have := Rabs_triang b2 (x1 * y1); lra.
+Qed.
+
+(* [s3 = RN(c + z3)]: [<= 20u^2].                                             *)
+Lemma s3_bound c z3 :
+  Rabs c <= 8 * (u * u) -> Rabs z3 <= 12 * (u * u) ->
+  Rabs (RND (c + z3)) <= 20 * (u * u).
+Proof.
+move=> H1 H2.
+have F20 : format (20 * (u * u)).
+  by apply: (format_imul_u2 (k := 20)); have := two_p_ge_64; lia.
+apply: Rabs_round_le_r => //.
+by have := Rabs_triang c z3; lra.
 Qed.
 
 (* ---- degenerate inputs (a zero factor) -----------------------------------*)

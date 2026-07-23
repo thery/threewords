@@ -4,7 +4,9 @@
 > `ThreeProd_isTW` and `ThreeProd_error` are PROVED, reduced (FLX scale +
 > sign equivariance, degenerate zero-factor cases) to the *normalised* forms
 > `ThreeProd_isTW_norm` / `ThreeProd_error_norm`, which carry the §6.2 math and
-> are still admitted (with the §6.1 `z00p_lb`/`z00p_ub` bounds).
+> are still admitted.  **All §6.1 term bounds are proved** (see the table
+> below): `z00p`, `z00m` (+ `4u² | z00m`), `z01p`/`z10p`, `z01m`/`z10m`,
+> `z31`/`z32`, `b2`, `c`, `z3`, `s3`.
 > `doc/paper3.pdf` §6, p. 6–7.
 > Setting FLX, `u = 2^{-p}`, `RN` = round-to-nearest (ties-to-even), `ufp`/`uls`
 > as in the paper. This is the FIRST algorithm of the multiplication half
@@ -163,9 +165,12 @@ The bound is tight: at `p = 53` the witness (2) in the paper attains
      `ThreeProd_isTW_norm` / `ThreeProd_error_norm` (normalised, admitted).
    These lemmas are the reusable skeleton for the Alg-10…18 variants, which the
    paper proves "similarly".
-4. §6.1 term bounds as named lemmas — input bounds done (`tw_norm_ulp0`,
-   `tw_norm_x1`/`x2`/`hi`); product bounds `z00p_lb`/`z00p_ub` (+ the rest of
-   the table) TODO.
+4. §6.1 term bounds as named lemmas — **done**.  Input bounds (`tw_norm_ulp0`,
+   `tw_norm_x1`/`x2`/`hi`); product bounds `z00p_lb`/`z00p_ub`,
+   `z01p_bound`/`z10p_bound`, `x1y1`/`x0y2`/`x2y0_bound`; error/FMA bounds
+   `z00m_bound`/`z00m_imul`, `z01m`/`z10m_bound`, `z31`/`z32_bound`, `b2_bound`,
+   `c_bound`, `z3_bound`, `s3_bound` (via the reusable `round_le_imul_u2`,
+   `format_imul_u2`, `vecSum3`).
 5. The four-case `I` study → F-nonoverlapping of the 4-term inner VecSum →
    `ThreeProd_isTW_norm`.
 6. The six `εᵢ` bounds → `ThreeProd_error_norm`.

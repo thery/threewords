@@ -1482,6 +1482,28 @@ by split; [apply: Hfmt; rewrite !inE eqxx
          | apply: (Hno 0%N) | apply: (Hno 1%N)].
 Qed.
 
+(* The [star] head-emit step: when [RN(e0 + e1) = e0] (the top-of-VecSum        *)
+(* property) and [e1 <> 0], VSEB emits [e0] and continues on the tail.  This    *)
+(* is the [e1 <> 0] half of the paper's [(r0, VSEB(2)) = VSEB(3)] identity.     *)
+Lemma vseb_cons_round e0 e1 l :
+  format e0 -> format e1 -> RND (e0 + e1) = e0 -> e1 <> 0 ->
+  vseb (e0 :: e1 :: l) = e0 :: vseb (e1 :: l).
+Proof.
+move=> Fe0 Fe1 Hr Hne1.
+have HT : TwoSum e0 e1 = DWR e0 e1.
+  move: (TwoSum_correct_loc Hp2 choice_sym Fe0 Fe1) (TwoSum_hi p choice e0 e1).
+  rewrite Hr.
+  case: (TwoSum e0 e1) => s et /= Hsum Hs.
+  by rewrite Hs; congr DWR; lra.
+rewrite /vseb.
+case: l => [|e2 l].
+  by rewrite vsebAux_1 HT.
+rewrite vsebAux_consS HT.
+have -> : is_left (Req_EM_T e1 0) = false.
+  by case: (Req_EM_T e1 0) => [E1|//]; case: (Hne1 E1).
+by [].
+Qed.
+
 (* Final assembly: an error numerator [<= 28u^3 - 11.9u^4] over a product of    *)
 (* magnitude [>= 1 - 4u] yields the relative bound [28u^3 + 107u^4].  The       *)
 (* [107u^4] slack is exactly what makes [(28u^3-11.9u^4)/(1-4u) <= 28u^3+       *)

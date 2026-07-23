@@ -809,6 +809,60 @@ rewrite -(round_generic _ _ _ _ F44).
 by apply: round_le.
 Qed.
 
+(* [4u = pow(2-p)], used for the [< 4u] product bounds.                        *)
+Lemma pow_2mp : pow (2 - p) = 4 * u.
+Proof.
+rewrite (_ : (2 - p = 2 + - p)%Z); last by lia.
+by rewrite bpow_plus u_pow /= /Z.pow_pos /=; lra.
+Qed.
+
+(* Cross products [z01p = RN(x0 y1)], [z10p = RN(x1 y0)] are [<= 4u].          *)
+Lemma z01p_bound x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 -> Rabs (RND (x0 * y1)) <= 4 * u.
+Proof.
+Admitted.
+
+Lemma z10p_bound x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 -> Rabs (RND (x1 * y0)) <= 4 * u.
+Proof.
+Admitted.
+
+(* The ignored/second-order products [x1 y1], [x0 y2], [x2 y0] are [< 4u^2].   *)
+Lemma x1y1_bound x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 -> Rabs (x1 * y1) < 4 * (u * u).
+Proof.
+move=> Nx Ny.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hx1 := tw_norm_x1 Nx.
+have Hy1 := tw_norm_x1 Ny.
+have := Rabs_pos x1; have := Rabs_pos y1.
+by rewrite Rabs_mult; nra.
+Qed.
+
+Lemma x0y2_bound x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 -> Rabs (x0 * y2) < 4 * (u * u).
+Proof.
+move=> Nx Ny.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hx0hi := tw_norm_hi Nx.
+have Hy2 := tw_norm_x2 Ny.
+have := Rabs_pos y2.
+case: Nx => _ Hx0l _ _ _.
+by rewrite Rabs_mult (Rabs_pos_eq x0); [nra | lra].
+Qed.
+
+Lemma x2y0_bound x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 -> Rabs (x2 * y0) < 4 * (u * u).
+Proof.
+move=> Nx Ny.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hy0hi := tw_norm_hi Ny.
+have Hx2 := tw_norm_x2 Nx.
+have := Rabs_pos x2.
+case: Ny => _ Hy0l _ _ _.
+by rewrite Rabs_mult (Rabs_pos_eq y0); [nra | lra].
+Qed.
+
 (* ---- degenerate inputs (a zero factor) -----------------------------------*)
 
 Lemma negTW_id t : negTW (negTW t) = t.

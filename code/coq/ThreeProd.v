@@ -774,12 +774,40 @@ Admitted.
 Lemma z00p_lb x0 x1 x2 y0 y1 y2 :
   tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 -> 1 <= RND (x0 * y0).
 Proof.
-Admitted.
+move=> Nx Ny.
+have F1 : format 1 by rewrite -(pow0E beta); apply: format_pow.
+case: Nx => _ Hx0l _ _ _.
+case: Ny => _ Hy0l _ _ _.
+have H1 : 1 <= x0 * y0 by nra.
+rewrite -{1}(round_generic _ _ _ _ F1).
+by apply: round_le.
+Qed.
 
 Lemma z00p_ub x0 x1 x2 y0 y1 y2 :
   tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 -> RND (x0 * y0) < 4.
 Proof.
-Admitted.
+move=> Nx Ny.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hxhi := tw_norm_hi Nx.
+have Hyhi := tw_norm_hi Ny.
+case: Nx => _ Hx0l _ _ _.
+case: Ny => _ Hy0l _ _ _.
+have Hprod : x0 * y0 <= 4 - 4 * u by nra.
+have F44 : format (4 - 4 * u).
+  have Hpm : pow p * u = 1.
+    by rewrite u_pow -bpow_plus (_ : (p + - p = 0)%Z) ?pow0E //; lia.
+  have -> : 4 - 4 * u = IZR (2 ^ p - 1) * (4 * u).
+    rewrite minus_IZR IZR_2powp //.
+    have -> : (pow p - 1) * (4 * u) = 4 * (pow p * u) - 4 * u by ring.
+    by rewrite Hpm; ring.
+  have -> : 4 * u = pow (2 - p).
+    rewrite u_pow (_ : (2 - p = 2 + - p)%Z); last by lia.
+    by rewrite bpow_plus /= /Z.pow_pos /=; lra.
+  by apply: (format_mult_pow Hp2); rewrite Z.abs_eq; move: pow2_ge_16; lia.
+apply: (Rle_lt_trans _ (4 - 4 * u)); last by lra.
+rewrite -(round_generic _ _ _ _ F44).
+by apply: round_le.
+Qed.
 
 (* ---- degenerate inputs (a zero factor) -----------------------------------*)
 

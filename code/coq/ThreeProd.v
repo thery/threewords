@@ -66,7 +66,10 @@ Local Notation uls := (uls p).
 
 (* Building blocks, with this format's [p]/[choice] hidden.                   *)
 Local Notation TwoProd := (TwoProd p radix2 rnd).
+Local Notation TwoSum := (TwoSum p choice).
+Local Notation vecSumAux := (vecSumAux p choice).
 Local Notation vecSum := (vecSum p choice).
+Local Notation vsebAux := (vsebAux p choice).
 Local Notation vseb := (vseb p choice).
 Local Notation vsebK := (vsebK p choice).
 Local Notation isTW := (isTW p).
@@ -151,6 +154,341 @@ suff : (mag beta x - 1 <= mag beta (RND (x + y)))%Z by lia.
 apply: mag_ge_bpow.
 by have -> : (mag beta x - 1 - 1 = mag beta x - 2)%Z by lia.
 Qed.
+
+(* ===========================================================================*)
+(*  Section 6.1 -- bounds on the intermediate terms.                          *)
+(*                                                                            *)
+(*  The paper WLOGs [1 <= x0, y0 < 2] (so [ufp x0 = ufp y0 = 1]).  We package  *)
+(*  that normalisation together with the triple-word separation of one factor  *)
+(*  as [tw_norm].  Every bound of Section 6.1 is a lemma over [tw_norm].       *)
+(* ===========================================================================*)
+Definition tw_norm (x0 x1 x2 : R) : Prop :=
+  [/\ [/\ format x0, format x1 & format x2], 1 <= x0, x0 < 2,
+      (x1 = 0 \/ Rabs x1 < ulp x0) & (x2 = 0 \/ Rabs x2 < ulp x1)].
+
+(* Two [pow] rewrites used throughout: [2u = pow(1-p)] and [2u^2 = pow(1-2p)]. *)
+Lemma pow_1mp : pow (1 - p) = 2 * u.
+Proof. by rewrite /u; lra. Qed.
+
+Lemma pow_1m2p : pow (1 - 2 * p) = 2 * (u * u).
+Proof.
+rewrite /u.
+have -> : (1 - 2 * p = (1 - p) + ((1 - p) + (-1)))%Z by lia.
+rewrite !bpow_plus.
+have -> : pow (-1) = /2 by rewrite /= /Z.pow_pos /=; lra.
+lra.
+Qed.
+
+(* Under the normalisation the leading limb has [ulp x0 = 2u].                 *)
+Lemma tw_norm_ulp0 x0 x1 x2 : tw_norm x0 x1 x2 -> ulp x0 = 2 * u.
+Proof.
+move=> [] _ Hx0l Hx0r _ _.
+have x0n0 : x0 <> 0 by lra.
+have Hmag : (mag beta x0 = 1%Z :> Z).
+  apply: mag_unique_pos; rewrite /= /Z.pow_pos /=; lra.
+by rewrite ulp_neq_0 // /cexp /fexp Hmag /u; lra.
+Qed.
+
+(* First off-limb: [|x1| < 2u].  (Covers the [x1 = 0] case since [u > 0].)     *)
+Lemma tw_norm_x1 x0 x1 x2 : tw_norm x0 x1 x2 -> Rabs x1 < 2 * u.
+Proof.
+move=> Hn.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hulp := tw_norm_ulp0 Hn.
+case: Hn => _ _ _ [Hx1|Hx1] _.
+  by rewrite Hx1 Rabs_R0; lra.
+by rewrite -Hulp.
+Qed.
+
+(* Second off-limb: [|x2| < 2u^2].                                            *)
+Lemma tw_norm_x2 x0 x1 x2 : tw_norm x0 x1 x2 -> Rabs x2 < 2 * (u * u).
+Proof.
+move=> Hn.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hx1b := tw_norm_x1 Hn.
+have Hulpx1 : ulp x1 <= 2 * (u * u).
+  case: (Req_dec x1 0) => [->|x1n0].
+    by rewrite ulp_FLX_0 -pow_1m2p; apply: bpow_ge_0.
+  have Hmag : (mag beta x1 <= 1 - p)%Z.
+    by apply: mag_le_bpow => //; rewrite pow_1mp.
+  by rewrite ulp_neq_0 // /cexp /fexp -pow_1m2p; apply: bpow_le; lia.
+case: Hn => _ _ _ _ [->|Hx2].
+  rewrite Rabs_R0.
+  have Huu : 0 < u * u by nra.
+  lra.
+exact: (Rlt_le_trans _ _ _ Hx2 Hulpx1).
+Qed.
+
+(* [u = pow(-p)]: the workhorse rewrite for the product-term bounds.          *)
+Lemma u_pow : u = pow (- p).
+Proof.
+rewrite /u.
+have -> : (1 - p = 1 + - p)%Z by lia.
+by rewrite bpow_plus bpow_1 /=; lra.
+Qed.
+
+(* A normalised leading limb is at most [2 - 2u] (the largest float below 2). *)
+Lemma tw_norm_hi x0 x1 x2 : tw_norm x0 x1 x2 -> x0 <= 2 - 2 * u.
+Proof.
+move=> Hn; have Hulp := tw_norm_ulp0 Hn.
+case: Hn => -[Fx0 _ _] Hx0l Hx0r _ _.
+have x0n0 : x0 <> 0 by lra.
+have [k Hk] : is_imul x0 (2 * u).
+  have Ix0 := format_imul_cexp Fx0.
+  have Hc : pow (cexp x0) = 2 * u by rewrite -Hulp; symmetry; apply: ulp_neq_0.
+  by rewrite Hc in Ix0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hpp : pow p * u = 1.
+  by rewrite u_pow -bpow_plus (_ : (p + - p = 0)%Z) ?pow0E; [lra|lia].
+have Hp2u : pow p * (2 * u) = 2.
+  have -> : pow p * (2 * u) = 2 * (pow p * u) by ring.
+  by rewrite Hpp; lra.
+have Hkub : (k <= 2 ^ p - 1)%Z.
+  suff : (IZR k < IZR (2 ^ p))%R by move/lt_IZR; lia.
+  rewrite IZR_2powp //.
+  apply: (Rmult_lt_reg_r (2 * u)); first by lra.
+  by rewrite -Hk Hp2u.
+have -> : (2 - 2 * u = IZR (2 ^ p - 1) * (2 * u)).
+  rewrite minus_IZR IZR_2powp //.
+  by rewrite Rmult_minus_distr_r Hp2u; lra.
+rewrite Hk; apply: Rmult_le_compat_r; first by lra.
+by apply: IZR_le.
+Qed.
+
+(* ===========================================================================*)
+(*  FLX scale-invariance (the paper's "WLOG 1 <= x0, y0 < 2").                 *)
+(*                                                                            *)
+(*  In FLX every operation of Algorithm 9 commutes with scaling an input by a  *)
+(*  power of two ([round_bpow_FLX]).  We propagate this through the building    *)
+(*  blocks ([TwoSum], [vecSum], [vsebAux]/[vseb]/[vsebK], [TwoProd]) and hence  *)
+(*  through [ThreeProd]; combined with the scale-invariance of [isTW] and the  *)
+(*  scaling of [TWval], it lets the two theorems reduce to normalised inputs.  *)
+(* ===========================================================================*)
+
+(* [RND] commutes with scaling by a power of two (FLX; no underflow).          *)
+Lemma round_scale x c : RND (x * pow c) = RND x * pow c.
+Proof. exact: round_bpow_FLX. Qed.
+
+(* [TwoSum] scales: both output words pick up the common factor [pow c].       *)
+Lemma TwoSum_scale a b c :
+  TwoSum (a * pow c) (b * pow c) =
+  DWR (dwh (TwoSum a b) * pow c) (dwl (TwoSum a b) * pow c).
+Proof.
+rewrite /TwoSum /dwh /dwl.
+have Add : forall x y : R, x * pow c + y * pow c = (x + y) * pow c by move=> *; ring.
+have Sub : forall x y : R, x * pow c - y * pow c = (x - y) * pow c by move=> *; ring.
+by do 6! (rewrite ?Add ?Sub ?round_scale).
+Qed.
+
+(* [vecSumAux] scales: the emitted list and the running sum both pick up        *)
+(* [pow c].                                                                    *)
+Lemma vecSumAux_scale l c :
+  vecSumAux [seq z * pow c | z <- l] =
+  ([seq z * pow c | z <- (vecSumAux l).1], (vecSumAux l).2 * pow c).
+Proof.
+elim: l => [|x l IH].
+  by rewrite /= Rmult_0_l.
+case: l IH => [|y l'] IH; first by [].
+rewrite map_cons map_cons vecSumAux_cons.
+rewrite -map_cons IH.
+case E0 : (vecSumAux (y :: l')) => [es0 s0].
+rewrite TwoSum_scale.
+rewrite vecSumAux_cons E0.
+by case E1 : (TwoSum x s0) => [si0 ei0].
+Qed.
+
+(* [vecSum] scales.                                                            *)
+Lemma vecSum_scale l c :
+  vecSum [seq z * pow c | z <- l] = [seq z * pow c | z <- vecSum l].
+Proof.
+rewrite /vecSum vecSumAux_scale.
+by case: (vecSumAux l) => es s0.
+Qed.
+
+(* [vsebAux] scales (the [et = 0] branch test is preserved: [pow c <> 0]).     *)
+Lemma vsebAux_scale eps l c :
+  vsebAux (eps * pow c) [seq z * pow c | z <- l] =
+  [seq z * pow c | z <- vsebAux eps l].
+Proof.
+have pcn0 : pow c <> 0 by apply: Rgt_not_eq; apply: bpow_gt_0.
+elim: l eps => [|e l IH] eps; first by [].
+case: l IH => [|e2 l'] IH.
+  rewrite map_cons vsebAux_1 vsebAux_1 TwoSum_scale.
+  by case E1 : (TwoSum eps e) => [y0 y1].
+rewrite map_cons map_cons vsebAux_consS.
+rewrite TwoSum_scale.
+rewrite vsebAux_consS.
+case E1 : (TwoSum eps e) => [r0 et0].
+rewrite dwhE dwlE.
+case: (Req_EM_T et0 0) => [Et0|Et0].
+  have Ec : et0 * pow c = 0 by rewrite Et0; ring.
+  have -> : is_left (Req_EM_T (et0 * pow c) 0) = true.
+    by case: (Req_EM_T (et0 * pow c) 0) => // H; case: (H Ec).
+  by rewrite -map_cons IH.
+have -> : is_left (Req_EM_T (et0 * pow c) 0) = false.
+  case: (Req_EM_T (et0 * pow c) 0) => // H.
+  by case: (Rmult_integral _ _ H) => k; [case: (Et0 k) | case: (pcn0 k)].
+by rewrite -map_cons IH.
+Qed.
+
+(* [vseb] and [vsebK] scale.                                                   *)
+Lemma vseb_scale l c :
+  vseb [seq z * pow c | z <- l] = [seq z * pow c | z <- vseb l].
+Proof.
+case: l => [|e0 l'] //.
+by rewrite map_cons /vseb vsebAux_scale.
+Qed.
+
+Lemma vsebK_scale k l c :
+  vsebK k [seq z * pow c | z <- l] = [seq z * pow c | z <- vsebK k l].
+Proof.
+rewrite /vsebK vseb_scale.
+by rewrite map_take.
+Qed.
+
+(* [TwoProd] scales: with factors [pow c1] on [a] and [pow c2] on [b], both     *)
+(* words pick up [pow (c1 + c2)].                                              *)
+Lemma TwoProd_scale a b c1 c2 :
+  TwoProd (a * pow c1) (b * pow c2) =
+  ((TwoProd a b).1 * pow (c1 + c2), (TwoProd a b).2 * pow (c1 + c2)).
+Proof.
+rewrite /TwoProd /=.
+have Hprod : a * pow c1 * (b * pow c2) = a * b * pow (c1 + c2).
+  by rewrite bpow_plus; ring.
+rewrite Hprod round_scale.
+congr pair.
+have -> : a * b * pow (c1 + c2) - RND (a * b) * pow (c1 + c2) =
+          (a * b - RND (a * b)) * pow (c1 + c2) by ring.
+by rewrite round_scale.
+Qed.
+
+(* [nth] through a scaling [map] (the default [0] is fixed by the factor).     *)
+Lemma nth_map_scale (l : seq R) (c : Z) i :
+  nth 0 [seq z * pow c | z <- l] i = nth 0 l i * pow c.
+Proof. by elim: l i => [|x l IH] [|i] //=; rewrite ?Rmult_0_l //. Qed.
+
+(* [format], [ulp] under scaling by a power of two.                            *)
+Lemma format_scale x c : format (x * pow c) <-> format x.
+Proof.
+have pcn0 : pow c <> 0 by apply: Rgt_not_eq; apply: bpow_gt_0.
+split=> Hf.
+  have Hr : RND x * pow c = x * pow c.
+    by rewrite -round_scale (round_generic _ _ _ _ Hf).
+  have HRx : RND x = x by apply: (Rmult_eq_reg_r (pow c)).
+  by rewrite -HRx; apply: generic_format_round.
+have HRxc : RND (x * pow c) = x * pow c.
+  by rewrite round_scale (round_generic _ _ _ _ Hf).
+by rewrite -HRxc; apply: generic_format_round.
+Qed.
+
+Lemma ulp_scale x c : ulp (x * pow c) = ulp x * pow c.
+Proof.
+case: (Req_dec x 0) => [->|xn0].
+  by rewrite Rmult_0_l !ulp_FLX_0 Rmult_0_l.
+have xcn0 : x * pow c <> 0.
+  apply: Rmult_integral_contrapositive_currified => //.
+  by apply: Rgt_not_eq; apply: bpow_gt_0.
+rewrite !ulp_neq_0 // cexp_bpow_FLX // bpow_plus; ring.
+Qed.
+
+(* Scaling a triple word by [pow c] (component-wise).                          *)
+Definition scaleTW (c : Z) (t : twR) : twR :=
+  let: TWR t0 t1 t2 := t in TWR (t0 * pow c) (t1 * pow c) (t2 * pow c).
+
+Lemma TWval_scale c t : TWval (scaleTW c t) = TWval t * pow c.
+Proof. by case: t => t0 t1 t2 /=; ring. Qed.
+
+(* [isTW] is scale-invariant (formats, and the strict [ulp] gaps, both scale). *)
+Lemma isTW_scale c t : isTW (scaleTW c t) <-> isTW t.
+Proof.
+have pc0 : 0 < pow c by apply: bpow_gt_0.
+have Rc : Rabs (pow c) = pow c by apply: Rabs_pos_eq; lra.
+case: t => t0 t1 t2 /=; split=> -[F0 F1 F2 H1 H2]; split.
+- by rewrite -(format_scale t0 c).
+- by rewrite -(format_scale t1 c).
+- by rewrite -(format_scale t2 c).
+- case: H1 => [H1|H1]; [left; nra | right].
+  move: H1; rewrite ulp_scale Rabs_mult Rc => HH.
+  by apply: (Rmult_lt_reg_r (pow c)).
+- case: H2 => [H2|H2]; [left; nra | right].
+  move: H2; rewrite ulp_scale Rabs_mult Rc => HH.
+  by apply: (Rmult_lt_reg_r (pow c)).
+- by rewrite (format_scale t0 c).
+- by rewrite (format_scale t1 c).
+- by rewrite (format_scale t2 c).
+- case: H1 => [->|H1]; [left; ring | right].
+  rewrite ulp_scale Rabs_mult Rc.
+  by apply: Rmult_lt_compat_r.
+- case: H2 => [->|H2]; [left; ring | right].
+  rewrite ulp_scale Rabs_mult Rc.
+  by apply: Rmult_lt_compat_r.
+Qed.
+
+(* ===========================================================================*)
+(*  Algorithm 9 is scale-equivariant: [ThreeProd] of scaled inputs is the      *)
+(*  scaled [ThreeProd].  This is the FLX "WLOG 1 <= x0, y0 < 2" made explicit. *)
+(* ===========================================================================*)
+Lemma ThreeProd_scale a b x y :
+  ThreeProd (scaleTW a x) (scaleTW b y) = scaleTW (a + b) (ThreeProd x y).
+Proof.
+case: x => x0 x1 x2; case: y => y0 y1 y2.
+rewrite /ThreeProd /scaleTW.
+have P1 : x1 * pow a * (y1 * pow b) = x1 * y1 * pow (a + b) by rewrite bpow_plus; ring.
+have P2 : x0 * pow a * (y2 * pow b) = x0 * y2 * pow (a + b) by rewrite bpow_plus; ring.
+have P3 : x2 * pow a * (y0 * pow b) = x2 * y0 * pow (a + b) by rewrite bpow_plus; ring.
+rewrite !P1 !P2 !P3 !TwoProd_scale.
+case: (TwoProd x0 y0) => w00p w00m.
+case: (TwoProd x0 y1) => w01p w01m.
+case: (TwoProd x1 y0) => w10p w10m.
+have F1 : forall u v : R, (u, v).1 = u by [].
+have F2 : forall u v : R, (u, v).2 = v by [].
+rewrite !F1 !F2.
+have Eb : forall i, nth 0 (vecSum [:: w00m * pow (a+b); w01p * pow (a+b); w10p * pow (a+b)]) i = nth 0 (vecSum [:: w00m; w01p; w10p]) i * pow (a+b).
+  move=> i.
+  have -> : [:: w00m * pow (a+b); w01p * pow (a+b); w10p * pow (a+b)] = [seq z * pow (a+b) | z <- [:: w00m; w01p; w10p]] by [].
+  by rewrite vecSum_scale nth_map_scale.
+rewrite !Eb.
+set bb := vecSum [:: w00m; w01p; w10p].
+have E4 : forall t : R, RND (t * pow (a+b) + x1 * y1 * pow (a+b)) = RND (t + x1 * y1) * pow (a+b).
+  move=> t.
+  have -> : t * pow (a+b) + x1 * y1 * pow (a+b) = (t + x1 * y1) * pow (a+b) by ring.
+  by rewrite round_scale.
+have E5 : RND (RND (w10m * pow (a+b) + x0 * y2 * pow (a+b)) + RND (w01m * pow (a+b) + x2 * y0 * pow (a+b))) = RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0)) * pow (a+b).
+  have -> : w10m * pow (a+b) + x0 * y2 * pow (a+b) = (w10m + x0 * y2) * pow (a+b) by ring.
+  have -> : w01m * pow (a+b) + x2 * y0 * pow (a+b) = (w01m + x2 * y0) * pow (a+b) by ring.
+  rewrite !round_scale.
+  have -> : RND (w10m + x0 * y2) * pow (a+b) + RND (w01m + x2 * y0) * pow (a+b) = (RND (w10m + x0 * y2) + RND (w01m + x2 * y0)) * pow (a+b) by ring.
+  by rewrite round_scale.
+rewrite !E4 !E5.
+have Ee : forall i, nth 0 (vecSum [:: w00p * pow (a+b); nth 0 bb 0 * pow (a+b); nth 0 bb 1 * pow (a+b); RND (nth 0 bb 2 + x1 * y1) * pow (a+b); RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0)) * pow (a+b)]) i = nth 0 (vecSum [:: w00p; nth 0 bb 0; nth 0 bb 1; RND (nth 0 bb 2 + x1 * y1); RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0))]) i * pow (a+b).
+  move=> i.
+  have -> : [:: w00p * pow (a+b); nth 0 bb 0 * pow (a+b); nth 0 bb 1 * pow (a+b); RND (nth 0 bb 2 + x1 * y1) * pow (a+b); RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0)) * pow (a+b)] = [seq z * pow (a+b) | z <- [:: w00p; nth 0 bb 0; nth 0 bb 1; RND (nth 0 bb 2 + x1 * y1); RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0))]] by [].
+  by rewrite vecSum_scale nth_map_scale.
+rewrite !Ee.
+set ee := vecSum [:: w00p; nth 0 bb 0; nth 0 bb 1; RND (nth 0 bb 2 + x1 * y1); RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0))].
+have Ev : vsebK 2 [:: nth 0 ee 1 * pow (a+b); nth 0 ee 2 * pow (a+b); nth 0 ee 3 * pow (a+b); nth 0 ee 4 * pow (a+b)] = [seq z * pow (a+b) | z <- vsebK 2 [:: nth 0 ee 1; nth 0 ee 2; nth 0 ee 3; nth 0 ee 4]].
+  have -> : [:: nth 0 ee 1 * pow (a+b); nth 0 ee 2 * pow (a+b); nth 0 ee 3 * pow (a+b); nth 0 ee 4 * pow (a+b)] = [seq z * pow (a+b) | z <- [:: nth 0 ee 1; nth 0 ee 2; nth 0 ee 3; nth 0 ee 4]] by [].
+  by rewrite vsebK_scale.
+rewrite Ev.
+set V := vsebK 2 [:: nth 0 ee 1; nth 0 ee 2; nth 0 ee 3; nth 0 ee 4].
+by case: V => [|r1 [|r2 rr]] //=; congr TWR; ring.
+Qed.
+
+(* ===========================================================================*)
+(*  Section 6.1 -- product-term bounds.  Each is a lemma over the two          *)
+(*  normalisation contexts [tw_norm x0 x1 x2] / [tw_norm y0 y1 y2].            *)
+(* ===========================================================================*)
+
+(* The leading product [z00p = RN(x0 y0)] lies in [1, 4).                     *)
+Lemma z00p_lb x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 -> 1 <= RND (x0 * y0).
+Proof.
+Admitted.
+
+Lemma z00p_ub x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 -> RND (x0 * y0) < 4.
+Proof.
+Admitted.
 
 (* ===========================================================================*)
 (*  Theorem 7, part 1: [ThreeProd x y] is a triple-word number (p >= 6).      *)

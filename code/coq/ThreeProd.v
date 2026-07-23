@@ -76,6 +76,7 @@ Local Notation vecSum := (vecSum p choice).
 Local Notation vsebAux := (vsebAux p choice).
 Local Notation vseb := (vseb p choice).
 Local Notation vsebK := (vsebK p choice).
+Local Notation Pnonoverlap := (Pnonoverlap p).
 Local Notation isTW := (isTW p).
 
 (* ===========================================================================*)
@@ -1330,6 +1331,41 @@ have T1 := Rabs_triang (e0 + e1 + e2 + e3) e4.
 have T2 := Rabs_triang (e0 + e1 + e2) e3.
 have T3 := Rabs_triang (e0 + e1) e2.
 have T4 := Rabs_triang e0 e1.
+lra.
+Qed.
+
+(* [eps5]: the VSEB truncation error.  Given the VSEB output [vseb e] is        *)
+(* P-nonoverlapping (this is exactly the [ThreeProd_isTW_norm] ingredient), the *)
+(* tail dropped by keeping 3 limbs is [<= (2u^3 + 4.2u^4)|sum|] by Theorem 3    *)
+(* ([Pnonoverlap_truncate_error] at k = 3).  Stated conditionally so it can be  *)
+(* discharged now; the P-nonoverlap hypothesis comes from part 1.               *)
+Lemma eps5_bound e :
+  Pnonoverlap (vseb e) -> {in vseb e, forall z, format z} -> u <= / 64 ->
+  Rabs (sumR (vseb e) - sumR (vsebK 3 e)) <=
+    (2 * (u * u * u) + 42 / 10 * (u * u * u * u)) * Rabs (sumR (vseb e)).
+Proof.
+move=> Py Fy Hu64.
+set y := vseb e.
+have Hsplit : sumR y - sumR (vsebK 3 e) = sumR (drop 3 y).
+  by rewrite /vsebK -/y -{1}(cat_take_drop 3 y) sumR_cat; ring.
+rewrite Hsplit.
+have -> : 2 * (u * u * u) + 42 / 10 * (u * u * u * u) =
+          2 * u ^ 3 + 42 / 10 * u ^ 3.+1 by rewrite /=; ring.
+case: (Req_dec (nth 0 y 0) 0) => [Hy0z|Hy0n]; last first.
+  by apply: Pnonoverlap_truncate_error.
+have H1 := @nth_step_zero p Hp2 y 0 Py Fy Hy0z.
+have H2 := @nth_step_zero p Hp2 y 1 Py Fy H1.
+have H3 := @nth_step_zero p Hp2 y 2 Py Fy H2.
+have -> : sumR (drop 3 y) = 0.
+  apply: (@small_head_zero p Hp2);
+    [by apply: Pnonoverlap_drop
+    | by move=> t /mem_drop; apply: Fy
+    | by rewrite nth_drop addn0].
+rewrite Rabs_R0.
+have Hu0 : 0 < u by apply: u_gt_0.
+apply: Rmult_le_pos; last exact: Rabs_pos.
+have H4 : 0 <= u ^ 3 by apply: pow_le; lra.
+have H5 : 0 <= u ^ 4 by apply: pow_le; lra.
 lra.
 Qed.
 

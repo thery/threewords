@@ -1500,6 +1500,19 @@ by case: (TwoSum b1 s) => sb1 eb1; case: (TwoSum b0 sb1) => sb0 eb0;
    case: (TwoSum a sb0) => sa ea.
 Qed.
 
+(* The trailing error [e4 = dwl(TwoSum c d)] of the peeled 2Sum is at most       *)
+(* [1/2 ulp(s3)] ([s3 = dwh]).  This is the paper's [ulp(s3) >= 2|e4|], the      *)
+(* magnitude side of the [e4] F-nonoverlap step (item (b)).                     *)
+Lemma e4_le_half_ulp c d :
+  format c -> format d ->
+  2 * Rabs (dwl (TwoSum c d)) <= ulp (dwh (TwoSum c d)).
+Proof.
+move=> Fc Fd.
+have := magnitude_TwoSum Hp2 choice_sym Fc Fd.
+rewrite /magnitudeDWR.
+by case: (TwoSum c d) => s e /= H; lra.
+Qed.
+
 (* Top-of-VecSum property: the head of a VecSum output equals [RN] of (head +   *)
 (* next).  Because [e0 = RN(x0 + s)] is the last 2Sum's high word and [e1 =      *)
 (* x0 + s - e0] its low word, so [e0 + e1 = x0 + s] and [RN(e0 + e1) = e0].      *)

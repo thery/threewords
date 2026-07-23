@@ -475,6 +475,177 @@ by case: V => [|r1 [|r2 rr]] //=; congr TWR; ring.
 Qed.
 
 (* ===========================================================================*)
+(*  Sign-equivariance: negating [x_bar] alone flips every intermediate (each   *)
+(*  is odd of degree one in the [x] limbs), so [ThreeProd] is odd in its first  *)
+(*  argument.  Together with [ThreeProd_scale] this yields the paper's full     *)
+(*  "WLOG 1 <= x0, y0 < 2" (positive, normalised).                            *)
+(* ===========================================================================*)
+
+(* [RND] commutes with negation (symmetric ties-to-even, via [choice_sym]).    *)
+Lemma round_opp x : RND (- x) = - RND x.
+Proof. exact: (RN_opp_sym p choice_sym). Qed.
+
+Lemma nth_map_opp (l : seq R) i :
+  nth 0 [seq - z | z <- l] i = - nth 0 l i.
+Proof. by elim: l i => [|x l IH] [|i] //=; rewrite ?Ropp_0 //. Qed.
+
+Lemma TwoSum_opp a b :
+  TwoSum (- a) (- b) = DWR (- dwh (TwoSum a b)) (- dwl (TwoSum a b)).
+Proof.
+rewrite /TwoSum /dwh /dwl.
+have Add : forall u v : R, - u + - v = - (u + v) by move=> *; ring.
+have Sub : forall u v : R, - u - - v = - (u - v) by move=> *; ring.
+by do 6! (rewrite ?Add ?Sub ?round_opp).
+Qed.
+
+Lemma vecSumAux_opp l :
+  vecSumAux [seq - z | z <- l] =
+  ([seq - z | z <- (vecSumAux l).1], - (vecSumAux l).2).
+Proof.
+elim: l => [|x l IH].
+  by rewrite /= Ropp_0.
+case: l IH => [|y l'] IH; first by [].
+rewrite map_cons map_cons vecSumAux_cons.
+rewrite -map_cons IH.
+case E0 : (vecSumAux (y :: l')) => [es0 s0].
+rewrite TwoSum_opp.
+rewrite vecSumAux_cons E0.
+by case E1 : (TwoSum x s0) => [si0 ei0].
+Qed.
+
+Lemma vecSum_opp l :
+  vecSum [seq - z | z <- l] = [seq - z | z <- vecSum l].
+Proof.
+rewrite /vecSum vecSumAux_opp.
+by case: (vecSumAux l) => es s0.
+Qed.
+
+Lemma vsebAux_opp eps l :
+  vsebAux (- eps) [seq - z | z <- l] = [seq - z | z <- vsebAux eps l].
+Proof.
+elim: l eps => [|e l IH] eps; first by [].
+case: l IH => [|e2 l'] IH.
+  rewrite map_cons vsebAux_1 vsebAux_1 TwoSum_opp.
+  by case E1 : (TwoSum eps e) => [y0 y1].
+rewrite map_cons map_cons vsebAux_consS.
+rewrite TwoSum_opp.
+rewrite vsebAux_consS.
+case E1 : (TwoSum eps e) => [r0 et0].
+rewrite dwhE dwlE.
+case: (Req_EM_T et0 0) => [Et0|Et0].
+  have Ec : - et0 = 0 by rewrite Et0; ring.
+  have -> : is_left (Req_EM_T (- et0) 0) = true.
+    by case: (Req_EM_T (- et0) 0) => // H; case: (H Ec).
+  by rewrite -map_cons IH.
+have -> : is_left (Req_EM_T (- et0) 0) = false.
+  case: (Req_EM_T (- et0) 0) => // H.
+  have E0 : et0 = 0 by lra.
+  by case: (Et0 E0).
+by rewrite -map_cons IH.
+Qed.
+
+Lemma vseb_opp l :
+  vseb [seq - z | z <- l] = [seq - z | z <- vseb l].
+Proof.
+case: l => [|e0 l'] //.
+by rewrite map_cons /vseb vsebAux_opp.
+Qed.
+
+Lemma vsebK_opp k l :
+  vsebK k [seq - z | z <- l] = [seq - z | z <- vsebK k l].
+Proof.
+rewrite /vsebK vseb_opp.
+by rewrite map_take.
+Qed.
+
+(* [TwoProd] with the LEFT factor negated: both words flip sign.               *)
+Lemma TwoProd_opp_l a b :
+  TwoProd (- a) b = (- (TwoProd a b).1, - (TwoProd a b).2).
+Proof.
+rewrite /TwoProd /=.
+have -> : - a * b = - (a * b) by ring.
+rewrite round_opp.
+congr pair.
+have -> : - (a * b) - - RND (a * b) = - (a * b - RND (a * b)) by ring.
+by rewrite round_opp.
+Qed.
+
+(* Negating a triple word (component-wise).                                    *)
+Definition negTW (t : twR) : twR :=
+  let: TWR t0 t1 t2 := t in TWR (- t0) (- t1) (- t2).
+
+Lemma TWval_opp t : TWval (negTW t) = - TWval t.
+Proof. by case: t => t0 t1 t2 /=; ring. Qed.
+
+Lemma isTW_opp t : isTW (negTW t) <-> isTW t.
+Proof.
+have Fo : forall z, format (- z) <-> format z.
+  move=> z; split=> H; last by apply: generic_format_opp.
+  by rewrite -[z]Ropp_involutive; apply: generic_format_opp.
+case: t => t0 t1 t2 /=; split=> -[F0 F1 F2 H1 H2]; split; rewrite ?ulp_opp.
+- by apply/Fo.
+- by apply/Fo.
+- by apply/Fo.
+- case: H1 => [H1|H1]; [left; lra | right].
+  by move: H1; rewrite Rabs_Ropp ulp_opp.
+- case: H2 => [H2|H2]; [left; lra | right].
+  by move: H2; rewrite Rabs_Ropp ulp_opp.
+- by apply/Fo.
+- by apply/Fo.
+- by apply/Fo.
+- case: H1 => [H1|H1]; [left; lra | right].
+  by rewrite Rabs_Ropp.
+- case: H2 => [H2|H2]; [left; lra | right].
+  by rewrite Rabs_Ropp.
+Qed.
+
+(* Algorithm 9 is odd in its first argument.                                   *)
+Lemma ThreeProd_opp x y : ThreeProd (negTW x) y = negTW (ThreeProd x y).
+Proof.
+case: x => x0 x1 x2; case: y => y0 y1 y2.
+rewrite /ThreeProd /negTW.
+have P1 : (- x1) * y1 = - (x1 * y1) by ring.
+have P2 : (- x0) * y2 = - (x0 * y2) by ring.
+have P3 : (- x2) * y0 = - (x2 * y0) by ring.
+rewrite !P1 !P2 !P3 !TwoProd_opp_l.
+case: (TwoProd x0 y0) => w00p w00m.
+case: (TwoProd x0 y1) => w01p w01m.
+case: (TwoProd x1 y0) => w10p w10m.
+have F1 : forall u v : R, (u, v).1 = u by [].
+have F2 : forall u v : R, (u, v).2 = v by [].
+rewrite !F1 !F2.
+have Eb : forall i, nth 0 (vecSum [:: - w00m; - w01p; - w10p]) i = - nth 0 (vecSum [:: w00m; w01p; w10p]) i.
+  move=> i.
+  have -> : [:: - w00m; - w01p; - w10p] = [seq - z | z <- [:: w00m; w01p; w10p]] by [].
+  by rewrite vecSum_opp nth_map_opp.
+rewrite !Eb.
+set bb := vecSum [:: w00m; w01p; w10p].
+have E4 : forall t : R, RND (- t + - (x1 * y1)) = - RND (t + x1 * y1).
+  move=> t.
+  have -> : - t + - (x1 * y1) = - (t + x1 * y1) by ring.
+  by rewrite round_opp.
+have E5 : RND (RND (- w10m + - (x0 * y2)) + RND (- w01m + - (x2 * y0))) = - RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0)).
+  have -> : - w10m + - (x0 * y2) = - (w10m + x0 * y2) by ring.
+  have -> : - w01m + - (x2 * y0) = - (w01m + x2 * y0) by ring.
+  rewrite !round_opp.
+  have -> : - RND (w10m + x0 * y2) + - RND (w01m + x2 * y0) = - (RND (w10m + x0 * y2) + RND (w01m + x2 * y0)) by ring.
+  by rewrite round_opp.
+rewrite !E4 !E5.
+have Ee : forall i, nth 0 (vecSum [:: - w00p; - nth 0 bb 0; - nth 0 bb 1; - RND (nth 0 bb 2 + x1 * y1); - RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0))]) i = - nth 0 (vecSum [:: w00p; nth 0 bb 0; nth 0 bb 1; RND (nth 0 bb 2 + x1 * y1); RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0))]) i.
+  move=> i.
+  have -> : [:: - w00p; - nth 0 bb 0; - nth 0 bb 1; - RND (nth 0 bb 2 + x1 * y1); - RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0))] = [seq - z | z <- [:: w00p; nth 0 bb 0; nth 0 bb 1; RND (nth 0 bb 2 + x1 * y1); RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0))]] by [].
+  by rewrite vecSum_opp nth_map_opp.
+rewrite !Ee.
+set ee := vecSum [:: w00p; nth 0 bb 0; nth 0 bb 1; RND (nth 0 bb 2 + x1 * y1); RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0))].
+have Ev : vsebK 2 [:: - nth 0 ee 1; - nth 0 ee 2; - nth 0 ee 3; - nth 0 ee 4] = [seq - z | z <- vsebK 2 [:: nth 0 ee 1; nth 0 ee 2; nth 0 ee 3; nth 0 ee 4]].
+  have -> : [:: - nth 0 ee 1; - nth 0 ee 2; - nth 0 ee 3; - nth 0 ee 4] = [seq - z | z <- [:: nth 0 ee 1; nth 0 ee 2; nth 0 ee 3; nth 0 ee 4]] by [].
+  by rewrite vsebK_opp.
+rewrite Ev.
+set V := vsebK 2 [:: nth 0 ee 1; nth 0 ee 2; nth 0 ee 3; nth 0 ee 4].
+by case: V => [|r1 [|r2 rr]] //=; congr TWR; ring.
+Qed.
+
+(* ===========================================================================*)
 (*  Section 6.1 -- product-term bounds.  Each is a lemma over the two          *)
 (*  normalisation contexts [tw_norm x0 x1 x2] / [tw_norm y0 y1 y2].            *)
 (* ===========================================================================*)

@@ -6,10 +6,13 @@
 (* doc/thm7.md).  This starts the multiplication half of the paper.  Generic  *)
 (* over the precision [p] (FLX, no [emin]); needs [p >= 6].                   *)
 (*                                                                            *)
-(* STATUS: skeleton.  The definition transcribes Algorithm 9 verbatim on top  *)
-(* of [TwoProd] (Alg 3), [vecSum] (Alg 4) and [vsebK] (Alg 5); the two        *)
-(* theorems are stated and [Admitted], to be discharged following            *)
-(* doc/thm7.md.                                                               *)
+(* STATUS: the definition transcribes Algorithm 9 verbatim on top of          *)
+(* [TwoProd] (Alg 3), [vecSum] (Alg 4) and [vsebK] (Alg 5).  Both theorems are *)
+(* PROVED, reduced by the FLX WLOG (scale-invariance [ThreeProd_scale] and     *)
+(* sign-invariance [ThreeProd_opp]/[_opp_r], the paper's "1 <= x0, y0 < 2") to *)
+(* their normalised forms [ThreeProd_isTW_norm]/[ThreeProd_error_norm], which  *)
+(* still carry the Section-6.2 mathematics and are [Admitted] (with the        *)
+(* Section-6.1 [z00p] bounds) pending; see doc/thm7.md.                       *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -890,6 +893,17 @@ case: Hxsg => Hxs; case: Hysg => Hys.
   by apply: ThreeProd_isTW_norm => //; [apply: Hxn | apply: Hyn].
 Qed.
 
+(* A relative-error bound is invariant under a common [pow s] scaling.         *)
+Lemma error_scale_transfer (s : Z) (r rxy C : R) :
+  Rabs (r * pow s - rxy * pow s) <= C * Rabs (rxy * pow s) ->
+  Rabs (r - rxy) <= C * Rabs rxy.
+Proof.
+have ps : 0 < pow s by apply: bpow_gt_0.
+rewrite -Rmult_minus_distr_r !Rabs_mult (Rabs_pos_eq (pow s)); last by lra.
+rewrite -Rmult_assoc => H.
+by apply: (Rmult_le_reg_r (pow s) _ _ ps).
+Qed.
+
 (* ===========================================================================*)
 (*  Theorem 7, part 2: relative error of [ThreeProd] is [<= 28u^3+107u^4].    *)
 (*  Proof plan (paper Section 6.2, part 2; see doc/thm7.md): the six error    *)
@@ -902,6 +916,47 @@ Lemma ThreeProd_error x y :
   Rabs (TWval (ThreeProd x y) - TWval x * TWval y) <=
      (28 * (u * u * u) + 107 * (u * u * u * u)) * Rabs (TWval x * TWval y).
 Proof.
-Admitted.
+move=> Hc Hx Hy.
+set C := (28 * _ + _).
+case: (Req_dec (tw0 x) 0) => [x0z | x0n].
+  rewrite (isTW_zero_lead Hx x0z) ThreeProd_0l.
+  have -> : TWval (TWR 0 0 0) = 0 by rewrite /TWval; ring.
+  by rewrite Rmult_0_l Rminus_0_r Rabs_R0 Rmult_0_r; apply: Rle_refl.
+case: (Req_dec (tw0 y) 0) => [y0z | y0n].
+  rewrite (isTW_zero_lead Hy y0z) ThreeProd_0r.
+  have -> : TWval (TWR 0 0 0) = 0 by rewrite /TWval; ring.
+  by rewrite Rmult_0_r Rminus_0_r Rabs_R0 Rmult_0_r; apply: Rle_refl.
+have [cx _ [Hxp Hxn]] := isTW_normalize Hx x0n.
+have [cy _ [Hyp Hyn]] := isTW_normalize Hy y0n.
+have Hxsg : 0 < tw0 x \/ tw0 x < 0 by lra.
+have Hysg : 0 < tw0 y \/ tw0 y < 0 by lra.
+apply: (@error_scale_transfer (cx + cy)%Z (TWval (ThreeProd x y))
+                              (TWval x * TWval y) C).
+case: Hxsg => Hxs; case: Hysg => Hys.
+- have Hn := ThreeProd_error_norm Hc (Hxp Hxs) (Hyp Hys).
+  rewrite ThreeProd_scale !TWval_scale in Hn.
+  rewrite (_ : TWval x * pow cx * (TWval y * pow cy) = TWval x * TWval y * pow (cx + cy)) in Hn; last by rewrite bpow_plus; ring.
+  exact Hn.
+- have Hn := ThreeProd_error_norm Hc (Hxp Hxs) (Hyn Hys).
+  rewrite ThreeProd_scale ThreeProd_opp_r !TWval_scale !TWval_opp in Hn.
+  move: Hn.
+  have E : TWval x * pow cx * (- TWval y * pow cy) = - (TWval x * TWval y * pow (cx + cy)) by rewrite bpow_plus; ring.
+  rewrite E.
+  have E2 : - TWval (ThreeProd x y) * pow (cx + cy) - - (TWval x * TWval y * pow (cx + cy)) = - (TWval (ThreeProd x y) * pow (cx + cy) - TWval x * TWval y * pow (cx + cy)) by ring.
+  by rewrite E2 !Rabs_Ropp.
+- have Hn := ThreeProd_error_norm Hc (Hxn Hxs) (Hyp Hys).
+  rewrite ThreeProd_scale ThreeProd_opp !TWval_scale !TWval_opp in Hn.
+  move: Hn.
+  have E : - TWval x * pow cx * (TWval y * pow cy) = - (TWval x * TWval y * pow (cx + cy)) by rewrite bpow_plus; ring.
+  rewrite E.
+  have E2 : - TWval (ThreeProd x y) * pow (cx + cy) - - (TWval x * TWval y * pow (cx + cy)) = - (TWval (ThreeProd x y) * pow (cx + cy) - TWval x * TWval y * pow (cx + cy)) by ring.
+  by rewrite E2 !Rabs_Ropp.
+- have Hn := ThreeProd_error_norm Hc (Hxn Hxs) (Hyn Hys).
+  have Hxy : ThreeProd (negTW x) (negTW y) = ThreeProd x y.
+    by rewrite ThreeProd_opp ThreeProd_opp_r negTW_id.
+  rewrite ThreeProd_scale Hxy !TWval_scale !TWval_opp in Hn.
+  rewrite (_ : - TWval x * pow cx * (- TWval y * pow cy) = TWval x * TWval y * pow (cx + cy)) in Hn; last by rewrite bpow_plus; ring.
+  exact Hn.
+Qed.
 
 End SecThreeProd.

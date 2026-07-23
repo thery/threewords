@@ -1,7 +1,10 @@
 # Theorem 7 — 3Prod (product of two triple words)
 
-> **STATUS (2026-07-22).** Skeleton stage; **Lemma 1 (`half_ulp_div_RN_add`)
-> proved**. `ThreeProd_isTW` / `ThreeProd_error` still admitted.
+> **STATUS (2026-07-23).** Lemma 1 proved. **WLOG reduction COMPLETE**: both
+> `ThreeProd_isTW` and `ThreeProd_error` are PROVED, reduced (FLX scale +
+> sign equivariance, degenerate zero-factor cases) to the *normalised* forms
+> `ThreeProd_isTW_norm` / `ThreeProd_error_norm`, which carry the §6.2 math and
+> are still admitted (with the §6.1 `z00p_lb`/`z00p_ub` bounds).
 > `doc/paper3.pdf` §6, p. 6–7.
 > Setting FLX, `u = 2^{-p}`, `RN` = round-to-nearest (ties-to-even), `ufp`/`uls`
 > as in the paper. This is the FIRST algorithm of the multiplication half
@@ -143,7 +146,26 @@ The bound is tight: at `p = 53` the witness (2) in the paper attains
 1. Definition `ThreeProd` + the two theorem statements with `have`/`admit`
    skeletons. ✅
 2. Lemma 1 (`half_ulp_div_RN_add`). ✅
-3. §6.1 term bounds as named lemmas (`ThreeProd_bounds_*`).
-4. The four-case `I` study → F-nonoverlapping of the 4-term inner VecSum →
-   `ThreeProd_isTW`.
-5. The six `εᵢ` bounds → `ThreeProd_error`.
+3. **FLX WLOG reduction ✅** — the paper's "WLOG `1 ≤ x0, y0 < 2`" made
+   explicit and formal:
+   - **scale-equivariance** (magnitude): `round_scale`, `TwoSum_scale`,
+     `vecSum(Aux)_scale`, `vseb(Aux)/vsebK_scale`, `TwoProd_scale`,
+     `scaleTW`/`TWval_scale`/`format_scale`/`ulp_scale`/`isTW_scale`, and
+     `ThreeProd_scale` (`ThreeProd (scaleTW a x)(scaleTW b y) =
+     scaleTW (a+b) (ThreeProd x y)`);
+   - **sign-equivariance** (twin stack with `Ropp`): `round_opp`, …,
+     `TwoProd_opp_l`/`_opp_r`, `negTW`, `isTW_opp`, `ThreeProd_opp`/`_opp_r`
+     (odd in each argument);
+   - `isTW_normalize` (any nonzero `isTW` scales+sign-flips to `tw_norm`),
+     `tw_normP`, the zero-factor cases (`ThreeProd_0l`/`_0r` via
+     `vecSumAux_zeros`/`vsebAux_zeros`/`TwoSum00`), and `error_scale_transfer`;
+   - **`ThreeProd_isTW` and `ThreeProd_error` are DISCHARGED** by these onto
+     `ThreeProd_isTW_norm` / `ThreeProd_error_norm` (normalised, admitted).
+   These lemmas are the reusable skeleton for the Alg-10…18 variants, which the
+   paper proves "similarly".
+4. §6.1 term bounds as named lemmas — input bounds done (`tw_norm_ulp0`,
+   `tw_norm_x1`/`x2`/`hi`); product bounds `z00p_lb`/`z00p_ub` (+ the rest of
+   the table) TODO.
+5. The four-case `I` study → F-nonoverlapping of the 4-term inner VecSum →
+   `ThreeProd_isTW_norm`.
+6. The six `εᵢ` bounds → `ThreeProd_error_norm`.

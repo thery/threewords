@@ -820,12 +820,30 @@ Qed.
 Lemma z01p_bound x0 x1 x2 y0 y1 y2 :
   tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 -> Rabs (RND (x0 * y1)) <= 4 * u.
 Proof.
-Admitted.
+move=> Nx Ny.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Fx4 : format (4 * u) by rewrite -pow_2mp; apply: format_pow.
+apply: Rabs_round_le_r => //.
+case: Nx => _ Hx0l Hx0r _ _.
+have Hy1 := tw_norm_x1 Ny.
+have := Rabs_pos y1.
+rewrite Rabs_mult (Rabs_pos_eq x0); last by lra.
+by nra.
+Qed.
 
 Lemma z10p_bound x0 x1 x2 y0 y1 y2 :
   tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 -> Rabs (RND (x1 * y0)) <= 4 * u.
 Proof.
-Admitted.
+move=> Nx Ny.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Fx4 : format (4 * u) by rewrite -pow_2mp; apply: format_pow.
+apply: Rabs_round_le_r => //.
+case: Ny => _ Hy0l Hy0r _ _.
+have Hx1 := tw_norm_x1 Nx.
+have := Rabs_pos x1.
+rewrite Rabs_mult (Rabs_pos_eq y0); last by lra.
+by nra.
+Qed.
 
 (* The ignored/second-order products [x1 y1], [x0 y2], [x2 y0] are [< 4u^2].   *)
 Lemma x1y1_bound x0 x1 x2 y0 y1 y2 :

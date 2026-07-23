@@ -1461,6 +1461,27 @@ apply: (@error_decomp x0 x1 x2 y0 y1 y2 z00p z00m z01p z01m z10p z10m
           (nth 0 b 0) (nth 0 b 1) (nth 0 b 2) c z31 z32 z3) => //.
 Qed.
 
+(* Reading a triple word off a P-nonoverlapping list of floats: its first       *)
+(* three (zero-padded) limbs form an [isTW].  This is the [TWSum_isTW]           *)
+(* read-off, factored out; [ThreeProd_isTW_norm] ends the same way.             *)
+Lemma Pnonoverlap_isTW3 (l : seq R) :
+  Pnonoverlap l -> {in l, forall z, format z} ->
+  isTW (TWR (nth 0 l 0) (nth 0 l 1) (nth 0 l 2)).
+Proof.
+move=> Hno Hfmt.
+case: l Hno Hfmt => [|r0 [|r1 [|r2 tl]]] Hno Hfmt /=.
+- by split; try exact: generic_format_0; left.
+- by split; try exact: generic_format_0;
+     [apply: Hfmt; rewrite !inE eqxx | left | left].
+- by split; [apply: Hfmt; rewrite !inE eqxx
+           | apply: Hfmt; rewrite !inE eqxx orbT
+           | exact: generic_format_0 | apply: (Hno 0%N) | left].
+by split; [apply: Hfmt; rewrite !inE eqxx
+         | apply: Hfmt; rewrite !inE eqxx orbT
+         | apply: Hfmt; rewrite !inE eqxx !orbT
+         | apply: (Hno 0%N) | apply: (Hno 1%N)].
+Qed.
+
 (* Final assembly: an error numerator [<= 28u^3 - 11.9u^4] over a product of    *)
 (* magnitude [>= 1 - 4u] yields the relative bound [28u^3 + 107u^4].  The       *)
 (* [107u^4] slack is exactly what makes [(28u^3-11.9u^4)/(1-4u) <= 28u^3+       *)

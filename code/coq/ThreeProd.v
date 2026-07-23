@@ -1500,6 +1500,40 @@ by case: (TwoSum b1 s) => sb1 eb1; case: (TwoSum b0 sb1) => sb0 eb0;
    case: (TwoSum a sb0) => sa ea.
 Qed.
 
+(* Top-of-VecSum property: the head of a VecSum output equals [RN] of (head +   *)
+(* next).  Because [e0 = RN(x0 + s)] is the last 2Sum's high word and [e1 =      *)
+(* x0 + s - e0] its low word, so [e0 + e1 = x0 + s] and [RN(e0 + e1) = e0].      *)
+(* This is the [(star)] premise consumed by [vseb_cons_round].                  *)
+Lemma vecSum_top_round l :
+  {in l, forall z, format z} -> (1 < size l)%N ->
+  RND (nth 0 (vecSum l) 0 + nth 0 (vecSum l) 1) = nth 0 (vecSum l) 0.
+Proof.
+move=> Fl Hsz.
+case: l Fl Hsz => [|x0 [|x1 l']] Fl // _.
+set rest := x1 :: l'.
+have Fx0 : format x0 by apply: Fl; rewrite inE eqxx.
+have Frest : {in rest, forall z, format z}
+  by move=> z zI; apply: Fl; rewrite inE zI orbT.
+set s := (vecSumAux rest).2.
+have Fs : format s.
+  rewrite /s -vecSum_nth0.
+  apply: (@format_vecSum p Hp2 choice rest Frest).
+  by apply: mem_nth; rewrite size_vecSum.
+have HV : vecSum (x0 :: rest) =
+    RND (x0 + s) :: (x0 + s - RND (x0 + s)) :: (vecSumAux rest).1.
+  rewrite /vecSum vecSumAux_cons.
+  case E1 : (vecSumAux rest) => [es s0].
+  have Hs0 : s0 = s by rewrite /s E1.
+  rewrite Hs0.
+  case E2 : (TwoSum x0 s) => [si ei] /=.
+  have Hsi : si = RND (x0 + s) by move: (TwoSum_hi p choice x0 s); rewrite E2.
+  move: (TwoSum_correct_loc Hp2 choice_sym Fx0 Fs); rewrite E2 => Hsum.
+  by rewrite Hsi; congr (_ :: _ :: _); lra.
+rewrite HV /=.
+have -> : RND (x0 + s) + (x0 + s - RND (x0 + s)) = x0 + s by ring.
+by [].
+Qed.
+
 (* The [star] head-emit step: when [RN(e0 + e1) = e0] (the top-of-VecSum        *)
 (* property) and [e1 <> 0], VSEB emits [e0] and continues on the tail.  This    *)
 (* is the [e1 <> 0] half of the paper's [(r0, VSEB(2)) = VSEB(3)] identity.     *)

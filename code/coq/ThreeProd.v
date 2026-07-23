@@ -1128,6 +1128,117 @@ apply: Rabs_round_le_r => //.
 by have := Rabs_triang c z3; lra.
 Qed.
 
+(* ===========================================================================*)
+(*  Section 6.2 (part 2) -- the error sources.  [ThreeProd_error_norm] sums    *)
+(*  six terms [eps0..eps5]; [eps1..eps4] are single-rounding errors bounded    *)
+(*  here by [k u^3].  ([eps0] is a pure product bound; [eps5] is the VSEB      *)
+(*  truncation, Theorem 3.)                                                    *)
+(* ===========================================================================*)
+
+(* [16u^2 = pow(4-2p)], [u^3 = pow(-3p)], [8u^3 = pow(3-3p)], [16u^3=pow(4-3p)]*)
+Lemma pow_4m2p : pow (4 - 2 * p) = 16 * (u * u).
+Proof.
+rewrite (_ : (4 - 2 * p = 4 + - (2 * p))%Z); last by lia.
+by rewrite bpow_plus u2_pow /= /Z.pow_pos /=; lra.
+Qed.
+
+Lemma u3_pow : u * u * u = pow (- (3 * p)).
+Proof. by rewrite u2_pow u_pow -bpow_plus; congr bpow; lia. Qed.
+
+Lemma pow_3m3p : pow (3 - 3 * p) = 8 * (u * u * u).
+Proof.
+rewrite (_ : (3 - 3 * p = 3 + - (3 * p))%Z); last by lia.
+by rewrite bpow_plus u3_pow /= /Z.pow_pos /=; lra.
+Qed.
+
+Lemma pow_4m3p : pow (4 - 3 * p) = 16 * (u * u * u).
+Proof.
+rewrite (_ : (4 - 3 * p = 4 + - (3 * p))%Z); last by lia.
+by rewrite bpow_plus u3_pow /= /Z.pow_pos /=; lra.
+Qed.
+
+(* Master rounding-error bound: [|w| < pow e] gives [|w - RN w| <= half pow    *)
+(* (e-p)].                                                                     *)
+Lemma round_err_le w e :
+  Rabs w < pow e -> Rabs (w - RND w) <= / 2 * pow (e - p).
+Proof.
+move=> Hw.
+case: (Req_dec w 0) => [->|wn0].
+  rewrite round_0 Rminus_0_r Rabs_R0.
+  by apply: Rmult_le_pos; [lra | apply: bpow_ge_0].
+have Hulp : ulp w <= pow (e - p).
+  rewrite ulp_neq_0 // /cexp /fexp; apply: bpow_le.
+  suff : (mag beta w <= e)%Z by lia.
+  by apply: mag_le_bpow.
+have He : Rabs (RND w - w) <= / 2 * ulp w by apply: error_le_half_ulp.
+rewrite Rabs_minus_sym.
+have Hu0 : 0 < / 2 by lra.
+lra.
+Qed.
+
+(* [eps1 = (z10m + x0 y2) - z31], [eps2 = (z01m + x2 y0) - z32]: [<= 4u^3].     *)
+Lemma eps1_bound z10m x0 y2 :
+  Rabs z10m <= 2 * (u * u) -> Rabs (x0 * y2) < 4 * (u * u) ->
+  Rabs (z10m + x0 * y2 - RND (z10m + x0 * y2)) <= 4 * (u * u * u).
+Proof.
+move=> H1 H2.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hw : Rabs (z10m + x0 * y2) < pow (3 - 2 * p).
+  rewrite pow_3m2p.
+  have H3 := Rabs_triang z10m (x0 * y2).
+  nra.
+have Herr := round_err_le Hw.
+move: Herr; rewrite (_ : (3 - 2 * p - p = 3 - 3 * p)%Z); last by lia.
+rewrite pow_3m3p; nra.
+Qed.
+
+Lemma eps2_bound z01m x2 y0 :
+  Rabs z01m <= 2 * (u * u) -> Rabs (x2 * y0) < 4 * (u * u) ->
+  Rabs (z01m + x2 * y0 - RND (z01m + x2 * y0)) <= 4 * (u * u * u).
+Proof.
+move=> H1 H2.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hw : Rabs (z01m + x2 * y0) < pow (3 - 2 * p).
+  rewrite pow_3m2p.
+  have H3 := Rabs_triang z01m (x2 * y0).
+  nra.
+have Herr := round_err_le Hw.
+move: Herr; rewrite (_ : (3 - 2 * p - p = 3 - 3 * p)%Z); last by lia.
+rewrite pow_3m3p; nra.
+Qed.
+
+(* [eps3 = (z31 + z32) - z3]: [<= 8u^3].                                       *)
+Lemma eps3_bound z31 z32 :
+  Rabs z31 <= 6 * (u * u) -> Rabs z32 <= 6 * (u * u) ->
+  Rabs (z31 + z32 - RND (z31 + z32)) <= 8 * (u * u * u).
+Proof.
+move=> H1 H2.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hw : Rabs (z31 + z32) < pow (4 - 2 * p).
+  rewrite pow_4m2p.
+  have H3 := Rabs_triang z31 z32.
+  nra.
+have Herr := round_err_le Hw.
+move: Herr; rewrite (_ : (4 - 2 * p - p = 4 - 3 * p)%Z); last by lia.
+rewrite pow_4m3p; nra.
+Qed.
+
+(* [eps4 = (b2 + x1 y1) - c]: [<= 4u^3].                                       *)
+Lemma eps4_bound b2 x1 y1 :
+  Rabs b2 <= 4 * (u * u) -> Rabs (x1 * y1) < 4 * (u * u) ->
+  Rabs (b2 + x1 * y1 - RND (b2 + x1 * y1)) <= 4 * (u * u * u).
+Proof.
+move=> H1 H2.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hw : Rabs (b2 + x1 * y1) < pow (3 - 2 * p).
+  rewrite pow_3m2p.
+  have H3 := Rabs_triang b2 (x1 * y1).
+  nra.
+have Herr := round_err_le Hw.
+move: Herr; rewrite (_ : (3 - 2 * p - p = 3 - 3 * p)%Z); last by lia.
+rewrite pow_3m3p; nra.
+Qed.
+
 (* ---- degenerate inputs (a zero factor) -----------------------------------*)
 
 Lemma negTW_id t : negTW (negTW t) = t.

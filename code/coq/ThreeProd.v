@@ -1239,6 +1239,33 @@ move: Herr; rewrite (_ : (3 - 2 * p - p = 3 - 3 * p)%Z); last by lia.
 rewrite pow_3m3p; nra.
 Qed.
 
+(* [u <= 1/64] (from [p >= 6]); the slack the final assembly needs.           *)
+Lemma u_le_64 : u <= / 64.
+Proof.
+have -> : / 64 = pow (-6) by rewrite /= /Z.pow_pos /=; lra.
+rewrite u_pow; apply: bpow_le; lia.
+Qed.
+
+(* Final assembly: an error numerator [<= 28u^3 - 11.9u^4] over a product of    *)
+(* magnitude [>= 1 - 4u] yields the relative bound [28u^3 + 107u^4].  The       *)
+(* [107u^4] slack is exactly what makes [(28u^3-11.9u^4)/(1-4u) <= 28u^3+       *)
+(* 107u^4] hold at [u = 1/64] ([p >= 6]).                                      *)
+Lemma error_assembly err xy :
+  Rabs err <= 28 * (u * u * u) - 119 / 10 * (u * u * u * u) ->
+  1 - 4 * u <= Rabs xy ->
+  Rabs err <= (28 * (u * u * u) + 107 * (u * u * u * u)) * Rabs xy.
+Proof.
+move=> Hn Hxy.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := u_le_64.
+set B := 28 * (u * u * u) + 107 * (u * u * u * u).
+have HB0 : 0 <= B by rewrite /B; nra.
+apply: (Rle_trans _ (B * (1 - 4 * u))); last first.
+  by apply: Rmult_le_compat_l.
+apply: (Rle_trans _ _ _ Hn).
+rewrite /B; nra.
+Qed.
+
 (* ---- degenerate inputs (a zero factor) -----------------------------------*)
 
 Lemma negTW_id t : negTW (negTW t) = t.

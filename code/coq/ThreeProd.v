@@ -645,6 +645,123 @@ set V := vsebK 2 [:: nth 0 ee 1; nth 0 ee 2; nth 0 ee 3; nth 0 ee 4].
 by case: V => [|r1 [|r2 rr]] //=; congr TWR; ring.
 Qed.
 
+(* [TwoProd] with the RIGHT factor negated: both words flip sign.              *)
+Lemma TwoProd_opp_r a b :
+  TwoProd a (- b) = (- (TwoProd a b).1, - (TwoProd a b).2).
+Proof.
+rewrite /TwoProd /=.
+have -> : a * - b = - (a * b) by ring.
+rewrite round_opp.
+congr pair.
+have -> : - (a * b) - - RND (a * b) = - (a * b - RND (a * b)) by ring.
+by rewrite round_opp.
+Qed.
+
+(* Algorithm 9 is odd in its second argument, too.                            *)
+Lemma ThreeProd_opp_r x y : ThreeProd x (negTW y) = negTW (ThreeProd x y).
+Proof.
+case: x => x0 x1 x2; case: y => y0 y1 y2.
+rewrite /ThreeProd /negTW.
+have P1 : x1 * (- y1) = - (x1 * y1) by ring.
+have P2 : x0 * (- y2) = - (x0 * y2) by ring.
+have P3 : x2 * (- y0) = - (x2 * y0) by ring.
+rewrite !P1 !P2 !P3 !TwoProd_opp_r.
+case: (TwoProd x0 y0) => w00p w00m.
+case: (TwoProd x0 y1) => w01p w01m.
+case: (TwoProd x1 y0) => w10p w10m.
+have F1 : forall u v : R, (u, v).1 = u by [].
+have F2 : forall u v : R, (u, v).2 = v by [].
+rewrite !F1 !F2.
+have Eb : forall i, nth 0 (vecSum [:: - w00m; - w01p; - w10p]) i = - nth 0 (vecSum [:: w00m; w01p; w10p]) i.
+  move=> i.
+  have -> : [:: - w00m; - w01p; - w10p] = [seq - z | z <- [:: w00m; w01p; w10p]] by [].
+  by rewrite vecSum_opp nth_map_opp.
+rewrite !Eb.
+set bb := vecSum [:: w00m; w01p; w10p].
+have E4 : forall t : R, RND (- t + - (x1 * y1)) = - RND (t + x1 * y1).
+  move=> t.
+  have -> : - t + - (x1 * y1) = - (t + x1 * y1) by ring.
+  by rewrite round_opp.
+have E5 : RND (RND (- w10m + - (x0 * y2)) + RND (- w01m + - (x2 * y0))) = - RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0)).
+  have -> : - w10m + - (x0 * y2) = - (w10m + x0 * y2) by ring.
+  have -> : - w01m + - (x2 * y0) = - (w01m + x2 * y0) by ring.
+  rewrite !round_opp.
+  have -> : - RND (w10m + x0 * y2) + - RND (w01m + x2 * y0) = - (RND (w10m + x0 * y2) + RND (w01m + x2 * y0)) by ring.
+  by rewrite round_opp.
+rewrite !E4 !E5.
+have Ee : forall i, nth 0 (vecSum [:: - w00p; - nth 0 bb 0; - nth 0 bb 1; - RND (nth 0 bb 2 + x1 * y1); - RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0))]) i = - nth 0 (vecSum [:: w00p; nth 0 bb 0; nth 0 bb 1; RND (nth 0 bb 2 + x1 * y1); RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0))]) i.
+  move=> i.
+  have -> : [:: - w00p; - nth 0 bb 0; - nth 0 bb 1; - RND (nth 0 bb 2 + x1 * y1); - RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0))] = [seq - z | z <- [:: w00p; nth 0 bb 0; nth 0 bb 1; RND (nth 0 bb 2 + x1 * y1); RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0))]] by [].
+  by rewrite vecSum_opp nth_map_opp.
+rewrite !Ee.
+set ee := vecSum [:: w00p; nth 0 bb 0; nth 0 bb 1; RND (nth 0 bb 2 + x1 * y1); RND (RND (w10m + x0 * y2) + RND (w01m + x2 * y0))].
+have Ev : vsebK 2 [:: - nth 0 ee 1; - nth 0 ee 2; - nth 0 ee 3; - nth 0 ee 4] = [seq - z | z <- vsebK 2 [:: nth 0 ee 1; nth 0 ee 2; nth 0 ee 3; nth 0 ee 4]].
+  have -> : [:: - nth 0 ee 1; - nth 0 ee 2; - nth 0 ee 3; - nth 0 ee 4] = [seq - z | z <- [:: nth 0 ee 1; nth 0 ee 2; nth 0 ee 3; nth 0 ee 4]] by [].
+  by rewrite vsebK_opp.
+rewrite Ev.
+set V := vsebK 2 [:: nth 0 ee 1; nth 0 ee 2; nth 0 ee 3; nth 0 ee 4].
+by case: V => [|r1 [|r2 rr]] //=; congr TWR; ring.
+Qed.
+
+(* ===========================================================================*)
+(*  WLOG reduction: [ThreeProd_isTW]/[ThreeProd_error] reduce to normalised     *)
+(*  positive inputs ([tw_norm]).  [tw_normP] packages [tw_norm] on a [twR].     *)
+(* ===========================================================================*)
+Definition tw_normP (t : twR) : Prop :=
+  let: TWR t0 t1 t2 := t in tw_norm t0 t1 t2.
+
+(* An [isTW] whose leading limb sits in [1, 2) is exactly a normalised [twR].   *)
+Lemma isTW_tw_normP t : isTW t -> 1 <= tw0 t < 2 -> tw_normP t.
+Proof.
+by case: t => t0 t1 t2 [F0 F1 F2 H1 H2] /= [Hl Hr]; split=> //; split.
+Qed.
+
+(* Any nonzero [isTW] can be scaled (and sign-flipped) to a normalised [twR].   *)
+Lemma isTW_normalize t :
+  isTW t -> tw0 t <> 0 ->
+  exists2 c : Z, True &
+    (0 < tw0 t -> tw_normP (scaleTW c t)) /\
+    (tw0 t < 0 -> tw_normP (scaleTW c (negTW t))).
+Proof.
+move=> Ht t0n0.
+set m := mag beta (tw0 t).
+have Hmag : pow (m - 1) <= Rabs (tw0 t) by apply: bpow_mag_le.
+have Hmag2 : Rabs (tw0 t) < pow m by apply: bpow_mag_gt.
+have Hp1m : 0 < pow (1 - m) by apply: bpow_gt_0.
+have tw0_scale : forall c s, tw0 (scaleTW c s) = tw0 s * pow c by move=> c [s0 s1 s2].
+have tw0_opp : forall s, tw0 (negTW s) = - tw0 s by move=> [s0 s1 s2].
+have Hlo : pow (m - 1) * pow (1 - m) = 1.
+  by rewrite -bpow_plus (_ : (m - 1 + (1 - m) = 0)%Z) ?pow0E //; lia.
+have Hhi : pow m * pow (1 - m) = 2.
+  rewrite -bpow_plus (_ : (m + (1 - m) = 1)%Z); last by lia.
+  by rewrite /= /Z.pow_pos /=; lra.
+exists (1 - m)%Z => //; split=> Hsg.
+- apply: isTW_tw_normP; first by apply/isTW_scale.
+  rewrite tw0_scale; rewrite Rabs_pos_eq in Hmag Hmag2; try lra.
+  split.
+    by rewrite -Hlo; apply: Rmult_le_compat_r; lra.
+  by rewrite -Hhi; apply: Rmult_lt_compat_r; lra.
+apply: isTW_tw_normP; first by apply/isTW_scale; apply/isTW_opp.
+rewrite tw0_scale tw0_opp; rewrite Rabs_left in Hmag Hmag2; try lra.
+split.
+  by rewrite -Hlo; apply: Rmult_le_compat_r; lra.
+by rewrite -Hhi; apply: Rmult_lt_compat_r; lra.
+Qed.
+
+(* Normalised (paper WLOG) forms of the two theorems.  These carry the actual  *)
+(* Section-6.2 mathematics and remain to be discharged.                        *)
+Lemma ThreeProd_isTW_norm x y :
+  ties_to_even choice -> tw_normP x -> tw_normP y -> isTW (ThreeProd x y).
+Proof.
+Admitted.
+
+Lemma ThreeProd_error_norm x y :
+  ties_to_even choice -> tw_normP x -> tw_normP y ->
+  Rabs (TWval (ThreeProd x y) - TWval x * TWval y) <=
+     (28 * (u * u * u) + 107 * (u * u * u * u)) * Rabs (TWval x * TWval y).
+Proof.
+Admitted.
+
 (* ===========================================================================*)
 (*  Section 6.1 -- product-term bounds.  Each is a lemma over the two          *)
 (*  normalisation contexts [tw_norm x0 x1 x2] / [tw_norm y0 y1 y2].            *)
@@ -661,18 +778,117 @@ Lemma z00p_ub x0 x1 x2 y0 y1 y2 :
 Proof.
 Admitted.
 
+(* ---- degenerate inputs (a zero factor) -----------------------------------*)
+
+Lemma negTW_id t : negTW (negTW t) = t.
+Proof. by case: t => t0 t1 t2 /=; rewrite !Ropp_involutive. Qed.
+
+(* A [twR] with a zero leading limb is the zero triple word.                   *)
+Lemma isTW_zero_lead t : isTW t -> tw0 t = 0 -> t = TWR 0 0 0.
+Proof.
+case: t => t0 t1 t2 [_ _ _ H1 H2] /= t0z.
+move: H1 H2; rewrite {}t0z => H1 H2.
+have Ht1 : t1 = 0.
+  case: H1 => // H1; move: H1; rewrite ulp_FLX_0 => H1; split_Rabs; lra.
+have Ht2 : t2 = 0.
+  move: H2; rewrite Ht1 => H2.
+  case: H2 => // H2; move: H2; rewrite ulp_FLX_0 => H2; split_Rabs; lra.
+by rewrite Ht1 Ht2.
+Qed.
+
+Lemma isTW_TWR000 : isTW (TWR 0 0 0).
+Proof. by split; try exact: generic_format_0; left. Qed.
+
+Lemma TwoSum00 : TwoSum 0 0 = DWR 0 0.
+Proof.
+rewrite /TwoSum Rplus_0_r round_0.
+by do 8! (rewrite ?Rminus_0_l ?Rminus_0_r ?round_0 ?Ropp_0 ?Rplus_0_r ?Rplus_0_l).
+Qed.
+
+Lemma TwoProd00l a : TwoProd 0 a = (0, 0).
+Proof.
+by rewrite /TwoProd Rmult_0_l round_0 Rminus_0_r round_0.
+Qed.
+
+Lemma TwoProd00r a : TwoProd a 0 = (0, 0).
+Proof.
+by rewrite /TwoProd Rmult_0_r round_0 Rminus_0_r round_0.
+Qed.
+
+(* [VecSum] and [VSEB] of an all-zero list are all-zero.                       *)
+Lemma vecSumAux_zeros n : vecSumAux (nseq n 0) = (nseq n.-1 0, 0).
+Proof.
+elim: n => [|[|n] IH] //.
+rewrite [nseq n.+2 0]/= vecSumAux_cons -[0 :: nseq n 0]/(nseq n.+1 0) IH.
+by rewrite TwoSum00.
+Qed.
+
+Lemma vsebAux_zeros n : vsebAux 0 (nseq n.+1 0) = [:: 0; 0].
+Proof.
+elim: n => [|n IH]; first by rewrite vsebAux_1 TwoSum00.
+rewrite [nseq n.+2 0]/= vsebAux_consS TwoSum00.
+by case: (Req_EM_T 0 0) => // _; rewrite -[0 :: nseq n 0]/(nseq n.+1 0) IH.
+Qed.
+
+(* [ThreeProd] of the zero triple word is zero (either argument).              *)
+Lemma ThreeProd_0l y : ThreeProd (TWR 0 0 0) y = TWR 0 0 0.
+Proof.
+case: y => y0 y1 y2.
+rewrite /ThreeProd !TwoProd00l /=.
+rewrite !Rmult_0_l !Rplus_0_r !round_0.
+do 40! (rewrite ?round_0 ?Rplus_0_r ?Rplus_0_l ?Rminus_0_r ?Rminus_0_l ?Ropp_0).
+rewrite /vsebK /vseb.
+have -> : [:: 0; 0; 0] = nseq 2.+1 0 by [].
+by rewrite vsebAux_zeros.
+Qed.
+
+Lemma ThreeProd_0r x : ThreeProd x (TWR 0 0 0) = TWR 0 0 0.
+Proof.
+case: x => x0 x1 x2.
+rewrite /ThreeProd !TwoProd00r /=.
+rewrite !Rmult_0_r !Rplus_0_l !round_0.
+do 40! (rewrite ?round_0 ?Rplus_0_r ?Rplus_0_l ?Rminus_0_r ?Rminus_0_l ?Ropp_0).
+rewrite /vsebK /vseb.
+have -> : [:: 0; 0; 0] = nseq 2.+1 0 by [].
+by rewrite vsebAux_zeros.
+Qed.
+
 (* ===========================================================================*)
 (*  Theorem 7, part 1: [ThreeProd x y] is a triple-word number (p >= 6).      *)
-(*  Proof plan (paper Section 6.2, part 1; see doc/thm7.md): the equivalence  *)
-(*  with [VSEB(3)(e0..e4)], then F-nonoverlapping of                          *)
-(*  [vecSum(z00p, b0, b1, s3)] plus the [e4] divisibility, and finally        *)
-(*  Theorem 2 / Theorem 6.                                                    *)
+(*                                                                            *)
+(*  The general statement reduces to the normalised one [ThreeProd_isTW_norm]  *)
+(*  (paper WLOG [1 <= x0, y0 < 2]) using scale-invariance [ThreeProd_scale] /  *)
+(*  [isTW_scale] and sign-invariance [ThreeProd_opp]/[_opp_r] / [isTW_opp];    *)
+(*  a zero factor is the degenerate [ThreeProd_0l]/[_0r] case.                 *)
 (* ===========================================================================*)
 Lemma ThreeProd_isTW x y :
   ties_to_even choice ->
   isTW x -> isTW y -> isTW (ThreeProd x y).
 Proof.
-Admitted.
+move=> Hc Hx Hy.
+case: (Req_dec (tw0 x) 0) => [x0z | x0n].
+  by rewrite (isTW_zero_lead Hx x0z) ThreeProd_0l; exact: isTW_TWR000.
+case: (Req_dec (tw0 y) 0) => [y0z | y0n].
+  by rewrite (isTW_zero_lead Hy y0z) ThreeProd_0r; exact: isTW_TWR000.
+have [cx _ [Hxp Hxn]] := isTW_normalize Hx x0n.
+have [cy _ [Hyp Hyn]] := isTW_normalize Hy y0n.
+have Hxsg : 0 < tw0 x \/ tw0 x < 0 by lra.
+have Hysg : 0 < tw0 y \/ tw0 y < 0 by lra.
+case: Hxsg => Hxs; case: Hysg => Hys.
+- rewrite -(isTW_scale (cx + cy)) -ThreeProd_scale.
+  by apply: ThreeProd_isTW_norm => //; [apply: Hxp | apply: Hyp].
+- rewrite -(isTW_opp (ThreeProd x y)) -(isTW_scale (cx + cy)).
+  rewrite -ThreeProd_opp_r -ThreeProd_scale.
+  by apply: ThreeProd_isTW_norm => //; [apply: Hxp | apply: Hyn].
+- rewrite -(isTW_opp (ThreeProd x y)) -(isTW_scale (cx + cy)).
+  rewrite -ThreeProd_opp -ThreeProd_scale.
+  by apply: ThreeProd_isTW_norm => //; [apply: Hxn | apply: Hyp].
+- rewrite -(isTW_scale (cx + cy)).
+  have <- : ThreeProd (negTW x) (negTW y) = ThreeProd x y.
+    by rewrite ThreeProd_opp ThreeProd_opp_r negTW_id.
+  rewrite -ThreeProd_scale.
+  by apply: ThreeProd_isTW_norm => //; [apply: Hxn | apply: Hyn].
+Qed.
 
 (* ===========================================================================*)
 (*  Theorem 7, part 2: relative error of [ThreeProd] is [<= 28u^3+107u^4].    *)

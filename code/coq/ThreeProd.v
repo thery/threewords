@@ -1317,6 +1317,22 @@ move: Herr; rewrite (_ : (3 - 2 * p - p = 3 - 3 * p)%Z); last by lia.
 rewrite pow_3m3p; nra.
 Qed.
 
+(* Summing the five constant error sources [eps0..eps4]: the numerator          *)
+(* [8u^3-11.9u^4 + 4u^3 + 4u^3 + 8u^3 + 4u^3 = 28u^3 - 11.9u^4].                *)
+Lemma eps04_sum e0 e1 e2 e3 e4 :
+  Rabs e0 <= 8 * (u * u * u) - 119 / 10 * (u * u * u * u) ->
+  Rabs e1 <= 4 * (u * u * u) -> Rabs e2 <= 4 * (u * u * u) ->
+  Rabs e3 <= 8 * (u * u * u) -> Rabs e4 <= 4 * (u * u * u) ->
+  Rabs (e0 + e1 + e2 + e3 + e4) <= 28 * (u * u * u) - 119 / 10 * (u * u * u * u).
+Proof.
+move=> H0 H1 H2 H3 H4.
+have T1 := Rabs_triang (e0 + e1 + e2 + e3) e4.
+have T2 := Rabs_triang (e0 + e1 + e2) e3.
+have T3 := Rabs_triang (e0 + e1) e2.
+have T4 := Rabs_triang e0 e1.
+lra.
+Qed.
+
 (* Final assembly: an error numerator [<= 28u^3 - 11.9u^4] over a product of    *)
 (* magnitude [>= 1 - 4u] yields the relative bound [28u^3 + 107u^4].  The       *)
 (* [107u^4] slack is exactly what makes [(28u^3-11.9u^4)/(1-4u) <= 28u^3+       *)

@@ -1369,6 +1369,98 @@ have H5 : 0 <= u ^ 4 by apply: pow_le; lra.
 lra.
 Qed.
 
+(* Projection-form [2Prod] facts (avoid the [let] in [TwoProd_correct], which   *)
+(* blocks [rewrite]): exactness and the two output formats.                     *)
+Lemma TwoProd_exact a b :
+  format a -> format b -> (TwoProd a b).1 + (TwoProd a b).2 = a * b.
+Proof.
+move=> Fa Fb.
+rewrite /TwoProd /=.
+have Fe : format (a * b - RND (a * b)).
+  rewrite (_ : a * b - RND (a * b) = - (RND (a * b) - a * b)); last by ring.
+  apply: generic_format_opp; exact: format_err_mul.
+rewrite (round_generic _ _ _ _ Fe); ring.
+Qed.
+
+Lemma TwoProd_fmt1 a b : format a -> format b -> format (TwoProd a b).1.
+Proof. by move=> Fa Fb; rewrite /TwoProd /=; apply: generic_format_round. Qed.
+
+Lemma TwoProd_fmt2 a b : format a -> format b -> format (TwoProd a b).2.
+Proof. by move=> Fa Fb; rewrite /TwoProd /=; apply: generic_format_round. Qed.
+
+(* The error identity (algebraic core).  Given the three [2Prod] exactness      *)
+(* facts and that [VecSum] preserves sums ([b0+b1+b2 = z00m+z01p+z10p]), the     *)
+(* product minus the pre-truncation sum [z00p+b0+b1+c+z3] equals the five        *)
+(* error sources [eps0+eps1+eps2+eps3+eps4].                                    *)
+Lemma error_decomp x0 x1 x2 y0 y1 y2
+    z00p z00m z01p z01m z10p z10m b0 b1 b2 c z31 z32 z3 :
+  z00p + z00m = x0 * y0 ->
+  z01p + z01m = x0 * y1 ->
+  z10p + z10m = x1 * y0 ->
+  b0 + b1 + b2 = z00m + z01p + z10p ->
+  (x0 + x1 + x2) * (y0 + y1 + y2) - (z00p + b0 + b1 + c + z3) =
+    (x1 * y2 + x2 * y1 + x2 * y2)
+    + (z10m + x0 * y2 - z31)
+    + (z01m + x2 * y0 - z32)
+    + (z31 + z32 - z3)
+    + (b2 + x1 * y1 - c).
+Proof.
+move=> H1 H2 H3 H4.
+have Hexp : (x0 + x1 + x2) * (y0 + y1 + y2) =
+    x0 * y0 + x0 * y1 + x0 * y2 + x1 * y0 + x1 * y1 + x1 * y2
+    + x2 * y0 + x2 * y1 + x2 * y2 by ring.
+rewrite Hexp; lra.
+Qed.
+
+(* The concrete identity on [ThreeProd]'s own subterms: the product minus the   *)
+(* pre-truncation VecSum sum [sumR e] equals [eps0+eps1+eps2+eps3+eps4].  The    *)
+(* [2Prod] exactness comes from [TwoProd_correct]; [b]'s sum from [vecSum3];     *)
+(* [sumR e] from [vecSum_sum].                                                  *)
+Lemma sumR_e_decomp x0 x1 x2 y0 y1 y2
+    z00p z00m z01p z01m z10p z10m b c z31 z32 z3 :
+  format x0 -> format x1 -> format y0 -> format y1 ->
+  TwoProd x0 y0 = (z00p, z00m) ->
+  TwoProd x0 y1 = (z01p, z01m) ->
+  TwoProd x1 y0 = (z10p, z10m) ->
+  b = vecSum [:: z00m; z01p; z10p] ->
+  c = RND (nth 0 b 2 + x1 * y1) ->
+  z31 = RND (z10m + x0 * y2) ->
+  z32 = RND (z01m + x2 * y0) ->
+  z3 = RND (z31 + z32) ->
+  (x0 + x1 + x2) * (y0 + y1 + y2) -
+    sumR (vecSum [:: z00p; nth 0 b 0; nth 0 b 1; c; z3]) =
+    (x1 * y2 + x2 * y1 + x2 * y2) + (z10m + x0 * y2 - z31)
+    + (z01m + x2 * y0 - z32) + (z31 + z32 - z3) + (nth 0 b 2 + x1 * y1 - c).
+Proof.
+move=> Fx0 Fx1 Fy0 Fy1 HP00 HP01 HP10 Hb Hc H31 H32 H3.
+have Ez00 : z00p + z00m = x0 * y0 by have := TwoProd_exact Fx0 Fy0; rewrite HP00.
+have Ez01 : z01p + z01m = x0 * y1 by have := TwoProd_exact Fx0 Fy1; rewrite HP01.
+have Ez10 : z10p + z10m = x1 * y0 by have := TwoProd_exact Fx1 Fy0; rewrite HP10.
+have Fz00p : format z00p by have := TwoProd_fmt1 Fx0 Fy0; rewrite HP00.
+have Fz00m : format z00m by have := TwoProd_fmt2 Fx0 Fy0; rewrite HP00.
+have Fz01p : format z01p by have := TwoProd_fmt1 Fx0 Fy1; rewrite HP01.
+have Fz10p : format z10p by have := TwoProd_fmt1 Fx1 Fy0; rewrite HP10.
+have Eb : nth 0 b 0 + nth 0 b 1 + nth 0 b 2 = z00m + z01p + z10p.
+  by rewrite Hb (vecSum3 Fz00m Fz01p Fz10p) /=; ring.
+have Fb : {in b, forall z, format z}.
+  rewrite Hb; apply: (@format_vecSum p Hp2 choice).
+  by move=> z; rewrite !inE => /or3P[] /eqP-> //.
+have Hsz : size b = 3%N by rewrite Hb size_vecSum.
+have Fb0 : format (nth 0 b 0) by apply: Fb; rewrite mem_nth // Hsz.
+have Fb1 : format (nth 0 b 1) by apply: Fb; rewrite mem_nth // Hsz.
+have Fc : format c by rewrite Hc; apply: generic_format_round.
+have Fz3 : format z3 by rewrite H3; apply: generic_format_round.
+have Ee : sumR (vecSum [:: z00p; nth 0 b 0; nth 0 b 1; c; z3]) =
+          z00p + nth 0 b 0 + nth 0 b 1 + c + z3.
+  rewrite (@vecSum_sum p Hp2 choice choice_sym); last first.
+    by move=> z; rewrite !inE =>
+      /orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/eqP->]]]] //.
+  by rewrite /=; ring.
+rewrite Ee.
+apply: (@error_decomp x0 x1 x2 y0 y1 y2 z00p z00m z01p z01m z10p z10m
+          (nth 0 b 0) (nth 0 b 1) (nth 0 b 2) c z31 z32 z3) => //.
+Qed.
+
 (* Final assembly: an error numerator [<= 28u^3 - 11.9u^4] over a product of    *)
 (* magnitude [>= 1 - 4u] yields the relative bound [28u^3 + 107u^4].  The       *)
 (* [107u^4] slack is exactly what makes [(28u^3-11.9u^4)/(1-4u) <= 28u^3+       *)

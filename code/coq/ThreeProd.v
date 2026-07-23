@@ -1176,6 +1176,84 @@ have Hu0 : 0 < / 2 by lra.
 lra.
 Qed.
 
+(* [u <= 1/64] (from [p >= 6]); the slack the [eps0] and assembly bounds need. *)
+Lemma u_le_64 : u <= / 64.
+Proof.
+have -> : / 64 = pow (-6) by rewrite /= /Z.pow_pos /=; lra.
+rewrite u_pow; apply: bpow_le; lia.
+Qed.
+
+(* [2u^3 = pow(1-3p)]: the tight cap on the third-order limbs.                 *)
+Lemma pow_1m3p : pow (1 - 3 * p) = 2 * (u * u * u).
+Proof.
+rewrite (_ : (1 - 3 * p = 1 + - (3 * p))%Z); last by lia.
+by rewrite bpow_plus u3_pow /= /Z.pow_pos /=; lra.
+Qed.
+
+(* A float below [pow e] is at most its predecessor [pow e - pow(e-p)] (it is  *)
+(* a multiple of [pow(e-p)] and strictly below [2^p pow(e-p)]).                 *)
+Lemma float_lt_bpow_le x e :
+  format x -> Rabs x < pow e -> Rabs x <= pow e - pow (e - p).
+Proof.
+move=> Fx Hx.
+have FRx : format (Rabs x) by apply: generic_format_abs.
+have Fpe : format (pow e) by apply: format_pow.
+have V : Valid_exp fexp by apply: FLX_exp_valid.
+have Hpred := (@pred_ge_gt beta fexp V _ _ FRx Fpe Hx).
+move: Hpred; rewrite pred_bpow.
+move=> H; exact: H.
+Qed.
+
+(* Tight limb caps: the largest float below [2u] is [2u - 2u^2], below [2u^2]   *)
+(* is [2u^2 - 2u^3].  (Needed for the [eps0] product bound.)                   *)
+Lemma x1_tight x0 x1 x2 :
+  tw_norm x0 x1 x2 -> Rabs x1 <= 2 * u - 2 * (u * u).
+Proof.
+move=> N.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hx1 := tw_norm_x1 N.
+have Fx1 : format x1 by case: N => -[_ Fx1 _].
+have Hlt : Rabs x1 < pow (1 - p) by rewrite pow_1mp.
+have Hb := float_lt_bpow_le Fx1 Hlt.
+move: Hb; rewrite pow_1mp (_ : (1 - p - p = 1 - 2 * p)%Z); last by lia.
+rewrite pow_1m2p; lra.
+Qed.
+
+Lemma x2_tight x0 x1 x2 :
+  tw_norm x0 x1 x2 -> Rabs x2 <= 2 * (u * u) - 2 * (u * u * u).
+Proof.
+move=> N.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hx2 := tw_norm_x2 N.
+have Fx2 : format x2 by case: N => -[_ _ Fx2].
+have Hlt : Rabs x2 < pow (1 - 2 * p) by rewrite pow_1m2p.
+have Hb := float_lt_bpow_le Fx2 Hlt.
+move: Hb; rewrite pow_1m2p (_ : (1 - 2 * p - p = 1 - 3 * p)%Z); last by lia.
+rewrite pow_1m3p; lra.
+Qed.
+
+(* [eps0 = x1 y2 + x2 y1 + x2 y2] (the ignored products): [<= 8u^3 - 11.9u^4].  *)
+Lemma eps0_bound x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  Rabs (x1 * y2 + x2 * y1 + x2 * y2) <= 8 * (u * u * u) - 119 / 10 * (u * u * u * u).
+Proof.
+move=> Nx Ny.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := u_le_64.
+have Hx1 := x1_tight Nx.
+have Hy1 := x1_tight Ny.
+have Hx2 := x2_tight Nx.
+have Hy2 := x2_tight Ny.
+have P1 := Rabs_pos x1; have P2 := Rabs_pos x2.
+have Q1 := Rabs_pos y1; have Q2 := Rabs_pos y2.
+apply: (Rle_trans _ (Rabs (x1 * y2) + Rabs (x2 * y1) + Rabs (x2 * y2))).
+  have H1 := Rabs_triang (x1 * y2 + x2 * y1) (x2 * y2).
+  have H2 := Rabs_triang (x1 * y2) (x2 * y1).
+  lra.
+rewrite !Rabs_mult.
+nra.
+Qed.
+
 (* [eps1 = (z10m + x0 y2) - z31], [eps2 = (z01m + x2 y0) - z32]: [<= 4u^3].     *)
 Lemma eps1_bound z10m x0 y2 :
   Rabs z10m <= 2 * (u * u) -> Rabs (x0 * y2) < 4 * (u * u) ->
@@ -1237,13 +1315,6 @@ have Hw : Rabs (b2 + x1 * y1) < pow (3 - 2 * p).
 have Herr := round_err_le Hw.
 move: Herr; rewrite (_ : (3 - 2 * p - p = 3 - 3 * p)%Z); last by lia.
 rewrite pow_3m3p; nra.
-Qed.
-
-(* [u <= 1/64] (from [p >= 6]); the slack the final assembly needs.           *)
-Lemma u_le_64 : u <= / 64.
-Proof.
-have -> : / 64 = pow (-6) by rewrite /= /Z.pow_pos /=; lra.
-rewrite u_pow; apply: bpow_le; lia.
 Qed.
 
 (* Final assembly: an error numerator [<= 28u^3 - 11.9u^4] over a product of    *)

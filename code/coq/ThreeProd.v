@@ -1755,10 +1755,30 @@ Lemma inner_head_Fnonoverlap x0 x1 x2 y0 y1 y2 :
 Proof.
 Admitted.
 
+(* The shared divisibility crux (paper Section 6.2 part 1): when [s3 <> 0], the   *)
+(* leading input [z00+] and the [b0, b1] limbs are all divisible by [ulp(s3)].    *)
+(* [z00+]: [ulp(z00+) >= 2u > ulp(s3)].  [b0, b1]: Lemma 1 gives                   *)
+(* [1/2 ulp(x1) | b0, b1] and [1/2 ulp(x1) >= ulp(s3)] (WLOG [|x1| >= |y1|]).      *)
+(* Feeds both [e4_dominates] (item b) and the [I]-set study                       *)
+(* [inner_head_Fnonoverlap] (item a).                                            *)
+Lemma inner_inputs_imul x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  let s3 := dwh (TwoSum (RND (nth 0 bb 2 + x1 * y1))
+             (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+                 + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))) in
+  s3 <> 0 ->
+  [/\ is_imul (RND (x0 * y0)) (ulp s3),
+      is_imul (nth 0 bb 0) (ulp s3) & is_imul (nth 0 bb 1) (ulp s3)].
+Proof.
+Admitted.
+
 (* Item (b) (paper Section 6.2 part 1): the trailing [e4 = dwl(TwoSum c z3)] is   *)
 (* finer than every nonzero output limb of the head VecSum -- [ulp(s3) >= 2|e4|]  *)
 (* and each limb is divisible by [ulp(s3)], so [|e4| <= 1/2 uls(limb)].  Feeds    *)
-(* [Fnonoverlap_rcons].                                                          *)
+(* [Fnonoverlap_rcons].  Reduced to [inner_inputs_imul] via [vecSum_imul_forward] *)
+(* and [is_imul_uls_ge]; the [e4 = 0] case ([s3 = 0]) is trivial.                *)
 Lemma e4_dominates x0 x1 x2 y0 y1 y2 :
   ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
   let bb := vecSum
@@ -1774,7 +1794,49 @@ Lemma e4_dominates x0 x1 x2 y0 y1 y2 :
                  + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))))
       <= / 2 * uls x.
 Proof.
-Admitted.
+move=> Hc Nx Ny bb x xI xn0.
+set c := RND (nth 0 bb 2 + x1 * y1) in xI *.
+set z3 := RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+       + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)) in xI *.
+have Fc : format c by apply: generic_format_round.
+have Fz3 : format z3 by apply: generic_format_round.
+have [Fs3 Fe4] := @format_TwoSum p Hp2 choice c z3 Fc Fz3.
+case: (Req_dec (dwl (TwoSum c z3)) 0) => [He4|He4].
+  by rewrite He4 Rabs_R0; apply: Rmult_le_pos; [lra | apply: uls_ge_0].
+have Hs3n0 : dwh (TwoSum c z3) <> 0.
+  move=> Hs3; apply: He4.
+  have Hhi := TwoSum_hi p choice c z3.
+  have Hsum := TwoSum_correct_loc Hp2 choice_sym Fc Fz3.
+  have Hd : RND (dwl (TwoSum c z3)) = 0.
+    have Hrn0 : RND (c + z3) = 0 by rewrite -Hhi.
+    have HsumF : dwh (TwoSum c z3) + dwl (TwoSum c z3) = c + z3 by exact: Hsum.
+    have Hdwl : dwl (TwoSum c z3) = c + z3 by move: HsumF; rewrite Hs3; lra.
+    by rewrite Hdwl.
+  have Fe4' : format (dwl (TwoSum c z3)) by exact: Fe4.
+  by rewrite -(round_generic _ _ _ _ Fe4').
+have [Hz Hb0 Hb1] := inner_inputs_imul Hc Nx Ny Hs3n0.
+have Fs3n0 := ulp_neq_0 beta fexp _ Hs3n0.
+have Hf4 : {in [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1; dwh (TwoSum c z3)],
+    forall z, format z}.
+  move=> z; rewrite !inE => /or4P[/eqP->|/eqP->|/eqP->|/eqP->];
+    try apply: generic_format_round; exact: Fs3.
+have Hm4 : {in [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1; dwh (TwoSum c z3)],
+    forall z, is_imul z (pow (cexp (dwh (TwoSum c z3))))}.
+  move=> z; rewrite !inE => /or4P[/eqP->|/eqP->|/eqP->|/eqP->].
+  - by rewrite -Fs3n0; exact: Hz.
+  - by rewrite -Fs3n0; exact: Hb0.
+  - by rewrite -Fs3n0; exact: Hb1.
+  - exact: (format_imul_cexp Fs3).
+have Himx : is_imul x (ulp (dwh (TwoSum c z3))).
+  rewrite Fs3n0.
+  exact: (@vecSum_imul_forward p Hp2 choice choice_sym _ _ Hf4 Hm4 x xI).
+have Fx : format x by apply: (@format_vecSum p Hp2 choice _ Hf4 x xI).
+have Hulsx : ulp (dwh (TwoSum c z3)) <= uls x.
+  rewrite Fs3n0; apply: is_imul_uls_ge => //.
+  by move: Himx; rewrite Fs3n0.
+have He4le := e4_le_half_ulp Fc Fz3.
+lra.
+Qed.
 
 Lemma inner_Fnonoverlap x0 x1 x2 y0 y1 y2 :
   ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->

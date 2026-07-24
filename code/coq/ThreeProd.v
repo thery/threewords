@@ -3324,7 +3324,110 @@ Lemma eps5nz_numerator x0 x1 x2 y0 y1 y2 :
   Rabs ((x0 + x1 + x2) * (y0 + y1 + y2) - sumR e)
     <= 26 * (u * u * u) - 119 / 10 * (u * u * u * u).
 Proof.
-Admitted.
+move=> Nx Ny bb c z3 e Hdisj.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := u_le_64.
+have [[Fx0 Fx1 Fx2] Hx0l Hx0r Hx1o Hx2o] := Nx.
+have [[Fy0 Fy1 Fy2] Hy0l Hy0r Hy1o Hy2o] := Ny.
+set z10m := RND (x1 * y0 - RND (x1 * y0)).
+set z01m := RND (x0 * y1 - RND (x0 * y1)).
+set z31 := RND (z10m + x0 * y2).
+set z32 := RND (z01m + x2 * y0).
+have Hz10m : Rabs z10m <= 2 * (u * u).
+  rewrite /z10m round_generic; first by apply: (z10m_bound Nx Ny).
+  rewrite (_ : x1 * y0 - RND (x1 * y0) = -(RND (x1 * y0) - x1 * y0)); last by ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hz01m : Rabs z01m <= 2 * (u * u).
+  rewrite /z01m round_generic; first by apply: (z01m_bound Nx Ny).
+  rewrite (_ : x0 * y1 - RND (x0 * y1) = -(RND (x0 * y1) - x0 * y1)); last by ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hx0y2 := x0y2_bound Nx Ny.
+have Hx2y0 := x2y0_bound Nx Ny.
+have Hx1y1 := x1y1_bound Nx Ny.
+have Hz31 := z31_bound Hz10m Hx0y2.
+have Hz32 := z32_bound Hz01m Hx2y0.
+have Hb2 : Rabs (nth 0 bb 2) <= 4 * (u * u).
+  have Hb2eq : nth 0 bb 2 = RND (x0 * y1) + RND (x1 * y0)
+      - RND (RND (x0 * y1) + RND (x1 * y0)).
+    rewrite /bb (vecSum3 (generic_format_round _ _ _ _)
+      (generic_format_round _ _ _ _) (generic_format_round _ _ _ _)) /=; ring.
+  by rewrite Hb2eq; apply: (b2_bound Nx Ny).
+have Hdecomp := @sumR_e_decomp x0 x1 x2 y0 y1 y2
+  (RND (x0 * y0)) (RND (x0 * y0 - RND (x0 * y0)))
+  (RND (x0 * y1)) z01m (RND (x1 * y0)) z10m bb c z31 z32 z3
+  Fx0 Fx1 Fy0 Fy1 erefl erefl erefl erefl erefl erefl erefl erefl.
+have -> : (x0 + x1 + x2) * (y0 + y1 + y2) - sumR e
+    = (x1 * y2 + x2 * y1 + x2 * y2) + (z10m + x0 * y2 - z31)
+      + (z01m + x2 * y0 - z32) + (z31 + z32 - z3)
+      + (nth 0 bb 2 + x1 * y1 - c) by exact: Hdecomp.
+have He0 := eps0_bound Nx Ny.
+have He2 := eps2_bound Hz01m Hx2y0.
+have He3 := eps3_bound Hz31 Hz32.
+have He4 := eps4_bound Hb2 Hx1y1.
+have He1 := eps1_bound Hz10m Hx0y2.
+have T1 := Rabs_triang ((x1 * y2 + x2 * y1 + x2 * y2) + (z10m + x0 * y2 - z31)
+      + (z01m + x2 * y0 - z32) + (z31 + z32 - z3)) (nth 0 bb 2 + x1 * y1 - c).
+have T2 := Rabs_triang ((x1 * y2 + x2 * y1 + x2 * y2) + (z10m + x0 * y2 - z31)
+      + (z01m + x2 * y0 - z32)) (z31 + z32 - z3).
+have T3 := Rabs_triang ((x1 * y2 + x2 * y1 + x2 * y2) + (z10m + x0 * y2 - z31))
+      (z01m + x2 * y0 - z32).
+have T4 := Rabs_triang (x1 * y2 + x2 * y1 + x2 * y2) (z10m + x0 * y2 - z31).
+rewrite -/z31 in He1.
+rewrite -/z32 in He2.
+rewrite -/z31 -/z32 -/z3 in He3.
+have Hp2m3 : pow (2 - 3 * p) = 4 * (u * u * u).
+  rewrite (_ : (2 - 3 * p = 2 + - (3 * p))%Z); last by lia.
+  by rewrite bpow_plus u3_pow /= /Z.pow_pos /=; lra.
+have Hred : forall t : R, Rabs (RND t) < 4 * (u * u) ->
+    Rabs (t - RND t) <= 2 * (u * u * u).
+  move=> t Hlt.
+  have Herr := @error_le_half_ulp_round beta (FLX_exp p)
+    (FLX_exp_valid p) (FLX_exp_monotone p) choice t.
+  have Hulp : ulp (RND t) <= 4 * (u * u * u).
+    case: (Req_dec (RND t) 0) => [Hz|Hn0].
+      rewrite Hz ulp_FLX_0; clear -Hu0; nra.
+    rewrite ulp_neq_0 //.
+    apply: (Rle_trans _ (pow (2 - 3 * p))); last by rewrite Hp2m3; apply: Rle_refl.
+    have Hmag : (mag beta (RND t) <= 2 - 2 * p)%Z.
+      by apply: mag_le_bpow; [exact: Hn0 | rewrite pow_2m2p; exact: Hlt].
+    apply: bpow_le.
+    have Hcx : cexp (RND t) = (mag beta (RND t) - p)%Z
+      by rewrite /cexp /fexp /FLX_exp.
+    rewrite Hcx; lia.
+  have Hpp : Prec_gt_0 p by rewrite /Prec_gt_0; lia.
+  move: (Herr Hpp); rewrite Rabs_minus_sym; lra.
+case: Hdisj => [Hy2 | Hx2 | Hcs | Hz3s].
+- have He1' : Rabs (z10m + x0 * y2 - z31) <= 2 * (u * u * u).
+    have Hw : Rabs (z10m + x0 * y2) < pow (2 - 2 * p).
+      rewrite pow_2m2p.
+      have Hxy : Rabs (x0 * y2) < 2 * (u * u).
+        rewrite Rabs_mult (Rabs_pos_eq x0); last lra.
+        clear -Hx0l Hx0r Hy2 Hu0; have := Rabs_pos y2; nra.
+      have H3 := Rabs_triang z10m (x0 * y2); clear -Hz10m Hxy H3; lra.
+    have Herr := round_err_le Hw.
+    move: Herr; rewrite (_ : (2 - 2 * p - p = 2 - 3 * p)%Z) ?Hp2m3 -/z31;
+      last by lia.
+    lra.
+  rewrite -/c in He4; lra.
+- have He2' : Rabs (z01m + x2 * y0 - z32) <= 2 * (u * u * u).
+    have Hw : Rabs (z01m + x2 * y0) < pow (2 - 2 * p).
+      rewrite pow_2m2p.
+      have Hxy : Rabs (x2 * y0) < 2 * (u * u).
+        rewrite Rabs_mult (Rabs_pos_eq y0); last lra.
+        clear -Hx2 Hy0l Hy0r Hu0; have := Rabs_pos x2; nra.
+      have H3 := Rabs_triang z01m (x2 * y0); clear -Hz01m Hxy H3; lra.
+    have Herr := round_err_le Hw.
+    move: Herr; rewrite (_ : (2 - 2 * p - p = 2 - 3 * p)%Z) ?Hp2m3 -/z32;
+      last by lia.
+    lra.
+  rewrite -/c in He4; lra.
+- have He4' : Rabs (nth 0 bb 2 + x1 * y1 - c) <= 2 * (u * u * u).
+    by apply: (Hred (nth 0 bb 2 + x1 * y1)); rewrite -/c.
+  lra.
+- have He3' : Rabs (z31 + z32 - z3) <= 2 * (u * u * u).
+    by apply: (Hred (z31 + z32)); rewrite -/z3.
+  rewrite -/c in He4; lra.
+Qed.
 
 (* The [eps5 <> 0] case of the error bound (paper Section 6.2, part 2: "the      *)
 (* error is shown not too large when eps5 <> 0", details OMITTED in the paper).  *)

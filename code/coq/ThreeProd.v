@@ -1755,6 +1755,34 @@ Lemma inner_head_Fnonoverlap x0 x1 x2 y0 y1 y2 :
 Proof.
 Admitted.
 
+(* [u |x| <= ulp x]: the workhorse for the [x1]-relative magnitude bounds.  The   *)
+(* rounding error [<= 1/2 ulp <= u|.|] converts a product/sum's absolute size into *)
+(* a multiple of the operand's [ulp] without any [mag] case study.                *)
+Lemma u_abs_le_ulp x : u * Rabs x <= ulp x.
+Proof.
+have [->|xn0] := Req_dec x 0.
+  by rewrite Rabs_R0 Rmult_0_r ulp_FLX_0 //; apply: Rle_refl.
+by rewrite u_pow; have := ulp_FLX_gt p beta xn0; lra.
+Qed.
+
+(* A rounded product's error is [<= 2 ulp] of a factor when the OTHER factor is    *)
+(* [<= 2] in magnitude (the normalised leading limbs [x0, y0 < 2]).  Via           *)
+(* [Rabs(RN t - t) <= u|t|] and [u|a*b| = u|a||b| <= 2 u|a| <= 2 ulp a].           *)
+Lemma err_mul_le_ulp a b :
+  Rabs b <= 2 -> Rabs (a * b - RND (a * b)) <= 2 * ulp a.
+Proof.
+move=> Hb.
+have [Herr1 Herr2] := error_bound_ulp_u beta Hp2 choice (a * b).
+have Hua : u * Rabs a <= ulp a by apply: u_abs_le_ulp.
+rewrite [Rabs (a * b - RND (a * b))]Rabs_minus_sym.
+move: Herr2; rewrite Rabs_mult => Herr2.
+have Hpa := Rabs_pos a; have Hpb := Rabs_pos b.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hula : 0 <= ulp a by apply: ulp_ge_0.
+have H3 : u * (Rabs a * Rabs b) <= 2 * ulp a by nra.
+lra.
+Qed.
+
 (* The [x1]-relative magnitude bound (paper Section 6.2 part 1): [|s3|] is         *)
 (* [O(max(ulp x1, ulp y1))] -- every limb of [c, z3] is [O(ulp)] of the larger of  *)
 (* [x1, y1] ([|x2| < ulp x1], [|y2| < ulp y1], the 2Prod/2Sum errors [<= 1/2 ulp],  *)
@@ -1769,7 +1797,147 @@ Lemma s3_le_16max x0 x1 x2 y0 y1 y2 :
                  + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))))
     <= 16 * Rmax (ulp x1) (ulp y1).
 Proof.
-Admitted.
+move=> Hc Nx Ny.
+rewrite (TwoSum_hi p choice).
+set z00m := RND (x0 * y0 - RND (x0 * y0)).
+set z01p := RND (x0 * y1).
+set z10p := RND (x1 * y0).
+set b2 := nth 0 (vecSum [:: z00m; z01p; z10p]) 2.
+set c := RND (b2 + x1 * y1).
+set z3 := RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2) +
+               RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)).
+set M := Rmax (ulp x1) (ulp y1).
+have Hu0 : 0 < u by apply: u_gt_0.
+have HMx : ulp x1 <= M by apply: Rmax_l.
+have HMy : ulp y1 <= M by apply: Rmax_r.
+have HM0 : 0 <= M by apply: (Rle_trans _ _ _ (ulp_ge_0 beta fexp x1)).
+have Hule : u <= / 64.
+  rewrite u_pow; have -> : (/64 = pow (-6)) by rewrite /= /Z.pow_pos /=; lra.
+  by apply: bpow_le; lia.
+have RNrel : forall t : R, Rabs (RND t) <= (1 + u) * Rabs t.
+  move=> t; have Ht := relative_error_le beta Hp2 choice t.
+  have H2 : Rabs (RND t) <= Rabs t + Rabs (RND t - t).
+    by have := Rabs_triang t (RND t - t);
+       rewrite (_ : t + (RND t - t) = RND t); [lra | ring].
+  have := Rabs_pos t; nra.
+have [[Fx0 Fx1 Fx2] Hx0l Hx0h _ Hx2opt] := Nx.
+have [[Fy0 Fy1 Fy2] Hy0l Hy0h _ Hy2opt] := Ny.
+have Hx0b : Rabs x0 <= 2 by rewrite Rabs_pos_eq; lra.
+have Hy0b : Rabs y0 <= 2 by rewrite Rabs_pos_eq; lra.
+have Hx2b : Rabs x2 <= M.
+  have Hle : Rabs x2 <= ulp x1
+    by case: Hx2opt => [->|H]; [rewrite Rabs_R0; apply: ulp_ge_0 | lra].
+  lra.
+have Hy2b : Rabs y2 <= M.
+  have Hle : Rabs y2 <= ulp y1
+    by case: Hy2opt => [->|H]; [rewrite Rabs_R0; apply: ulp_ge_0 | lra].
+  lra.
+have Ee1 : RND (x1 * y0 - RND (x1 * y0)) = x1 * y0 - RND (x1 * y0).
+  apply: round_generic.
+  rewrite (_ : x1 * y0 - RND (x1 * y0) = - (RND (x1 * y0) - x1 * y0)); last ring.
+  by apply: generic_format_opp; apply: format_err_mul.
+have HT1 : Rabs (RND (x1 * y0 - RND (x1 * y0))) <= 2 * M.
+  rewrite Ee1.
+  by apply: (Rle_trans _ _ _ (err_mul_le_ulp x1 Hy0b)); lra.
+have Ee3 : RND (x0 * y1 - RND (x0 * y1)) = x0 * y1 - RND (x0 * y1).
+  apply: round_generic.
+  rewrite (_ : x0 * y1 - RND (x0 * y1) = - (RND (x0 * y1) - x0 * y1)); last ring.
+  by apply: generic_format_opp; apply: format_err_mul.
+have HT3 : Rabs (RND (x0 * y1 - RND (x0 * y1))) <= 2 * M.
+  rewrite Ee3 (Rmult_comm x0 y1).
+  by apply: (Rle_trans _ _ _ (err_mul_le_ulp y1 Hx0b)); lra.
+have HT2 : Rabs (x0 * y2) <= 2 * M.
+  rewrite Rabs_mult (Rabs_pos_eq x0); last lra.
+  have := Rabs_pos y2; nra.
+have HT4 : Rabs (x2 * y0) <= 2 * M.
+  rewrite Rabs_mult (Rabs_pos_eq y0); last lra.
+  have := Rabs_pos x2; nra.
+have HT5 : Rabs (x1 * y1) <= 2 * M.
+  have Hy1 := tw_norm_x1 Ny.
+  have Hux1 := u_abs_le_ulp x1.
+  rewrite Rabs_mult.
+  have Hx1p := Rabs_pos x1.
+  have Hstep : Rabs x1 * Rabs y1 <= Rabs x1 * (2 * u).
+    by apply: Rmult_le_compat_l; [exact: Hx1p | lra].
+  nra.
+have Fz00m : format z00m by apply: generic_format_round.
+have Fz01p : format z01p by apply: generic_format_round.
+have Fz10p : format z10p by apply: generic_format_round.
+have Hb2e : b2 = z01p + z10p - RND (z01p + z10p).
+  by rewrite /b2 (vecSum3 Fz00m Fz01p Fz10p).
+have Hz01 : Rabs z01p <= 2 * (1 + u) * Rabs y1.
+  rewrite /z01p.
+  apply: (Rle_trans _ _ _ (RNrel _)).
+  rewrite Rabs_mult (Rabs_pos_eq x0); last lra.
+  rewrite (_ : 2 * (1 + u) * Rabs y1 = (1 + u) * (2 * Rabs y1)); last ring.
+  apply: Rmult_le_compat_l; first lra.
+  by apply: Rmult_le_compat_r; [apply: Rabs_pos | lra].
+have Hz10 : Rabs z10p <= 2 * (1 + u) * Rabs x1.
+  rewrite /z10p.
+  apply: (Rle_trans _ _ _ (RNrel _)).
+  rewrite Rabs_mult (Rabs_pos_eq y0); last lra.
+  rewrite (_ : 2 * (1 + u) * Rabs x1 = (1 + u) * (2 * Rabs x1)); last ring.
+  apply: Rmult_le_compat_l; first lra.
+  rewrite Rmult_comm.
+  by apply: Rmult_le_compat_r; [apply: Rabs_pos | lra].
+have Hb2 : Rabs b2 <= 4 * (1 + u) * M.
+  rewrite Hb2e Rabs_minus_sym.
+  have Hbe1 : Rabs (RND (z01p + z10p) - (z01p + z10p)) <= u * Rabs (z01p + z10p).
+    by have [H1 H2] := error_bound_ulp_u beta Hp2 choice (z01p + z10p); lra.
+  apply: (Rle_trans _ _ _ Hbe1).
+  have Ht := Rabs_triang z01p z10p.
+  have Hux1 := u_abs_le_ulp x1.
+  have Huy1 := u_abs_le_ulp y1.
+  have Hx1p := Rabs_pos x1; have Hy1p := Rabs_pos y1.
+  have Hsum : Rabs (z01p + z10p) <= 2 * (1 + u) * (Rabs x1 + Rabs y1) by nra.
+  have Hup : 0 <= u by lra.
+  have Hstep : u * Rabs (z01p + z10p) <=
+               2 * (1 + u) * (u * Rabs x1 + u * Rabs y1).
+    have H := Rmult_le_compat_l u _ _ Hup Hsum.
+    have Heq : u * (2 * (1 + u) * (Rabs x1 + Rabs y1))
+             = 2 * (1 + u) * (u * Rabs x1 + u * Rabs y1) by ring.
+    lra.
+  have H1u : 0 < 1 + u by lra.
+  nra.
+have Hcb : Rabs c <= (1 + u) * (4 * (1 + u) * M + 2 * M).
+  rewrite /c.
+  apply: (Rle_trans _ _ _ (RNrel _)).
+  apply: Rmult_le_compat_l; first lra.
+  have := Rabs_triang b2 (x1 * y1); lra.
+have HA : Rabs (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2))
+          <= (1 + u) * (2 * M + 2 * M).
+  apply: (Rle_trans _ _ _ (RNrel _)).
+  apply: Rmult_le_compat_l; first lra.
+  have := Rabs_triang (RND (x1 * y0 - RND (x1 * y0))) (x0 * y2); lra.
+have HB : Rabs (RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))
+          <= (1 + u) * (2 * M + 2 * M).
+  apply: (Rle_trans _ _ _ (RNrel _)).
+  apply: Rmult_le_compat_l; first lra.
+  have := Rabs_triang (RND (x0 * y1 - RND (x0 * y1))) (x2 * y0); lra.
+have Hzb : Rabs z3 <= (1 + u) * ((1 + u) * (2 * M + 2 * M)
+                                 + (1 + u) * (2 * M + 2 * M)).
+  rewrite /z3.
+  apply: (Rle_trans _ _ _ (RNrel _)).
+  apply: Rmult_le_compat_l; first lra.
+  have := Rabs_triang (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2))
+                      (RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)); lra.
+apply: (Rle_trans _ _ _ (RNrel _)).
+apply: (Rle_trans _ ((1 + u) * (Rabs c + Rabs z3))).
+  apply: Rmult_le_compat_l; first lra.
+  exact: Rabs_triang.
+apply: (Rle_trans _ ((1 + u) * ((1 + u) * (4 * (1 + u) * M + 2 * M)
+    + (1 + u) * ((1 + u) * (2 * M + 2 * M) + (1 + u) * (2 * M + 2 * M))))).
+  apply: Rmult_le_compat_l; first lra.
+  by have := Hcb; have := Hzb; lra.
+have Heq : (1 + u) * ((1 + u) * (4 * (1 + u) * M + 2 * M)
+    + (1 + u) * ((1 + u) * (2 * M + 2 * M) + (1 + u) * (2 * M + 2 * M)))
+    = M * ((1 + u) * ((1 + u) * (4 * (1 + u) + 2)
+      + (1 + u) * ((1 + u) * 4 + (1 + u) * 4))) by ring.
+rewrite Heq.
+have HK : (1 + u) * ((1 + u) * (4 * (1 + u) + 2)
+      + (1 + u) * ((1 + u) * 4 + (1 + u) * 4)) <= 16 by nra.
+have := HM0; nra.
+Qed.
 
 (* The [x1]-relative magnitude bound (paper Section 6.2 part 1): [ulp(s3)] is at   *)
 (* most half the [ulp] of one of the two cross-product rounds -- i.e.              *)

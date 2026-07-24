@@ -77,6 +77,8 @@ Local Notation vsebAux := (vsebAux p choice).
 Local Notation vseb := (vseb p choice).
 Local Notation vsebK := (vsebK p choice).
 Local Notation Pnonoverlap := (Pnonoverlap p).
+Local Notation Fnonoverlap := (Fnonoverlap p).
+Local Notation Fnonoverlap_aux := (Fnonoverlap_aux p).
 Local Notation isTW := (isTW p).
 
 (* ===========================================================================*)
@@ -753,19 +755,10 @@ split.
 by rewrite -Hhi; apply: Rmult_lt_compat_r; lra.
 Qed.
 
-(* Normalised (paper WLOG) forms of the two theorems.  These carry the actual  *)
-(* Section-6.2 mathematics and remain to be discharged.                        *)
-Lemma ThreeProd_isTW_norm x y :
-  ties_to_even choice -> tw_normP x -> tw_normP y -> isTW (ThreeProd x y).
-Proof.
-Admitted.
-
-Lemma ThreeProd_error_norm x y :
-  ties_to_even choice -> tw_normP x -> tw_normP y ->
-  Rabs (TWval (ThreeProd x y) - TWval x * TWval y) <=
-     (28 * (u * u * u) + 107 * (u * u * u * u)) * Rabs (TWval x * TWval y).
-Proof.
-Admitted.
+(* The normalised (paper WLOG) forms [ThreeProd_isTW_norm] /                    *)
+(* [ThreeProd_error_norm] carry the actual Section-6.2 mathematics and are      *)
+(* proved BELOW, after the Section-6.1/6.2 term bounds and structural lemmas    *)
+(* they depend on (just before [ThreeProd_isTW]).                               *)
 
 (* ===========================================================================*)
 (*  Section 6.1 -- product-term bounds.  Each is a lemma over the two          *)
@@ -1569,6 +1562,76 @@ have -> : is_left (Req_EM_T e1 0) = false.
 by [].
 Qed.
 
+(* Appending a trailing element [e] finer than every nonzero element of [l]     *)
+(* (bound [1/2 uls] against each) preserves F-nonoverlap.  This is the shape of *)
+(* the [e4] tail: [e4] is divisible by [ulp(s3)], finer than every output limb. *)
+Lemma Fnonoverlap_aux_rcons prev l e :
+  Rabs e <= / 2 * uls prev ->
+  (forall x, x \in l -> Rabs e <= / 2 * uls x) ->
+  Fnonoverlap_aux prev l -> Fnonoverlap_aux prev (rcons l e).
+Proof.
+elim: l prev => [|x l IH] prev Hp Hl Hf.
+  by rewrite /=; split=> // _; case: (Req_EM_T e 0).
+have Hlx : forall z, z \in l -> Rabs e <= / 2 * uls z.
+  by move=> z zI; apply: Hl; rewrite inE zI orbT.
+rewrite rcons_cons.
+case: (Req_dec x 0) => [x0|xn0].
+  rewrite x0 Fnonoverlap_aux_cons0; apply: IH => //.
+  by move: Hf; rewrite x0 Fnonoverlap_aux_cons0.
+apply: Fnonoverlap_aux_consN => //.
+  by move: Hf => [Hx _]; apply: Hx.
+apply: IH => //.
+  by apply: Hl; rewrite inE eqxx.
+move: Hf => [_ Hrec]; move: Hrec.
+by have -> : is_left (Req_EM_T x 0) = false by
+  case: (Req_EM_T x 0) => [xe|//]; case: (xn0 xe).
+Qed.
+
+Lemma Fnonoverlap_rcons l e :
+  Fnonoverlap l -> (forall x, x \in l -> x <> 0 -> Rabs e <= / 2 * uls x) ->
+  Fnonoverlap (rcons l e).
+Proof.
+move=> Fl Hb.
+case: (Req_dec e 0) => [e0|en0].
+  by rewrite e0; move: Fl; rewrite /Fnonoverlap filter_rcons eqxx.
+rewrite /Fnonoverlap filter_rcons ifT; last by apply/eqP.
+have Hsurv : forall x, x \in [seq z <- l | z != 0 :> R] ->
+    Rabs e <= / 2 * uls x.
+  move=> x; rewrite mem_filter => /andP[xn0 xI].
+  by apply: Hb => // /eqP; rewrite (negbTE xn0).
+move: Fl; rewrite /Fnonoverlap.
+case E : [seq z <- l | z != 0 :> R] => [|x l'] /=.
+  by split=> // _; case: (Req_EM_T e 0).
+move=> Faux; apply: Fnonoverlap_aux_rcons => //.
+  by apply: Hsurv; rewrite E inE eqxx.
+by move=> z zI; apply: Hsurv; rewrite E inE zI orbT.
+Qed.
+
+(* The paper's [(r0, VSEB(2)) = VSEB(3)] star identity, non-degenerate half.     *)
+(* When the second VecSum limb [e1] is nonzero, [vseb] emits the head [e0]       *)
+(* unchanged and recurses on the tail -- so [VSEB(3)(e0..e4)] agrees with the    *)
+(* algorithm's [(e0, VSEB(2)(e1..e4))].  [RN(e0 + e1) = e0] is the top-of-VecSum *)
+(* property [vecSum_top_round].                                                  *)
+Lemma vseb_star l :
+  {in l, forall z, format z} -> (1 < size l)%N ->
+  nth 0 (vecSum l) 1 <> 0 ->
+  vseb (vecSum l) = nth 0 (vecSum l) 0 :: vseb (behead (vecSum l)).
+Proof.
+move=> Fl Hsz Hne1.
+have Hr := vecSum_top_round Fl Hsz.
+have Fe : {in vecSum l, forall z, format z}.
+  by move=> z zI; apply: (@format_vecSum p Hp2 choice l Fl).
+have Hsze : (1 < size (vecSum l))%N.
+  by rewrite size_vecSum; move: Hsz; case: (size l) => [|[|n]].
+case E : (vecSum l) => [|e0 [|e1 rest]].
+- by rewrite E in Hsze.
+- by rewrite E in Hsze.
+rewrite E /= in Hr Hne1 *.
+apply: vseb_cons_round => //.
+- by apply: Fe; rewrite E inE eqxx.
+- by apply: Fe; rewrite E !inE eqxx orbT.
+Qed.
+
 (* Final assembly: an error numerator [<= 28u^3 - 11.9u^4] over a product of    *)
 (* magnitude [>= 1 - 4u] yields the relative bound [28u^3 + 107u^4].  The       *)
 (* [107u^4] slack is exactly what makes [(28u^3-11.9u^4)/(1-4u) <= 28u^3+       *)
@@ -1662,6 +1725,293 @@ do 40! (rewrite ?round_0 ?Rplus_0_r ?Rplus_0_l ?Rminus_0_r ?Rminus_0_l ?Ropp_0).
 rewrite /vsebK /vseb.
 have -> : [:: 0; 0; 0] = nseq 2.+1 0 by [].
 by rewrite vsebAux_zeros.
+Qed.
+
+(* ===========================================================================*)
+(*  Section 6.2, part 1 -- the normalised [isTW] theorem and its crux.        *)
+(* ===========================================================================*)
+
+(* THE CRUX (paper Section 6.2, part 1): the inner VecSum                       *)
+(* [VecSum(z00+, b0, b1, c, z3)] is F-nonoverlapping.  Route: peel the last     *)
+(* 2Sum [(c, z3)] into [s3 = RN(c + z3)] plus the trailing error [e4]           *)
+(* ([vecSum_split5]); the head [VecSum(z00+, b0, b1, s3)] meets the Theorem-1   *)
+(* conditions through the four-case study of the overlap-index set [I]          *)
+(* (Corollary 1, [vecSum_Fnonoverlap_sep]); and [e4] is divisible by            *)
+(* [ulp(s3)], finer than every output limb, so it appends by                    *)
+(* [Fnonoverlap_rcons].  See [doc/thm7.md] Section 6.2 part 1.                  *)
+Lemma inner_Fnonoverlap x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  Fnonoverlap (vecSum
+    [:: RND (x0 * y0);
+        nth 0 bb 0;
+        nth 0 bb 1;
+        RND (nth 0 bb 2 + x1 * y1);
+        RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+           + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))]).
+Proof.
+Admitted.
+
+(* The [e1 = 0] half of the star identity (paper Section 6.2, part 1): when the *)
+(* second VecSum limb vanishes, [|s1|,|s2|,|s3| < 16u <= 1/2 ufp(z00+)], so the  *)
+(* next nonzero limb is still [< 1/2 ulp(e0)] and [VSEB] reproduces              *)
+(* [(e0, VSEB(2))].  Unlike [e1 <> 0] (which is the structural top-of-VecSum     *)
+(* [vecSum_top_round]), this needs the Section-6.1 magnitudes -- [Fnonoverlap]   *)
+(* alone bounds by [1/2 uls], too weak under FLX where [uls >= ulp].  Returns    *)
+(* the three head-limb identities shared by [ThreeProd_norm_eq].  See            *)
+(* [doc/thm7.md] Section 6.2 part 1 (the [e1 = 0] bullet).                       *)
+Lemma vseb_head3_e1zero x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  let e := vecSum
+    [:: RND (x0 * y0);
+        nth 0 bb 0;
+        nth 0 bb 1;
+        RND (nth 0 bb 2 + x1 * y1);
+        RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+           + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))] in
+  nth 0 e 1 = 0 ->
+  nth 0 (vseb e) 0 = nth 0 e 0 /\
+  nth 0 (vseb e) 1 = nth 0 (vseb (behead e)) 0 /\
+  nth 0 (vseb e) 2 = nth 0 (vseb (behead e)) 1.
+Proof.
+Admitted.
+
+(* The paper's star identity [(r0, VSEB(2)) = VSEB(3)]: [ThreeProd (x, y)]'s     *)
+(* output equals the first three limbs of [vseb e], with [e = VecSum(z00+, b0,   *)
+(* b1, c, z3)] the pre-truncation VecSum output.  [e1 <> 0] uses [vseb_star]     *)
+(* (structural), [e1 = 0] uses [vseb_head3_e1zero].  Shared by                   *)
+(* [ThreeProd_isTW_norm] and [ThreeProd_error_norm].                            *)
+Lemma ThreeProd_norm_eq x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  let e := vecSum
+    [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1; RND (nth 0 bb 2 + x1 * y1);
+        RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+           + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))] in
+  ThreeProd (TWR x0 x1 x2) (TWR y0 y1 y2) =
+    TWR (nth 0 (vseb e) 0) (nth 0 (vseb e) 1) (nth 0 (vseb e) 2).
+Proof.
+move=> Hc Nx' Ny'.
+rewrite /ThreeProd /TwoProd.
+set bb := vecSum [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)].
+set e := vecSum [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1;
+  RND (nth 0 bb 2 + x1 * y1);
+  RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+     + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))].
+set el := [:: nth 0 e 1; nth 0 e 2; nth 0 e 3; nth 0 e 4].
+have Hmatch : match vsebK 2 el with
+    | [::] => TWR (nth 0 e 0) 0 0
+    | [:: r1] => TWR (nth 0 e 0) r1 0
+    | [:: r1, r2 & _] => TWR (nth 0 e 0) r1 r2
+    end = TWR (nth 0 e 0) (nth 0 (vseb el) 0) (nth 0 (vseb el) 1).
+  by rewrite /vsebK; case: (vseb el) => [|r1 [|r2 rl]].
+rewrite Hmatch.
+have Hsz5 : size e = 5%N by rewrite /e size_vecSum.
+have Fbb : {in bb, forall z, format z}.
+  apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
+  by move=> /orP[/eqP->|/orP[/eqP->|/eqP->]]; apply: generic_format_round.
+have Fnthbb : forall i, format (nth 0 bb i).
+  move=> i; case: (ltnP i (size bb)) => Hi;
+    last by rewrite nth_default //; exact: generic_format_0.
+  by apply: Fbb; apply: mem_nth.
+have Hbeh : el = behead e.
+  have gen : forall s : seq R, size s = 5%N ->
+      behead s = [:: nth 0 s 1; nth 0 s 2; nth 0 s 3; nth 0 s 4].
+    by move=> s; case: s => [|a[|b[|c[|d[|f[|g r]]]]]].
+  by rewrite /el (gen e Hsz5).
+have [H0 [H1 H2]] : nth 0 (vseb e) 0 = nth 0 e 0 /\
+    nth 0 (vseb e) 1 = nth 0 (vseb (behead e)) 0 /\
+    nth 0 (vseb e) 2 = nth 0 (vseb (behead e)) 1.
+  case: (Req_dec (nth 0 e 1) 0) => [He1|He1].
+    by apply: (vseb_head3_e1zero Hc Nx' Ny').
+  have FL5 : {in [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1;
+      RND (nth 0 bb 2 + x1 * y1);
+      RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+         + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))],
+      forall z, format z}.
+    move=> z; rewrite !inE.
+    move=> /orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/eqP->]]]];
+      try apply: generic_format_round; apply: Fnthbb.
+  have Hstar := vseb_star FL5 (isT : (1 < 5)%N) He1.
+  have Hs : vseb e = nth 0 e 0 :: vseb (behead e) by exact: Hstar.
+  rewrite Hs; split; [exact: erefl | split; exact: erefl].
+by rewrite Hbeh H0 H1 H2.
+Qed.
+
+(* Section 6.2, part 1 -- [ThreeProd (x, y)] is a triple word (normalised).     *)
+(* The inner VecSum is F-nonoverlapping ([inner_Fnonoverlap]), so [vseb e] is    *)
+(* P-nonoverlapping (Theorem 2); [ThreeProd_norm_eq] identifies the output with  *)
+(* the first three limbs of [vseb e], a TW by [Pnonoverlap_isTW3].               *)
+Lemma ThreeProd_isTW_norm x y :
+  ties_to_even choice -> tw_normP x -> tw_normP y -> isTW (ThreeProd x y).
+Proof.
+move=> Hc Nx Ny.
+case: x Nx => x0 x1 x2 Nx.
+case: y Ny => y0 y1 y2 Ny.
+have Nx' : tw_norm x0 x1 x2 by exact: Nx.
+have Ny' : tw_norm y0 y1 y2 by exact: Ny.
+rewrite (ThreeProd_norm_eq Hc Nx' Ny').
+set bb := vecSum [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)].
+set e := vecSum [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1;
+  RND (nth 0 bb 2 + x1 * y1);
+  RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+     + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))].
+have Hsz5 : size e = 5%N by rewrite /e size_vecSum.
+have Fbb : {in bb, forall z, format z}.
+  apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
+  by move=> /orP[/eqP->|/orP[/eqP->|/eqP->]]; apply: generic_format_round.
+have Fnthbb : forall i, format (nth 0 bb i).
+  move=> i; case: (ltnP i (size bb)) => Hi;
+    last by rewrite nth_default //; exact: generic_format_0.
+  by apply: Fbb; apply: mem_nth.
+have Fe : {in e, forall z, format z}.
+  apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
+  move=> /orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/eqP->]]]];
+    try apply: generic_format_round; apply: Fnthbb.
+have Fno : Fnonoverlap e by rewrite /e /bb; apply: (inner_Fnonoverlap Hc Nx' Ny').
+have Pno : Pnonoverlap (vseb e).
+  have Hle : (Z.of_nat (size e) <= p + 1)%Z by rewrite Hsz5; lia.
+  by have [] := @vseb_Pnonoverlap p Hp2 choice choice_sym e Hle Fe Fno.
+apply: Pnonoverlap_isTW3; first exact: Pno.
+by apply: (@format_vseb p Hp2 choice e Fe).
+Qed.
+
+(* The normalised product [x*y >= 1 - 4u] (paper Section 6.2).  Both factors     *)
+(* are [>= 1 - 2u] (limbs [x1_tight]/[x2_tight]), and both are positive.         *)
+Lemma xy_ge x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  1 - 4 * u <= Rabs ((x0 + x1 + x2) * (y0 + y1 + y2)).
+Proof.
+move=> Nx Ny.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := u_le_64.
+have Hx1 := x1_tight Nx; have Hx2 := x2_tight Nx.
+have Hy1 := x1_tight Ny; have Hy2 := x2_tight Ny.
+case: Nx => _ Hx0l Hx0h _ _.
+case: Ny => _ Hy0l Hy0h _ _.
+have Hx : 1 - 2 * u <= x0 + x1 + x2 by split_Rabs; nra.
+have Hy : 1 - 2 * u <= y0 + y1 + y2 by split_Rabs; nra.
+rewrite Rabs_pos_eq; nra.
+Qed.
+
+(* The [eps5 <> 0] case of the error bound (paper Section 6.2, part 2: "the      *)
+(* error is shown not too large when eps5 <> 0", details OMITTED in the paper).  *)
+(* The naive triangle [|eps0..4| + |eps5|] over-counts here (it reaches ~30u^3), *)
+(* so a tighter analysis of the mutually-exclusive tightness of the sources is   *)
+(* needed.  Stated over the algorithm context; see [doc/thm7.md] Section 6.2     *)
+(* part 2 and [doc/old-triplewors.pdf] for the missing steps.                    *)
+Lemma ThreeProd_error_eps5nz x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  let e := vecSum
+    [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1; RND (nth 0 bb 2 + x1 * y1);
+        RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+           + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))] in
+  sumR (vseb e) - sumR (vsebK 3 e) <> 0 ->
+  Rabs (sumR (vsebK 3 e) - (x0 + x1 + x2) * (y0 + y1 + y2)) <=
+     (28 * (u * u * u) + 107 * (u * u * u * u)) *
+       Rabs ((x0 + x1 + x2) * (y0 + y1 + y2)).
+Proof.
+Admitted.
+
+(* Section 6.2, part 2 -- relative error [<= 28u^3 + 107u^4] (normalised).       *)
+(* [ThreeProd_norm_eq] gives [TWval (ThreeProd x y) = sumR (vsebK 3 e)]; the     *)
+(* error identity [sumR_e_decomp] plus [vseb_sum] rewrites the numerator as      *)
+(* [eps0+..+eps4] (when [eps5 = 0]) or delegates to [ThreeProd_error_eps5nz].    *)
+(* [eps5 = 0]: [eps04_sum] bounds the numerator by [28u^3-11.9u^4], closed over  *)
+(* [x*y >= 1 - 4u] ([xy_ge]) by [error_assembly].                               *)
+Lemma ThreeProd_error_norm x y :
+  ties_to_even choice -> tw_normP x -> tw_normP y ->
+  Rabs (TWval (ThreeProd x y) - TWval x * TWval y) <=
+     (28 * (u * u * u) + 107 * (u * u * u * u)) * Rabs (TWval x * TWval y).
+Proof.
+move=> Hc Nx Ny.
+case: x Nx => x0 x1 x2 Nx.
+case: y Ny => y0 y1 y2 Ny.
+have Nx' : tw_norm x0 x1 x2 by exact: Nx.
+have Ny' : tw_norm y0 y1 y2 by exact: Ny.
+rewrite (ThreeProd_norm_eq Hc Nx' Ny').
+set bb := vecSum [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)].
+set e := vecSum [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1;
+  RND (nth 0 bb 2 + x1 * y1);
+  RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+     + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))].
+have HTW3 : TWval (TWR (nth 0 (vseb e) 0) (nth 0 (vseb e) 1) (nth 0 (vseb e) 2))
+    = sumR (vsebK 3 e).
+  rewrite /TWval /vsebK.
+  case E : (vseb e) => [|v0 [|v1 [|v2 r]]] /=.
+  - ring.
+  - ring.
+  - ring.
+  - rewrite take0 /=; ring.
+rewrite HTW3.
+have HXY : TWval (TWR x0 x1 x2) * TWval (TWR y0 y1 y2)
+    = (x0 + x1 + x2) * (y0 + y1 + y2) by rewrite /TWval.
+rewrite HXY.
+case: (Req_dec (sumR (vseb e) - sumR (vsebK 3 e)) 0) => [HE5z|HE5n]; last first.
+  by apply: (ThreeProd_error_eps5nz Hc Nx' Ny' HE5n).
+have [[Fx0 Fx1 Fx2] _ _ _ _] := Nx'.
+have [[Fy0 Fy1 Fy2] _ _ _ _] := Ny'.
+have Hz10m : Rabs (RND (x1 * y0 - RND (x1 * y0))) <= 2 * (u * u).
+  rewrite round_generic; first by apply: (z10m_bound Nx' Ny').
+  rewrite (_ : x1 * y0 - RND (x1 * y0) = -(RND (x1 * y0) - x1 * y0)); last by ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hz01m : Rabs (RND (x0 * y1 - RND (x0 * y1))) <= 2 * (u * u).
+  rewrite round_generic; first by apply: (z01m_bound Nx' Ny').
+  rewrite (_ : x0 * y1 - RND (x0 * y1) = -(RND (x0 * y1) - x0 * y1)); last by ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hx0y2 := x0y2_bound Nx' Ny'.
+have Hx2y0 := x2y0_bound Nx' Ny'.
+have Hx1y1 := x1y1_bound Nx' Ny'.
+have Hz31 := z31_bound Hz10m Hx0y2.
+have Hz32 := z32_bound Hz01m Hx2y0.
+have Hb2 : Rabs (nth 0 bb 2) <= 4 * (u * u).
+  have Hb2eq : nth 0 bb 2 = RND (x0 * y1) + RND (x1 * y0)
+      - RND (RND (x0 * y1) + RND (x1 * y0)).
+    rewrite /bb (vecSum3 (generic_format_round _ _ _ _)
+      (generic_format_round _ _ _ _) (generic_format_round _ _ _ _)) /=; ring.
+  by rewrite Hb2eq; apply: (b2_bound Nx' Ny').
+have Hsz5 : size e = 5%N by rewrite /e size_vecSum.
+have Fbb : {in bb, forall z, format z}.
+  apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
+  by move=> /orP[/eqP->|/orP[/eqP->|/eqP->]]; apply: generic_format_round.
+have Fnthbb : forall i, format (nth 0 bb i).
+  move=> i; case: (ltnP i (size bb)) => Hi;
+    last by rewrite nth_default //; exact: generic_format_0.
+  by apply: Fbb; apply: mem_nth.
+have Fe : {in e, forall z, format z}.
+  apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
+  move=> /orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/eqP->]]]];
+    try apply: generic_format_round; apply: Fnthbb.
+have Fno : Fnonoverlap e by rewrite /e /bb; apply: (inner_Fnonoverlap Hc Nx' Ny').
+have Hle : (Z.of_nat (size e) <= p + 1)%Z by rewrite Hsz5; lia.
+have [_ Hsumeq] := @vseb_Pnonoverlap p Hp2 choice choice_sym e Hle Fe Fno.
+have Hdecomp := @sumR_e_decomp x0 x1 x2 y0 y1 y2
+  (RND (x0 * y0)) (RND (x0 * y0 - RND (x0 * y0)))
+  (RND (x0 * y1)) (RND (x0 * y1 - RND (x0 * y1)))
+  (RND (x1 * y0)) (RND (x1 * y0 - RND (x1 * y0)))
+  bb
+  (RND (nth 0 bb 2 + x1 * y1))
+  (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2))
+  (RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))
+  (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+      + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))
+  Fx0 Fx1 Fy0 Fy1 erefl erefl erefl erefl erefl erefl erefl erefl.
+have Hk3 : sumR (vsebK 3 e) = sumR e by rewrite -Hsumeq; lra.
+rewrite Hk3.
+apply: error_assembly; last by apply: (xy_ge Nx' Ny').
+rewrite Rabs_minus_sym /e Hdecomp.
+apply: eps04_sum.
+- exact: (eps0_bound Nx' Ny').
+- exact: (eps1_bound Hz10m Hx0y2).
+- exact: (eps2_bound Hz01m Hx2y0).
+- exact: (eps3_bound Hz31 Hz32).
+- exact: (eps4_bound Hb2 Hx1y1).
 Qed.
 
 (* ===========================================================================*)

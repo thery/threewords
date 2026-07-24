@@ -1739,6 +1739,43 @@ Qed.
 (* (Corollary 1, [vecSum_Fnonoverlap_sep]); and [e4] is divisible by            *)
 (* [ulp(s3)], finer than every output limb, so it appends by                    *)
 (* [Fnonoverlap_rcons].  See [doc/thm7.md] Section 6.2 part 1.                  *)
+(* Item (a) (paper Section 6.2 part 1): the head VecSum [(z00+, b0, b1, s3)]     *)
+(* (with [s3 = dwh(TwoSum c z3) = RN(c + z3)]) is F-nonoverlapping -- the         *)
+(* four-case study of the overlap-index set [I] (Corollary 1,                     *)
+(* [vecSum_Fnonoverlap_sep]).  The intricate core; see [doc/thm7.md].            *)
+Lemma inner_head_Fnonoverlap x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  Fnonoverlap (vecSum
+    [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1;
+        dwh (TwoSum (RND (nth 0 bb 2 + x1 * y1))
+             (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+                 + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))))]).
+Proof.
+Admitted.
+
+(* Item (b) (paper Section 6.2 part 1): the trailing [e4 = dwl(TwoSum c z3)] is   *)
+(* finer than every nonzero output limb of the head VecSum -- [ulp(s3) >= 2|e4|]  *)
+(* and each limb is divisible by [ulp(s3)], so [|e4| <= 1/2 uls(limb)].  Feeds    *)
+(* [Fnonoverlap_rcons].                                                          *)
+Lemma e4_dominates x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  forall x,
+    x \in vecSum [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1;
+        dwh (TwoSum (RND (nth 0 bb 2 + x1 * y1))
+             (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+                 + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))) ] ->
+    x <> 0 ->
+    Rabs (dwl (TwoSum (RND (nth 0 bb 2 + x1 * y1))
+             (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+                 + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))))
+      <= / 2 * uls x.
+Proof.
+Admitted.
+
 Lemma inner_Fnonoverlap x0 x1 x2 y0 y1 y2 :
   ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
   let bb := vecSum
@@ -1751,7 +1788,16 @@ Lemma inner_Fnonoverlap x0 x1 x2 y0 y1 y2 :
         RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
            + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))]).
 Proof.
-Admitted.
+move=> Hc Nx Ny bb.
+rewrite (vecSum_split5 (RND (x0 * y0)) (nth 0 bb 0) (nth 0 bb 1)
+  (RND (nth 0 bb 2 + x1 * y1))
+  (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+      + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))).
+rewrite cats1.
+apply: Fnonoverlap_rcons.
+  by apply: (inner_head_Fnonoverlap Hc Nx Ny).
+by apply: (e4_dominates Hc Nx Ny).
+Qed.
 
 (* Round-to-nearest keeps a float [x] when the perturbation [y] stays within    *)
 (* half the gap to each neighbour ([x - pred x] below, [succ x - x] above).      *)

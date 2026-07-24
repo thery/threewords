@@ -1739,21 +1739,6 @@ Qed.
 (* (Corollary 1, [vecSum_Fnonoverlap_sep]); and [e4] is divisible by            *)
 (* [ulp(s3)], finer than every output limb, so it appends by                    *)
 (* [Fnonoverlap_rcons].  See [doc/thm7.md] Section 6.2 part 1.                  *)
-(* Item (a) (paper Section 6.2 part 1): the head VecSum [(z00+, b0, b1, s3)]     *)
-(* (with [s3 = dwh(TwoSum c z3) = RN(c + z3)]) is F-nonoverlapping -- the         *)
-(* four-case study of the overlap-index set [I] (Corollary 1,                     *)
-(* [vecSum_Fnonoverlap_sep]).  The intricate core; see [doc/thm7.md].            *)
-Lemma inner_head_Fnonoverlap x0 x1 x2 y0 y1 y2 :
-  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
-  let bb := vecSum
-    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
-  Fnonoverlap (vecSum
-    [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1;
-        dwh (TwoSum (RND (nth 0 bb 2 + x1 * y1))
-             (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
-                 + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))))]).
-Proof.
-Admitted.
 
 (* [u |x| <= ulp x]: the workhorse for the [x1]-relative magnitude bounds.  The   *)
 (* rounding error [<= 1/2 ulp <= u|.|] converts a product/sum's absolute size into *)
@@ -1788,14 +1773,14 @@ Qed.
 (* [x1, y1] ([|x2| < ulp x1], [|y2| < ulp y1], the 2Prod/2Sum errors [<= 1/2 ulp],  *)
 (* [|x1 y1| < 2 max]).  The pure component-magnitude crux behind [s3_ulp_op].  The  *)
 (* [16] is generous ([p >= 6] gives [16 < 2^(p-1)]).                              *)
-Lemma s3_le_16max x0 x1 x2 y0 y1 y2 :
+Lemma s3_le_15max x0 x1 x2 y0 y1 y2 :
   ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
   Rabs (dwh (TwoSum (RND (nth 0 (vecSum
     [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)]) 2
       + x1 * y1))
              (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
                  + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))))
-    <= 16 * Rmax (ulp x1) (ulp y1).
+    <= 15 * Rmax (ulp x1) (ulp y1).
 Proof.
 move=> Hc Nx Ny.
 rewrite (TwoSum_hi p choice).
@@ -1935,8 +1920,27 @@ have Heq : (1 + u) * ((1 + u) * (4 * (1 + u) * M + 2 * M)
       + (1 + u) * ((1 + u) * 4 + (1 + u) * 4))) by ring.
 rewrite Heq.
 have HK : (1 + u) * ((1 + u) * (4 * (1 + u) + 2)
-      + (1 + u) * ((1 + u) * 4 + (1 + u) * 4)) <= 16 by nra.
+      + (1 + u) * ((1 + u) * 4 + (1 + u) * 4)) <= 15 by nra.
 have := HM0; nra.
+Qed.
+
+(* Symmetric [<= 16] corollary of the tighter [s3_le_15max]; kept for the        *)
+(* [s3_ulp_op] magnitude argument (the strict [< 16] margin is only needed for    *)
+(* the [I]-set divisibility of [inner_head_Fnonoverlap]).                        *)
+Lemma s3_le_16max x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  Rabs (dwh (TwoSum (RND (nth 0 (vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)]) 2
+      + x1 * y1))
+             (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+                 + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))))
+    <= 16 * Rmax (ulp x1) (ulp y1).
+Proof.
+move=> Hc Nx Ny.
+have H := s3_le_15max Hc Nx Ny.
+have H0 : 0 <= Rmax (ulp x1) (ulp y1)
+  by apply: (Rle_trans _ _ _ (ulp_ge_0 beta fexp x1)); apply: Rmax_l.
+lra.
 Qed.
 
 (* The [x1]-relative magnitude bound (paper Section 6.2 part 1): [ulp(s3)] is at   *)
@@ -2213,6 +2217,197 @@ have Hulsx : ulp (dwh (TwoSum c z3)) <= uls x.
 have He4le := e4_le_half_ulp Fc Fz3.
 lra.
 Qed.
+
+(* From [|s| <= 15 ulp x] (strictly below [16 ulp x = pow(mag x - p + 4)]) the    *)
+(* magnitude of [s] is at most [mag x - p + 4].  The strict [15 < 16] margin is    *)
+(* exactly what the p=6-tight [I]-set divisibility below needs.                   *)
+Lemma mag_le_of_le_15ulp x s : x <> 0 -> s <> 0 ->
+  Rabs s <= 15 * ulp x -> (mag beta s <= mag beta x - p + 4)%Z.
+Proof.
+move=> xn0 sn0 Hs.
+have Hulp : ulp x = pow (mag beta x - p).
+  by rewrite ulp_neq_0 // /cexp /fexp /FLX_exp.
+have H16 : 16 * ulp x = pow (mag beta x - p + 4).
+  rewrite Hulp (_ : (mag beta x - p + 4 = 4 + (mag beta x - p))%Z); last by lia.
+  by rewrite bpow_plus (_ : pow 4 = 16); [ring | rewrite /= /Z.pow_pos /=; lra].
+have Hs0 : Rabs s < pow (mag beta x - p + 4).
+  have Hup : 0 < ulp x by rewrite Hulp; apply: bpow_gt_0.
+  rewrite -H16; lra.
+by apply: mag_le_bpow.
+Qed.
+
+(* The Lemma-1 divisibility on the ACTUAL operand grid (paper Section 6.2         *)
+(* part 1: "1/2 ulp(x1) | b0, b1"): for [w] either [x1] or [y1] (nonzero), the     *)
+(* [b0, b1] limbs are divisible by [1/2 ulp w].  [a = RN(z01+ + z10+)] is          *)
+(* [1/2 ulp]-divisible by its larger operand round ([half_ulp_div_RN_add]), whose  *)
+(* [ulp] dominates [ulp w] ([|z.0+| >= |w|]); [z00-] is far finer                 *)
+(* ([4u^2 | z00-]).  Feeds the [I]-set [ufp] bounds.                             *)
+Lemma b01_imul_half_ulp x0 x1 x2 y0 y1 y2 (w : R) :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  (w = x1 \/ w = y1) -> w <> 0 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  is_imul (nth 0 bb 0) (/ 2 * ulp w) /\ is_imul (nth 0 bb 1) (/ 2 * ulp w).
+Proof.
+move=> Nx Ny Hw wn0 bb.
+have [[Fx0 Fx1 Fx2] Hx0l Hx0r Hx1o Hx2o] := Nx.
+have [[Fy0 Fy1 Fy2] Hy0l Hy0r Hy1o Hy2o] := Ny.
+have Hu0 : 0 < u by apply: u_gt_0.
+set z00m := RND (x0 * y0 - RND (x0 * y0)).
+set z01p := RND (x0 * y1).
+set z10p := RND (x1 * y0).
+have Fz00m : format z00m by apply: generic_format_round.
+have Fz01p : format z01p by apply: generic_format_round.
+have Fz10p : format z10p by apply: generic_format_round.
+set a := RND (z01p + z10p).
+have Hbb0 : nth 0 bb 0 = RND (z00m + a).
+  by rewrite /bb (vecSum3 Fz00m Fz01p Fz10p).
+have Hbb1 : nth 0 bb 1 = z00m + a - RND (z00m + a).
+  by rewrite /bb (vecSum3 Fz00m Fz01p Fz10p).
+have Hhw : / 2 * ulp w = pow (cexp w - 1).
+  rewrite ulp_neq_0 // (_ : / 2 = pow (-1)); last by rewrite /= /Z.pow_pos /=; lra.
+  by rewrite -bpow_plus; congr bpow; lia.
+have Hwabs : Rabs w < 2 * u
+  by case: Hw => ->; [apply: (tw_norm_x1 Nx) | apply: (tw_norm_x1 Ny)].
+have Hwmag : (mag beta w <= 2 - p)%Z.
+  apply: mag_le_bpow => //.
+  apply: (Rlt_le_trans _ _ _ Hwabs).
+  by rewrite -pow_1mp; apply: bpow_le; lia.
+have Hzm : is_imul z00m (/ 2 * ulp w).
+  rewrite Hhw.
+  apply: (is_imul_pow_le (y1 := (2 - 2 * p)%Z)); last first.
+    by rewrite /cexp /fexp /FLX_exp; lia.
+  rewrite /z00m round_generic; last first.
+    rewrite (_ : x0 * y0 - RND (x0 * y0) = - (RND (x0 * y0) - x0 * y0)); last by ring.
+    by apply: generic_format_opp; exact: format_err_mul.
+  rewrite pow_2m2p; exact: (z00m_imul Nx Ny).
+have Ha : is_imul a (/ 2 * ulp w).
+  have key : forall op oth : R, format op -> format oth -> op <> 0 ->
+      (mag beta w <= mag beta op)%Z -> a = RND (op + oth) ->
+      is_imul a (/ 2 * ulp w).
+    move=> op oth Fop Foth opn0 Hmag ->.
+    rewrite Hhw.
+    apply: (is_imul_pow_le (y1 := (cexp op - 1)%Z)); last first.
+      by rewrite /cexp /fexp /FLX_exp; lia.
+    have -> : pow (cexp op - 1) = / 2 * ulp op.
+      rewrite ulp_neq_0 // (_ : / 2 = pow (-1)); last by rewrite /= /Z.pow_pos /=; lra.
+      by rewrite -bpow_plus; congr bpow; lia.
+    exact: (half_ulp_div_RN_add Fop Foth opn0).
+  case: Hw => Hw.
+  - apply: (key z10p z01p Fz10p Fz01p) => //.
+    + move=> H0; apply: wn0; rewrite Hw.
+      have Hle : Rabs x1 <= Rabs (x1 * y0).
+        rewrite Rabs_mult (Rabs_pos_eq y0); last lra.
+        have := Rabs_pos x1; nra.
+      have Hr : Rabs x1 <= Rabs (RND (x1 * y0)).
+        by apply: Rabs_round_le_l; [exact: generic_format_abs | exact: Hle].
+      move: Hr; rewrite -/z10p H0 Rabs_R0 => Hr.
+      by move: Hr; split_Rabs; lra.
+    + rewrite Hw -(mag_abs beta x1) -(mag_abs beta z10p).
+      apply: mag_le; first by apply: Rabs_pos_lt; move: wn0; rewrite Hw.
+      rewrite /z10p; apply: Rabs_round_le_l; first exact: generic_format_abs.
+      by rewrite Rabs_mult (Rabs_pos_eq y0); [have := Rabs_pos x1; nra | lra].
+    + by rewrite /a Rplus_comm.
+  - apply: (key z01p z10p Fz01p Fz10p) => //.
+    + move=> H0.
+      have Hle : Rabs y1 <= Rabs (x0 * y1).
+        rewrite Rabs_mult (Rabs_pos_eq x0); last lra.
+        have := Rabs_pos y1; nra.
+      have Hr : Rabs y1 <= Rabs (RND (x0 * y1)).
+        by apply: Rabs_round_le_l; [exact: generic_format_abs | exact: Hle].
+      move: Hr; rewrite -/z01p H0 Rabs_R0 => Hr.
+      by move: wn0; rewrite Hw; move: Hr; split_Rabs; lra.
+    + rewrite Hw -(mag_abs beta y1) -(mag_abs beta z01p).
+      apply: mag_le; first by apply: Rabs_pos_lt; move: wn0; rewrite Hw.
+      rewrite /z01p; apply: Rabs_round_le_l; first exact: generic_format_abs.
+      by rewrite Rabs_mult (Rabs_pos_eq x0); [have := Rabs_pos y1; nra | lra].
+rewrite Hbb0 Hbb1; split.
+- rewrite Hhw; apply: is_imul_pow_round; rewrite -Hhw.
+  by apply: is_imul_add; [exact: Hzm | exact: Ha].
+apply: is_imul_minus.
+  by apply: is_imul_add; [exact: Hzm | exact: Ha].
+rewrite Hhw; apply: is_imul_pow_round; rewrite -Hhw.
+by apply: is_imul_add; [exact: Hzm | exact: Ha].
+Qed.
+
+(* The packaged [I]-set facts (paper Section 6.2 part 1): for the [WLOG] larger    *)
+(* operand [w] ([x1] or [y1]), [4 ulp s3 <= ulp w] and [ufp s3 <= 8 ulp w] (from    *)
+(* the strict [|s3| <= 15 ulp w], p>=6-tight) and [1/2 ulp w | b0, b1]              *)
+(* ([b01_imul_half_ulp]).  These four facts discharge every [Cor1_hyp] [ufp]        *)
+(* side-condition of the [I]-set cases.                                          *)
+Lemma s3_div_facts x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  let s3 := dwh (TwoSum (RND (nth 0 bb 2 + x1 * y1))
+             (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+                 + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))) in
+  s3 <> 0 ->
+  exists w : R, [/\ w <> 0,
+     4 * ulp s3 <= ulp w,
+     ufp s3 <= 8 * ulp w,
+     is_imul (nth 0 bb 0) (/ 2 * ulp w) & is_imul (nth 0 bb 1) (/ 2 * ulp w)].
+Proof.
+move=> Hc Nx Ny bb s3 Hs3n0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hmax : Rabs s3 <= 15 * Rmax (ulp x1) (ulp y1) := s3_le_15max Hc Nx Ny.
+have magfacts : forall w : R, w <> 0 -> Rabs s3 <= 15 * ulp w ->
+    4 * ulp s3 <= ulp w /\ ufp s3 <= 8 * ulp w.
+  move=> w wn0 Hw.
+  have Hmg : (mag beta s3 <= mag beta w - p + 4)%Z
+    by apply: (mag_le_of_le_15ulp wn0 Hs3n0 Hw).
+  have Hcs3 : ulp s3 = pow (mag beta s3 - p)
+    by rewrite ulp_neq_0 // /cexp /fexp /FLX_exp.
+  have Hcw : ulp w = pow (mag beta w - p)
+    by rewrite ulp_neq_0 // /cexp /fexp /FLX_exp.
+  split.
+  - rewrite Hcs3 Hcw.
+    have -> : 4 * pow (mag beta s3 - p) = pow (mag beta s3 - p + 2)
+      by rewrite bpow_plus (_ : pow 2 = 4); [ring | rewrite /= /Z.pow_pos /=; lra].
+    by apply: bpow_le; lia.
+  rewrite /ufp Hcw.
+  have -> : 8 * pow (mag beta w - p) = pow (mag beta w - p + 3)
+    by rewrite bpow_plus (_ : pow 3 = 8); [ring | rewrite /= /Z.pow_pos /=; lra].
+  by apply: bpow_le; lia.
+case: (Rle_dec (ulp y1) (ulp x1)) => [Hle|Hgt].
+- have Hx1n0 : x1 <> 0.
+    move=> H0; apply: Hs3n0.
+    have Hy1u : ulp y1 = 0
+      by move: Hle; rewrite H0 ulp_FLX_0; have := ulp_ge_0 beta fexp y1; lra.
+    move: Hmax; rewrite H0 ulp_FLX_0 Hy1u Rmax_left; last by lra.
+    by rewrite Rmult_0_r => H; split_Rabs; lra.
+  have Hmx : Rabs s3 <= 15 * ulp x1 by move: Hmax; rewrite (Rmax_left _ _ Hle).
+  have [H4 Hufp] := magfacts x1 Hx1n0 Hmx.
+  have [Hb0 Hb1] := b01_imul_half_ulp Nx Ny (or_introl (erefl x1)) Hx1n0.
+  by exists x1; split.
+have Hgt' : ulp x1 <= ulp y1 by lra.
+have Hy1n0 : y1 <> 0.
+  move=> H0; apply: Hs3n0.
+  have Hx1u : ulp x1 = 0
+    by move: Hgt'; rewrite H0 ulp_FLX_0; have := ulp_ge_0 beta fexp x1; lra.
+  move: Hmax; rewrite H0 ulp_FLX_0 Hx1u Rmax_right; last by lra.
+  by rewrite Rmult_0_r => H; split_Rabs; lra.
+have Hmy : Rabs s3 <= 15 * ulp y1 by move: Hmax; rewrite (Rmax_right _ _ Hgt').
+have [H4 Hufp] := magfacts y1 Hy1n0 Hmy.
+have [Hb0 Hb1] := b01_imul_half_ulp Nx Ny (or_intror (erefl y1)) Hy1n0.
+by exists y1; split.
+Qed.
+
+(* Item (a) (paper Section 6.2 part 1): the head VecSum [(z00+, b0, b1, s3)]     *)
+(* (with [s3 = dwh(TwoSum c z3) = RN(c + z3)]) is F-nonoverlapping -- the         *)
+(* four-case study of the overlap-index set [I] (Corollary 1,                     *)
+(* [vecSum_Fnonoverlap_sep]).  The intricate core; see [doc/thm7.md].            *)
+Lemma inner_head_Fnonoverlap x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  Fnonoverlap (vecSum
+    [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1;
+        dwh (TwoSum (RND (nth 0 bb 2 + x1 * y1))
+             (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+                 + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))))]).
+Proof.
+Admitted.
 
 Lemma inner_Fnonoverlap x0 x1 x2 y0 y1 y2 :
   ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->

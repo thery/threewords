@@ -2393,6 +2393,83 @@ have [Hb0 Hb1] := b01_imul_half_ulp Nx Ny (or_intror (erefl y1)) Hy1n0.
 by exists y1; split.
 Qed.
 
+(* [TwoSum 0 y = DWR y 0] for a float [y] (the accumulator starts at 0).         *)
+Lemma TwoSum_0l y : format y -> TwoSum 0 y = DWR y 0.
+Proof.
+move=> Fy.
+move: (TwoSum_correct_loc Hp2 choice_sym (@generic_format_0 beta fexp) Fy)
+      (TwoSum_hi p choice 0 y).
+rewrite Rplus_0_l (round_generic _ _ _ _ Fy).
+by case: (TwoSum 0 y) => s et /= Hsum Hs; rewrite Hs; congr DWR; lra.
+Qed.
+
+(* Zero inputs are inert for [VecSum]: a [0] entry only prepends a [0] error      *)
+(* limb and leaves the running sum unchanged ([TwoSum 0 s = DWR s 0]).  Hence     *)
+(* the zero-filtered [VecSum] output is the same whether or not the zero inputs    *)
+(* are dropped first -- so [Fnonoverlap (vecSum l)] (which is read off the         *)
+(* zero-filtered output) equals [Fnonoverlap (vecSum (filter nonzero l))].  This  *)
+(* is the bridge that lets [Cor1_hyp] (which demands all-nonzero) apply to the     *)
+(* [I]-set cases where [b0], [b1], or [s3] vanish.                               *)
+Lemma vecSum_filter0 l : {in l, forall z, format z} ->
+  [seq z <- vecSum l | z != 0 :> R] =
+  [seq z <- vecSum [seq x <- l | x != 0 :> R] | z != 0 :> R].
+Proof.
+move=> Fl.
+suff aux : forall m : seq R, {in m, forall z : R, format z} ->
+    (vecSumAux m).2 = (vecSumAux [seq x <- m | x != 0 :> R]).2 /\
+    [seq z <- (vecSumAux m).1 | z != 0 :> R] =
+      [seq z <- (vecSumAux [seq x <- m | x != 0 :> R]).1 | z != 0 :> R].
+  have [Hs Hes] := aux l Fl.
+  rewrite /vecSum.
+  move: Hs Hes; case: (vecSumAux l) => es s; case: (vecSumAux _) => es2 s2 /= -> Hes.
+  by rewrite /= Hes.
+elim => [|x m IH] Hm; first by split.
+have Fx : format x by apply: Hm; rewrite inE eqxx.
+have Hmf : {in m, forall z : R, format z}
+  by move=> z zm; apply: Hm; rewrite inE zm orbT.
+have [IHs IHes] := IH Hmf.
+have Fs : format (vecSumAux m).2
+  by have [] := @format_vecSumAux p Hp2 choice m Hmf.
+have U : forall n : seq R, {in n, forall z : R, format z} ->
+   (vecSumAux (x :: n)).2 = dwh (TwoSum x (vecSumAux n).2) /\
+   [seq z <- (vecSumAux (x :: n)).1 | z != 0] =
+   [seq z <- dwl (TwoSum x (vecSumAux n).2) :: (vecSumAux n).1 | z != 0].
+  move=> n Hn; case: n Hn => [_|c n' Hn].
+  - have Hhi : dwh (TwoSum x 0) = x
+      by rewrite (TwoSum_hi p choice) Rplus_0_r round_generic.
+    have Hlo : dwl (TwoSum x 0) = 0.
+      have Hc : dwh (TwoSum x 0) + dwl (TwoSum x 0) = x + 0
+        by exact: (TwoSum_correct_loc Hp2 choice_sym Fx (@generic_format_0 beta fexp)).
+      by move: Hc; rewrite Hhi; lra.
+    have E0 : (vecSumAux (@nil R)).2 = 0 by [].
+    have Ex1 : (vecSumAux [:: x]).1 = [::] by [].
+    have Ex2 : (vecSumAux [:: x]).2 = x by [].
+    rewrite E0 Ex1 Ex2 Hhi Hlo; split => //.
+    by rewrite /= eqxx.
+  rewrite vecSumAux_cons.
+  case E : (vecSumAux (c :: n')) => [es s].
+  by case E2 : (TwoSum x s) => [si ei]; rewrite /=.
+have Hfmf : {in [seq x0 <- m | x0 != 0], forall z : R, format z}
+  by move=> z; rewrite mem_filter => /andP[_ zm]; apply: Hmf.
+have [Um2 Um1] := U m Hmf.
+have [Uf2 Uf1] := U [seq x0 <- m | x0 != 0] Hfmf.
+case: (Req_dec x 0) => [x0|xn0].
+- have Hf : [seq z <- x :: m | z != 0] = [seq z <- m | z != 0]
+    by rewrite /= x0 eqxx.
+  have HT0 : TwoSum x (vecSumAux m).2 = DWR (vecSumAux m).2 0
+    by rewrite x0; apply: TwoSum_0l.
+  rewrite Hf; split.
+  + by rewrite Um2 HT0 /= IHs.
+  + by rewrite Um1 HT0 /= eqxx IHes.
+have Hf : [seq z <- x :: m | z != 0] = x :: [seq z <- m | z != 0]
+  by rewrite /= ifT //; apply/eqP.
+rewrite Hf; split.
+- by rewrite Um2 Uf2 IHs.
+rewrite Um1 Uf1 IHs.
+set d := dwl (TwoSum x (vecSumAux [seq x0 <- m | x0 != 0]).2).
+by rewrite /= IHes.
+Qed.
+
 (* Item (a) (paper Section 6.2 part 1): the head VecSum [(z00+, b0, b1, s3)]     *)
 (* (with [s3 = dwh(TwoSum c z3) = RN(c + z3)]) is F-nonoverlapping -- the         *)
 (* four-case study of the overlap-index set [I] (Corollary 1,                     *)
@@ -2521,15 +2598,6 @@ rewrite Hrn.
 by case: (TwoSum e0 x) => s et /= Hsum Hs; rewrite Hs; congr DWR; lra.
 Qed.
 
-(* [TwoSum 0 y = DWR y 0] for a float [y] (the accumulator starts at 0).         *)
-Lemma TwoSum_0l y : format y -> TwoSum 0 y = DWR y 0.
-Proof.
-move=> Fy.
-move: (TwoSum_correct_loc Hp2 choice_sym (@generic_format_0 beta fexp) Fy)
-      (TwoSum_hi p choice 0 y).
-rewrite Rplus_0_l (round_generic _ _ _ _ Fy).
-by case: (TwoSum 0 y) => s et /= Hsum Hs; rewrite Hs; congr DWR; lra.
-Qed.
 
 (* Prepending a zero to a format list leaves every [vseb] entry unchanged        *)
 (* (the leading zero merges away; the two runs may differ only in a trailing      *)

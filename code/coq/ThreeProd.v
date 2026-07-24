@@ -1755,12 +1755,27 @@ Lemma inner_head_Fnonoverlap x0 x1 x2 y0 y1 y2 :
 Proof.
 Admitted.
 
+(* The [x1]-relative magnitude bound (paper Section 6.2 part 1): [|s3|] is         *)
+(* [O(max(ulp x1, ulp y1))] -- every limb of [c, z3] is [O(ulp)] of the larger of  *)
+(* [x1, y1] ([|x2| < ulp x1], [|y2| < ulp y1], the 2Prod/2Sum errors [<= 1/2 ulp],  *)
+(* [|x1 y1| < 2 max]).  The pure component-magnitude crux behind [s3_ulp_op].  The  *)
+(* [16] is generous ([p >= 6] gives [16 < 2^(p-1)]).                              *)
+Lemma s3_le_16max x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  Rabs (dwh (TwoSum (RND (nth 0 (vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)]) 2
+      + x1 * y1))
+             (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+                 + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))))
+    <= 16 * Rmax (ulp x1) (ulp y1).
+Proof.
+Admitted.
+
 (* The [x1]-relative magnitude bound (paper Section 6.2 part 1): [ulp(s3)] is at   *)
 (* most half the [ulp] of one of the two cross-product rounds -- i.e.              *)
 (* [2 ulp(s3) <= ulp(z10+)] or [<= ulp(z01+)] (whichever is the larger operand).   *)
-(* From [|s3| <= 10 ulp(x1) < ufp(x1) <= |z10+|] (and symmetric), using that       *)
-(* every limb of [c, z3] is [O(ulp(x1))] and [10 < 2^(p-1)] ([p >= 6]).  The       *)
-(* purely-magnitude crux of [a_imul_ulp_s3].                                      *)
+(* From [|s3| <= 16 max(ulp x1, ulp y1) < ufp(larger) <= |larger round|].  The     *)
+(* larger operand is nonzero ([s3_le_16max] forces [s3 = 0] when both vanish).     *)
 Lemma s3_ulp_op x0 x1 x2 y0 y1 y2 :
   ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
   let s3 := dwh (TwoSum (RND (nth 0 (vecSum
@@ -1771,7 +1786,59 @@ Lemma s3_ulp_op x0 x1 x2 y0 y1 y2 :
   s3 <> 0 ->
   2 * ulp s3 <= ulp (RND (x1 * y0)) \/ 2 * ulp s3 <= ulp (RND (x0 * y1)).
 Proof.
-Admitted.
+move=> Hc Nx Ny s3 Hs3n0.
+have Hmax : Rabs s3 <= 16 * Rmax (ulp x1) (ulp y1) := s3_le_16max Hc Nx Ny.
+have Hulps3 : ulp s3 = pow (cexp s3) by apply: ulp_neq_0.
+have V : Valid_exp fexp by apply: FLX_exp_valid.
+have Mono : Monotone_exp fexp by apply: FLX_exp_monotone.
+have [[Fx0 Fx1 Fx2] Hx0l Hx0h _ _] := Nx.
+have [[Fy0 Fy1 Fy2] Hy0l Hy0h _ _] := Ny.
+have key : forall w z : R, format w -> w <> 0 -> 1 <= z ->
+    Rabs s3 <= 16 * ulp w -> 2 * ulp s3 <= ulp (RND (w * z)).
+  move=> w z Fw wn0 z1 Hs3w.
+  have Hz1 : 1 <= Rabs z by rewrite Rabs_pos_eq; lra.
+  have Hwz : Rabs w <= Rabs (RND (w * z)).
+    apply: Rabs_round_le_l; first exact: generic_format_abs.
+    by rewrite Rabs_mult; move: (Rabs_pos w) Hz1; nra.
+  have Hwzn0 : RND (w * z) <> 0.
+    by move=> H0; move: Hwz; rewrite H0 Rabs_R0; have := Rabs_pos_lt _ wn0; lra.
+  have Hmagw : (mag beta w <= mag beta (RND (w * z)))%Z.
+    rewrite -(mag_abs beta w) -(mag_abs beta (RND (w * z))).
+    by apply: mag_le => //; apply: Rabs_pos_lt.
+  have Hmags3 : (mag beta s3 <= mag beta w - p + 5)%Z.
+    apply: mag_le_bpow => //.
+    apply: (Rle_lt_trans _ _ _ Hs3w).
+    rewrite (ulp_neq_0 _ _ _ wn0) /cexp /fexp /FLX_exp.
+    have -> : 16 * pow (mag beta w - p) = pow (mag beta w - p + 4).
+      by rewrite bpow_plus (_ : pow 4 = 16); [ring | rewrite /= /Z.pow_pos /=; lra].
+    by apply: bpow_lt; lia.
+  rewrite Hulps3 (ulp_neq_0 _ _ _ Hwzn0).
+  have -> : 2 * pow (cexp s3) = pow (cexp s3 + 1)
+    by rewrite bpow_plus (_ : pow 1 = 2); [ring | rewrite /= /Z.pow_pos /=; lra].
+  apply: bpow_le.
+  move: Hmags3 Hmagw; rewrite /cexp /fexp /FLX_exp; lia.
+case: (Rle_dec (ulp y1) (ulp x1)) => [Hle|Hgt].
+- left.
+  have Hx1n0 : x1 <> 0.
+    move=> H0; apply: Hs3n0.
+    have Hy1u : ulp y1 = 0 by
+      move: Hle; rewrite H0 ulp_FLX_0; have := ulp_ge_0 beta fexp y1; lra.
+    move: Hmax; rewrite H0 ulp_FLX_0 Hy1u Rmax_left; last by lra.
+    by rewrite Rmult_0_r => H; split_Rabs; lra.
+  have Hmx : Rabs s3 <= 16 * ulp x1 by move: Hmax; rewrite (Rmax_left _ _ Hle).
+  exact: (key x1 y0 Fx1 Hx1n0 Hy0l Hmx).
+- right.
+  have Hgt' : ulp x1 <= ulp y1 by lra.
+  have Hy1n0 : y1 <> 0.
+    move=> H0; apply: Hs3n0.
+    have Hx1u : ulp x1 = 0 by
+      move: Hgt'; rewrite H0 ulp_FLX_0; have := ulp_ge_0 beta fexp x1; lra.
+    move: Hmax; rewrite H0 ulp_FLX_0 Hx1u Rmax_right; last by lra.
+    by rewrite Rmult_0_r => H; split_Rabs; lra.
+  have Hmx : Rabs s3 <= 16 * ulp y1 by move: Hmax; rewrite (Rmax_right _ _ Hgt').
+  rewrite (Rmult_comm x0 y1).
+  exact: (key y1 x0 Fy1 Hy1n0 Hx0l Hmx).
+Qed.
 
 (* The Lemma-1 divisibility core (paper Section 6.2 part 1): [a = RN(z01+ + z10+)]*)
 (* is divisible by [ulp(s3)].  Via Lemma 1 [half_ulp_div_RN_add] on the larger    *)

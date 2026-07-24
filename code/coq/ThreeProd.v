@@ -1753,6 +1753,156 @@ Lemma inner_Fnonoverlap x0 x1 x2 y0 y1 y2 :
 Proof.
 Admitted.
 
+(* Round-to-nearest keeps a float [x] when the perturbation [y] stays within    *)
+(* half the gap to each neighbour ([x - pred x] below, [succ x - x] above).      *)
+(* Both midpoint tests ([round_N_le_midp]/[round_N_ge_midp]).                    *)
+Lemma RN_add_keep x y :
+  format x -> Rabs y < / 2 * (x - pred beta fexp x) ->
+  Rabs y < / 2 * (succ beta fexp x - x) -> RND (x + y) = x.
+Proof.
+move=> Fx Hlo Hhi.
+have Hy := Rle_abs y.
+have Hy' : - Rabs y <= y by split_Rabs; lra.
+have Hle : RND (x + y) <= x.
+  apply: round_N_le_midp => //; move: Hhi Hy; lra.
+have Hge : x <= RND (x + y).
+  apply: round_N_ge_midp => //; move: Hlo Hy'; lra.
+by apply: Rle_antisym.
+Qed.
+
+(* For a float [x >= 3/4] the neighbour gaps are at least [u]: [ulp x >= u] and  *)
+(* [x - pred x = ulp(pred x) >= u] (as [pred x >= 1/2]).                         *)
+Lemma pred_gap_ge x : format x -> 3 / 4 <= x -> u <= x - pred beta fexp x.
+Proof.
+move=> Fx Hx.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := u_le_64.
+have V : Valid_exp fexp by apply: FLX_exp_valid.
+have M : Monotone_exp fexp by apply: FLX_exp_monotone.
+have F12 : format (/ 2).
+  by rewrite (_ : / 2 = pow (-1)); [apply: format_pow | rewrite /= /Z.pow_pos /=; lra].
+have H12x : / 2 < x by lra.
+have Hpx : / 2 <= pred beta fexp x by apply: (@pred_ge_gt beta fexp V _ _ F12 Fx H12x).
+have Fp : format (pred beta fexp x) by apply: generic_format_pred.
+have Hgap : x - pred beta fexp x = ulp (pred beta fexp x).
+  have := @succ_pred beta fexp V x Fx; rewrite succ_eq_pos; last by lra.
+  by lra.
+rewrite Hgap.
+have Hu12 : ulp (/ 2) = u.
+  rewrite (_ : / 2 = pow (-1)); last by rewrite /= /Z.pow_pos /=; lra.
+  rewrite ulp_bpow /fexp /FLX_exp.
+  have -> : (-1 + 1 - p = - p)%Z by lia.
+  by rewrite -u_pow.
+rewrite -Hu12.
+by apply: ulp_le_pos => //; lra.
+Qed.
+
+(* [u <= ulp x] for a float [x >= 1/2] (both neighbour gaps of an [x >= 3/4]     *)
+(* are then at least [u]).                                                       *)
+Lemma ulp_ge_u x : 1 / 2 <= x -> u <= ulp x.
+Proof.
+move=> Hx.
+have Hu0 : 0 < u by apply: u_gt_0.
+have V : Valid_exp fexp by apply: FLX_exp_valid.
+have M : Monotone_exp fexp by apply: FLX_exp_monotone.
+have Hu12 : ulp (/ 2) = u.
+  rewrite (_ : / 2 = pow (-1)); last by rewrite /= /Z.pow_pos /=; lra.
+  rewrite ulp_bpow /fexp /FLX_exp.
+  have -> : (-1 + 1 - p = - p)%Z by lia.
+  by rewrite -u_pow.
+rewrite -Hu12; apply: ulp_le_pos => //; lra.
+Qed.
+
+(* Specialisation of [RN_add_keep] used for VSEB head domination: when [x >= 3/4]*)
+(* and the perturbation is [< u/2], round-to-nearest keeps [x] (both gaps are    *)
+(* at least [u]).                                                                 *)
+Lemma RN_add_keep_small x y :
+  format x -> 3 / 4 <= x -> 2 * Rabs y < u -> RND (x + y) = x.
+Proof.
+move=> Fx Hx Hy.
+have Hpred := pred_gap_ge Fx Hx.
+have Hsucc : u <= succ beta fexp x - x.
+  have Hx0 : 0 <= x by lra.
+  rewrite (succ_eq_pos beta fexp x Hx0).
+  have -> : x + ulp x - x = ulp x by ring.
+  by apply: ulp_ge_u; lra.
+apply: RN_add_keep => //; lra.
+Qed.
+
+(* A 2Sum whose second operand is dominated ([2|x| < u], head [>= 3/4]) keeps    *)
+(* the head: [TwoSum e0 x = DWR e0 x].                                           *)
+Lemma TwoSum_keep e0 x :
+  format e0 -> format x -> 3 / 4 <= e0 -> 2 * Rabs x < u ->
+  TwoSum e0 x = DWR e0 x.
+Proof.
+move=> Fe0 Fx He0 Hx.
+have Hrn : RND (e0 + x) = e0 by apply: RN_add_keep_small.
+move: (TwoSum_correct_loc Hp2 choice_sym Fe0 Fx) (TwoSum_hi p choice e0 x).
+rewrite Hrn.
+by case: (TwoSum e0 x) => s et /= Hsum Hs; rewrite Hs; congr DWR; lra.
+Qed.
+
+(* [TwoSum 0 y = DWR y 0] for a float [y] (the accumulator starts at 0).         *)
+Lemma TwoSum_0l y : format y -> TwoSum 0 y = DWR y 0.
+Proof.
+move=> Fy.
+move: (TwoSum_correct_loc Hp2 choice_sym (@generic_format_0 beta fexp) Fy)
+      (TwoSum_hi p choice 0 y).
+rewrite Rplus_0_l (round_generic _ _ _ _ Fy).
+by case: (TwoSum 0 y) => s et /= Hsum Hs; rewrite Hs; congr DWR; lra.
+Qed.
+
+(* Prepending a zero to a format list leaves every [vseb] entry unchanged        *)
+(* (the leading zero merges away; the two runs may differ only in a trailing      *)
+(* zero, so equality is at the [nth] level).                                     *)
+Lemma vseb_cons0_nth l :
+  {in l, forall z, format z} ->
+  forall j, nth 0 (vseb (0 :: l)) j = nth 0 (vseb l) j.
+Proof.
+move=> Fl j.
+have E0 : vseb (0 :: l) = vsebAux 0 l by [].
+rewrite E0; clear E0.
+case: l Fl => [|y [|z l]] Fl.
+- by case: j => [|[|j]].
+- rewrite vsebAux_1 TwoSum_0l; last by apply: Fl; rewrite inE eqxx.
+  have -> : vseb [:: y] = [:: y] by [].
+  case: j => [|[|j]] //=.
+  by rewrite nth_nil.
+- rewrite vsebAux_consS TwoSum_0l; last by apply: Fl; rewrite inE eqxx.
+  by case: (Req_EM_T 0 0) => // _.
+Qed.
+
+(* VSEB head domination ([nth] level): a head [e0 >= 3/4] whose every tail limb   *)
+(* is [2|x| < u] (so [RN(e0 + x) = e0]) is emitted first, then VSEB recurses on   *)
+(* the tail.  Equality up to trailing zeros, so stated on [nth].                 *)
+Lemma vsebAux_dom_nth e0 l :
+  format e0 -> 3 / 4 <= e0 -> {in l, forall z, format z} ->
+  (forall x, x \in l -> 2 * Rabs x < u) ->
+  forall j, nth 0 (vsebAux e0 l) j = nth 0 (e0 :: vseb l) j.
+Proof.
+move=> Fe0 He0.
+elim: l => [|x l IH] Fl Hb j; first by [].
+have Fx : format x by apply: Fl; rewrite inE eqxx.
+have Hx : 2 * Rabs x < u by apply: Hb; rewrite inE eqxx.
+have Hfl : {in l, forall z, format z}
+  by move=> z zI; apply: Fl; rewrite inE zI orbT.
+have Hbl : forall z, z \in l -> 2 * Rabs z < u
+  by move=> z zI; apply: Hb; rewrite inE zI orbT.
+case: l IH Fl Hb Hfl Hbl => [|y l'] IH Fl Hb Hfl Hbl.
+  by rewrite vsebAux_1 (TwoSum_keep Fe0 Fx He0 Hx); case: j => [|[|j]].
+rewrite vsebAux_consS (TwoSum_keep Fe0 Fx He0 Hx).
+case: (Req_dec x 0) => [x0|xn0].
+  have -> : is_left (Req_EM_T x 0) = true.
+    by case: (Req_EM_T x 0) => [//|E]; case: (E x0).
+  rewrite (IH Hfl Hbl j).
+  case: j => [|j] //=.
+  rewrite x0.
+  by rewrite (vseb_cons0_nth Hfl).
+have -> : is_left (Req_EM_T x 0) = false.
+  by case: (Req_EM_T x 0) => [E|//]; case: (xn0 E).
+by case: j => [|j] //=.
+Qed.
+
 (* The [e1 = 0] half of the star identity (paper Section 6.2, part 1): when the *)
 (* second VecSum limb vanishes, [|s1|,|s2|,|s3| < 16u <= 1/2 ufp(z00+)], so the  *)
 (* next nonzero limb is still [< 1/2 ulp(e0)] and [VSEB] reproduces              *)

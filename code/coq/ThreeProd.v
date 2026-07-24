@@ -1755,11 +1755,28 @@ Lemma inner_head_Fnonoverlap x0 x1 x2 y0 y1 y2 :
 Proof.
 Admitted.
 
+(* The [x1]-relative magnitude bound (paper Section 6.2 part 1): [ulp(s3)] is at   *)
+(* most half the [ulp] of one of the two cross-product rounds -- i.e.              *)
+(* [2 ulp(s3) <= ulp(z10+)] or [<= ulp(z01+)] (whichever is the larger operand).   *)
+(* From [|s3| <= 10 ulp(x1) < ufp(x1) <= |z10+|] (and symmetric), using that       *)
+(* every limb of [c, z3] is [O(ulp(x1))] and [10 < 2^(p-1)] ([p >= 6]).  The       *)
+(* purely-magnitude crux of [a_imul_ulp_s3].                                      *)
+Lemma s3_ulp_op x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let s3 := dwh (TwoSum (RND (nth 0 (vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)]) 2
+      + x1 * y1))
+             (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+                 + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))) in
+  s3 <> 0 ->
+  2 * ulp s3 <= ulp (RND (x1 * y0)) \/ 2 * ulp s3 <= ulp (RND (x0 * y1)).
+Proof.
+Admitted.
+
 (* The Lemma-1 divisibility core (paper Section 6.2 part 1): [a = RN(z01+ + z10+)]*)
 (* is divisible by [ulp(s3)].  Via Lemma 1 [half_ulp_div_RN_add] on the larger    *)
-(* operand (WLOG [|x1| >= |y1|]): [1/2 ulp(x1) | a], and [1/2 ulp(x1) >= ulp(s3)]  *)
-(* from the [x1]-relative bound [|s3| <= 10 ulp(x1)].  This is the sole remaining  *)
-(* crux of [inner_inputs_imul].                                                   *)
+(* operand ([s3_ulp_op]): [1/2 ulp(op) | a] and [ulp(s3) <= 1/2 ulp(op)].  Reduced *)
+(* to the magnitude crux [s3_ulp_op].                                             *)
 Lemma a_imul_ulp_s3 x0 x1 x2 y0 y1 y2 :
   ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
   let s3 := dwh (TwoSum (RND (nth 0 (vecSum
@@ -1770,7 +1787,37 @@ Lemma a_imul_ulp_s3 x0 x1 x2 y0 y1 y2 :
   s3 <> 0 ->
   is_imul (RND (RND (x0 * y1) + RND (x1 * y0))) (ulp s3).
 Proof.
-Admitted.
+move=> Hc Nx Ny s3 Hs3n0.
+have Fz01p : format (RND (x0 * y1)) by apply: generic_format_round.
+have Fz10p : format (RND (x1 * y0)) by apply: generic_format_round.
+have Hulps3 : ulp s3 = pow (cexp s3) by apply: ulp_neq_0.
+have Hulps3pos : 0 < ulp s3 by rewrite Hulps3; apply: bpow_gt_0.
+have Hhalf : forall z : R, z <> 0 -> / 2 * ulp z = pow (cexp z - 1).
+  move=> z zn0; rewrite ulp_neq_0 // (_ : (cexp z - 1 = (-1) + cexp z)%Z);
+    last by lia.
+  by rewrite bpow_plus (_ : pow (-1) = / 2); [ring | rewrite /= /Z.pow_pos /=; lra].
+have Hcexp : forall z, z <> 0 -> 2 * ulp s3 <= ulp z ->
+    (cexp s3 <= cexp z - 1)%Z.
+  move=> z zn0 Hz; suff : (cexp s3 + 1 <= cexp z)%Z by lia.
+  apply: (le_bpow beta); rewrite bpow_plus.
+  have -> : pow 1 = 2 by rewrite /= /Z.pow_pos /=; lra.
+  by move: Hz; rewrite Hulps3 (ulp_neq_0 _ _ _ zn0); lra.
+have [Hop | Hop] := s3_ulp_op Hc Nx Ny Hs3n0.
+- have Hop' : 2 * ulp s3 <= ulp (RND (x1 * y0)) := Hop.
+  have Hz10n0 : RND (x1 * y0) <> 0.
+    by move=> H0; move: Hop' Hulps3pos; rewrite H0 ulp_FLX_0; lra.
+  rewrite (Rplus_comm (RND (x0 * y1)) (RND (x1 * y0))) Hulps3.
+  apply: (is_imul_pow_le (y1 := (cexp (RND (x1 * y0)) - 1)%Z));
+    last exact: (Hcexp _ Hz10n0 Hop').
+  rewrite -(Hhalf _ Hz10n0); exact: half_ulp_div_RN_add.
+- have Hop' : 2 * ulp s3 <= ulp (RND (x0 * y1)) := Hop.
+  have Hz01n0 : RND (x0 * y1) <> 0.
+    by move=> H0; move: Hop' Hulps3pos; rewrite H0 ulp_FLX_0; lra.
+  rewrite Hulps3.
+  apply: (is_imul_pow_le (y1 := (cexp (RND (x0 * y1)) - 1)%Z));
+    last exact: (Hcexp _ Hz01n0 Hop').
+  rewrite -(Hhalf _ Hz01n0); exact: half_ulp_div_RN_add.
+Qed.
 
 (* The shared divisibility crux (paper Section 6.2 part 1): when [s3 <> 0], the   *)
 (* leading input [z00+] and the [b0, b1] limbs are all divisible by [ulp(s3)].    *)

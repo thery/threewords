@@ -2470,6 +2470,13 @@ set d := dwl (TwoSum x (vecSumAux [seq x0 <- m | x0 != 0]).2).
 by rewrite /= IHes.
 Qed.
 
+(* Corollary of [vecSum_filter0]: to prove [Fnonoverlap (vecSum l)] it suffices    *)
+(* to prove it for the nonzero-filtered inputs -- exactly what lets [Cor1_hyp]     *)
+(* (all-nonzero) apply after dropping the vanishing [b0], [b1], [s3].            *)
+Lemma Fnonoverlap_vecSum_filter l : {in l, forall z : R, format z} ->
+  Fnonoverlap (vecSum [seq x <- l | x != 0 :> R]) -> Fnonoverlap (vecSum l).
+Proof. by move=> Fl; rewrite /Fnonoverlap (vecSum_filter0 Fl). Qed.
+
 (* Item (a) (paper Section 6.2 part 1): the head VecSum [(z00+, b0, b1, s3)]     *)
 (* (with [s3 = dwh(TwoSum c z3) = RN(c + z3)]) is F-nonoverlapping -- the         *)
 (* four-case study of the overlap-index set [I] (Corollary 1,                     *)
@@ -2484,7 +2491,267 @@ Lemma inner_head_Fnonoverlap x0 x1 x2 y0 y1 y2 :
              (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
                  + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))))]).
 Proof.
-Admitted.
+move=> Hc Nx Ny bb.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := u_le_64.
+set z00p := RND (x0 * y0).
+set c := RND (nth 0 bb 2 + x1 * y1).
+set z3 := RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+             + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)).
+set b0 := nth 0 bb 0.
+set b1 := nth 0 bb 1.
+set s3 := dwh (TwoSum c z3).
+have Fc : format c by apply: generic_format_round.
+have Fz3 : format z3 by apply: generic_format_round.
+have [Fs3 Fe4] := @format_TwoSum p Hp2 choice c z3 Fc Fz3.
+have Fz00p : format z00p by apply: generic_format_round.
+have Fbb : {in bb, forall z : R, format z}.
+  apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
+  by move=> /orP[/eqP->|/orP[/eqP->|/eqP->]]; apply: generic_format_round.
+have Fb0 : format b0 by apply: Fbb; rewrite /b0 /bb mem_nth // size_vecSum.
+have Fb1 : format b1 by apply: Fbb; rewrite /b1 /bb mem_nth // size_vecSum.
+have Fs3' : format s3 by rewrite /s3 (TwoSum_hi p choice).
+have Hz00p1 : 1 <= z00p by apply: (z00p_lb Nx Ny).
+have z00pn0 : z00p <> 0 by lra.
+apply: Fnonoverlap_vecSum_filter.
+  by move=> z; rewrite !inE => /or4P[/eqP->|/eqP->|/eqP->|/eqP->].
+apply: (@vecSum_Fnonoverlap_sep).
+exact: Hp2.
+exact: choice_sym.
+have Hufp : forall x : R, x <> 0 -> ufp x = pow (p - 1) * ulp x.
+  move=> x xn0; rewrite /ufp ulp_neq_0 // /cexp /fexp /FLX_exp -bpow_plus.
+  by congr bpow; lia.
+have Hhw : forall x : R, x <> 0 -> / 2 * ulp x = pow (cexp x - 1).
+  move=> x xn0; rewrite ulp_neq_0 // (_ : / 2 = pow (-1));
+    last by rewrite /= /Z.pow_pos /=; lra.
+  by rewrite -bpow_plus; congr bpow; lia.
+have Hufpz00p : 1 <= ufp z00p.
+  rewrite /ufp -(pow0E beta); apply: bpow_le.
+  suff : (1 <= mag beta z00p)%Z by lia.
+  by apply: mag_ge_bpow; rewrite pow0E Rabs_pos_eq; lra.
+have [[Fx0 Fx1 Fx2] Hx0l Hx0r Hx1o Hx2o] := Nx.
+have [[Fy0 Fy1 Fy2] Hy0l Hy0r Hy1o Hy2o] := Ny.
+have Hz10m2 : Rabs (RND (x1 * y0 - RND (x1 * y0))) <= 2 * (u * u).
+  rewrite round_generic; first by apply: (z10m_bound Nx Ny).
+  rewrite (_ : x1 * y0 - RND (x1 * y0) = -(RND (x1 * y0) - x1 * y0)); last by ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hz01m2 : Rabs (RND (x0 * y1 - RND (x0 * y1))) <= 2 * (u * u).
+  rewrite round_generic; first by apply: (z01m_bound Nx Ny).
+  rewrite (_ : x0 * y1 - RND (x0 * y1) = -(RND (x0 * y1) - x0 * y1)); last by ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hz3b := z3_bound (z31_bound Hz10m2 (x0y2_bound Nx Ny))
+                      (z32_bound Hz01m2 (x2y0_bound Nx Ny)).
+have Hb2 : Rabs (nth 0 bb 2) <= 4 * (u * u).
+  have Hb2eq : nth 0 bb 2 = RND (x0 * y1) + RND (x1 * y0)
+      - RND (RND (x0 * y1) + RND (x1 * y0)).
+    rewrite /bb (vecSum3 (generic_format_round _ _ _ _)
+      (generic_format_round _ _ _ _) (generic_format_round _ _ _ _)) /=; ring.
+  by rewrite Hb2eq; apply: (b2_bound Nx Ny).
+have Hc8 : Rabs c <= 8 * (u * u) by apply: (c_bound Hb2 (x1y1_bound Nx Ny)).
+have Hs3_20 : Rabs s3 <= 20 * (u * u)
+  by rewrite /s3 (TwoSum_hi p choice); apply: (s3_bound Hc8 Hz3b).
+have RNrel : forall t : R, Rabs (RND t) <= (1 + u) * Rabs t.
+  move=> t; have Ht := relative_error_le beta Hp2 choice t.
+  have H2 : Rabs (RND t) <= Rabs t + Rabs (RND t - t)
+    by have := Rabs_triang t (RND t - t);
+       rewrite (_ : t + (RND t - t) = RND t); [lra | ring].
+  have := Rabs_pos t; nra.
+have Hz01pb := z01p_bound Nx Ny.
+have Hz10pb := z10p_bound Nx Ny.
+have Hz00mb : Rabs (RND (x0 * y0 - RND (x0 * y0))) <= 2 * u.
+  rewrite round_generic; first by apply: (z00m_bound Nx Ny).
+  rewrite (_ : x0 * y0 - RND (x0 * y0) = -(RND (x0 * y0) - x0 * y0)); last by ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hav9 : Rabs (RND (RND (x0 * y1) + RND (x1 * y0))) <= 9 * u.
+  apply: (Rle_trans _ _ _ (RNrel _)).
+  have := Rabs_triang (RND (x0 * y1)) (RND (x1 * y0)); nra.
+have Hb0e : b0 = RND (RND (x0 * y0 - RND (x0 * y0))
+                      + RND (RND (x0 * y1) + RND (x1 * y0))).
+  by rewrite /b0 /bb (vecSum3 (generic_format_round _ _ _ _)
+    (generic_format_round _ _ _ _) (generic_format_round _ _ _ _)).
+have Hb0lt1 : Rabs b0 < 1.
+  rewrite Hb0e; apply: (Rle_lt_trans _ _ _ (RNrel _)).
+  set A := RND (x0 * y0 - RND (x0 * y0)).
+  set B := RND (RND (x0 * y1) + RND (x1 * y0)).
+  have Ht := Rabs_triang A B.
+  have HA : Rabs A <= 2 * u by exact: Hz00mb.
+  have HB : Rabs B <= 9 * u by exact: Hav9.
+  have Hr : Rabs (A + B) <= 11 * u by lra.
+  clear -Hr Hu0 Hu64; have Hrp := Rabs_pos (A + B); nra.
+have Hz00mF : format (RND (x0 * y0 - RND (x0 * y0)))
+  by apply: generic_format_round.
+have HavF : format (RND (RND (x0 * y1) + RND (x1 * y0)))
+  by apply: generic_format_round.
+have Hb1e' : b1 = RND (x0 * y0 - RND (x0 * y0))
+      + RND (RND (x0 * y1) + RND (x1 * y0))
+    - RND (RND (x0 * y0 - RND (x0 * y0)) + RND (RND (x0 * y1) + RND (x1 * y0))).
+  by rewrite /b1 /bb (vecSum3 (generic_format_round _ _ _ _)
+    (generic_format_round _ _ _ _) (generic_format_round _ _ _ _)).
+have Hb1half : Rabs b1 <= / 2 * ulp b0.
+  move: (@magnitude_TwoSum p Hp2 choice choice_sym _ _ Hz00mF HavF)
+        (TwoSum_correct_loc Hp2 choice_sym Hz00mF HavF)
+        (TwoSum_hi p choice (RND (x0 * y0 - RND (x0 * y0)))
+          (RND (RND (x0 * y1) + RND (x1 * y0)))).
+  case: (TwoSum _ _) => sh sl; rewrite /magnitudeDWR /dwh /dwl => Hmag Hsum Hhi.
+  have Hb0sh : b0 = sh by rewrite Hb0e -Hhi.
+  have Hb1sl : b1 = sl by rewrite Hb1e' -Hhi; lra.
+  rewrite Hb0sh Hb1sl; move: Hmag; lra.
+have Hulpufp : forall x : R, x <> 0 -> ulp x <= ufp x.
+  by move=> x xn0; rewrite /ufp ulp_neq_0 // /cexp /fexp /FLX_exp;
+    apply: bpow_le; lia.
+have HC1 : b0 <> 0 -> 2 * ufp b0 <= ufp z00p.
+  move=> b0n0.
+  have Hmb : (mag beta b0 <= 0)%Z by apply: mag_le_bpow => //; rewrite pow0E.
+  have Hub : ufp b0 <= / 2.
+    rewrite /ufp (_ : / 2 = pow (-1)); last by rewrite /= /Z.pow_pos /=; lra.
+    by apply: bpow_le; lia.
+  lra.
+have HC2 : b0 <> 0 -> b1 <> 0 -> 2 * ufp b1 <= ufp b0.
+  move=> b0n0 b1n0.
+  have Hub1 : ufp b1 <= / 2 * ulp b0
+    by apply: (Rle_trans _ _ _ (ufp_le_abs b1n0)); exact: Hb1half.
+  have := Hulpufp b0 b0n0; lra.
+have HC3 : s3 <> 0 -> 2 * ufp s3 <= ufp z00p.
+  move=> s3n0.
+  have Hub : ufp s3 <= 20 * (u * u)
+    by apply: (Rle_trans _ _ _ (ufp_le_abs s3n0)); exact: Hs3_20.
+  have H40 : 40 * (u * u) <= 1 by clear -Hu0 Hu64; nra.
+  lra.
+have HM4 : s3 <> 0 -> 4 * ufp s3 <= ufp z00p.
+  move=> s3n0.
+  have Hub : ufp s3 <= 20 * (u * u)
+    by apply: (Rle_trans _ _ _ (ufp_le_abs s3n0)); exact: Hs3_20.
+  have H80 : 80 * (u * u) <= 1 by clear -Hu0 Hu64; nra.
+  lra.
+have Hs3on : s3 <> 0 ->
+  [/\ (b0 <> 0 -> ufp s3 <= pow (p - 2) * uls b0),
+      (b1 <> 0 -> ufp s3 <= pow (p - 2) * uls b1) &
+      (b0 <> 0 -> b1 <> 0 -> 4 * ufp s3 <= ufp b0)].
+  move=> s3n0.
+  have [w [wn0 H4w Hufpw Hb0im Hb1im]] := s3_div_facts Hc Nx Ny s3n0.
+  have Hwpow : / 2 * ulp w = pow (cexp w - 1) := Hhw w wn0.
+  have Hp1 : pow (p - 1) = 2 * pow (p - 2).
+    rewrite (_ : (p - 1 = (p - 2) + 1)%Z); last by lia.
+    by rewrite bpow_plus (_ : pow 1 = 2); [ring | rewrite /= /Z.pow_pos /=; lra].
+  have Hufps3 : ufp s3 = pow (p - 1) * ulp s3 := Hufp s3 s3n0.
+  have Hp20 : 0 <= pow (p - 2) by apply: bpow_ge_0.
+  split.
+  - move=> b0n0.
+    have Hulsb0 : / 2 * ulp w <= uls b0.
+      rewrite Hwpow; apply: (is_imul_uls_ge Fb0 b0n0).
+      by move: Hb0im; rewrite Hwpow.
+    have H4s : 4 * ulp s3 <= ulp w by exact: H4w.
+    rewrite Hufps3 Hp1; clear -H4s Hulsb0 Hp20; nra.
+  - move=> b1n0.
+    have Hulsb1 : / 2 * ulp w <= uls b1.
+      rewrite Hwpow; apply: (is_imul_uls_ge Fb1 b1n0).
+      by move: Hb1im; rewrite Hwpow.
+    have H4s : 4 * ulp s3 <= ulp w by exact: H4w.
+    rewrite Hufps3 Hp1; clear -H4s Hulsb1 Hp20; nra.
+  move=> b0n0 b1n0.
+  have Hufps38 : ufp s3 <= 8 * ulp w by exact: Hufpw.
+  have Hufpb1lo : / 2 * ulp w <= ufp b1.
+    have Hb1ge : / 2 * ulp w <= Rabs b1.
+      rewrite Hwpow; apply: (is_imul_pow_le_abs _ b1n0).
+      by move: Hb1im; rewrite Hwpow.
+    have Hmagb1 : (cexp w <= mag beta b1)%Z.
+      by apply: mag_ge_bpow; rewrite -Hwpow.
+    rewrite /ufp Hwpow; apply: bpow_le; move: Hmagb1; lia.
+  have Hufpb1hi : ufp b1 <= / 2 * ulp b0
+    by apply: (Rle_trans _ _ _ (ufp_le_abs b1n0)); exact: Hb1half.
+  have H32 : 32 * ulp b0 <= ufp b0.
+    rewrite /ufp ulp_neq_0 // /cexp /fexp /FLX_exp.
+    have -> : 32 * pow (mag beta b0 - p) = pow (mag beta b0 - p + 5)
+      by rewrite bpow_plus (_ : pow 5 = 32); [ring | rewrite /= /Z.pow_pos /=; lra].
+    by apply: bpow_le; lia.
+  have Hulpw0 : 0 <= ulp w by apply: ulp_ge_0.
+  clear -Hufps38 Hufpb1lo Hufpb1hi H32 Hulpw0; lra.
+have Hb01 : b0 = 0 -> b1 = 0.
+  move=> b00; move: Hb1half; rewrite b00 ulp_FLX_0 Rmult_0_r => H.
+  clear -H; apply: Rabs_eq_R0; have := Rabs_pos b1; lra.
+have Cor1_empty : forall l : seq R, {in l, forall z : R, format z} ->
+    (forall i, (i < size l)%N -> nth 0 l i <> 0) ->
+    (forall i, (i.+1 < size l)%N -> 2 * ufp (nth 0 l i.+1) <= ufp (nth 0 l i)) ->
+    Cor1_hyp p l.
+  move=> l Fl Hnz Hdec; split; [exact: Fl | exact: Hnz |].
+  exists (fun=> false); split => // i Hi _.
+  exact: Hdec.
+have Cor1_I1 : forall a b d : R,
+    format a -> format b -> format d -> a <> 0 -> b <> 0 -> d <> 0 ->
+    2 * ufp b <= ufp a -> ufp d <= pow (p - 2) * uls b -> 4 * ufp d <= ufp a ->
+    Cor1_hyp p [:: a; b; d].
+  move=> a b d Fa Fb Fd an0 bn0 dn0 H1 H2 H3; split.
+  - by move=> z; rewrite !inE => /or3P[/eqP->|/eqP->|/eqP->].
+  - by move=> [|[|[|i]]] //= _.
+  exists (fun i => i == 1%N); split.
+  - by move=> [|[|i]] //= _.
+  - by move=> [|[|i]].
+  - by move=> [|[|[|i]]] //= _ _.
+  - by move=> [|[|i]] //= _.
+  by move=> [|[|i]] //= _.
+have Cor1_I2 : forall a b cc d : R,
+    format a -> format b -> format cc -> format d ->
+    a <> 0 -> b <> 0 -> cc <> 0 -> d <> 0 ->
+    2 * ufp b <= ufp a -> 2 * ufp cc <= ufp b ->
+    ufp d <= pow (p - 2) * uls cc -> 4 * ufp d <= ufp b ->
+    Cor1_hyp p [:: a; b; cc; d].
+  move=> a b cc d Fa Fb Fcc Fd an0 bn0 ccn0 dn0 H1 H2 H3 H4; split.
+  - by move=> z; rewrite !inE => /or4P[/eqP->|/eqP->|/eqP->|/eqP->].
+  - by move=> [|[|[|[|i]]]] //= _.
+  exists (fun i => i == 2%N); split.
+  - by move=> [|[|[|i]]] //= _.
+  - by move=> [|[|[|i]]].
+  - by move=> [|[|[|[|i]]]] //= _ _.
+  - by move=> [|[|[|i]]] //= _.
+  by move=> [|[|[|i]]] //= _.
+have Hfz : [seq x <- [:: z00p; b0; b1; s3] | x != 0 :> R]
+    = z00p :: [seq x <- [:: b0; b1; s3] | x != 0 :> R]
+  by rewrite /= ifT //; apply/eqP.
+rewrite Hfz.
+case: (Req_dec b0 0) => [b00|b0n0].
+- have b10 := Hb01 b00.
+  have -> : [seq x <- [:: b0; b1; s3] | x != 0 :> R]
+      = [seq x <- [:: s3] | x != 0 :> R] by rewrite /= b00 b10 !eqxx.
+  case: (Req_dec s3 0) => [s30|s3n0].
+  + rewrite /= s30 eqxx /=.
+    apply: Cor1_empty.
+    * by move=> z; rewrite inE => /eqP->.
+    * by move=> [|i] //= _.
+    * by move=> [|i] //=.
+  + rewrite /= ifT; last by apply/eqP.
+    apply: Cor1_empty.
+    * by move=> z; rewrite !inE => /orP[/eqP->|/eqP->].
+    * by move=> [|[|i]] //= _.
+    * by move=> [|i] //= _; exact: HC3 s3n0.
+have -> : [seq x <- [:: b0; b1; s3] | x != 0 :> R]
+    = b0 :: [seq x <- [:: b1; s3] | x != 0 :> R]
+  by rewrite /= ifT //; apply/eqP.
+case: (Req_dec b1 0) => [b10|b1n0].
+- have -> : [seq x <- [:: b1; s3] | x != 0 :> R] = [seq x <- [:: s3] | x != 0 :> R]
+    by rewrite /= b10 eqxx.
+  case: (Req_dec s3 0) => [s30|s3n0].
+  + rewrite /= s30 eqxx /=.
+    apply: Cor1_empty.
+    * by move=> z; rewrite !inE => /orP[/eqP->|/eqP->].
+    * by move=> [|[|i]] //= _.
+    * by move=> [|i] //= _; exact: HC1 b0n0.
+  + rewrite /= ifT; last by apply/eqP.
+    apply: Cor1_I1 => //; [exact: HC1 b0n0 | | exact: HM4 s3n0].
+    by have [M3 _ _] := Hs3on s3n0; apply: M3.
+have -> : [seq x <- [:: b1; s3] | x != 0 :> R] = b1 :: [seq x <- [:: s3] | x != 0 :> R]
+  by rewrite /= ifT //; apply/eqP.
+case: (Req_dec s3 0) => [s30|s3n0].
+- rewrite /= s30 eqxx /=.
+  apply: Cor1_empty.
+  + by move=> z; rewrite !inE => /or3P[/eqP->|/eqP->|/eqP->].
+  + by move=> [|[|[|i]]] //= _.
+  + by move=> [|[|i]] //= _; [exact: HC1 b0n0 | exact: HC2 b0n0 b1n0].
+- rewrite /= ifT; last by apply/eqP.
+  apply: Cor1_I2 => //;
+    [exact: HC1 b0n0 | exact: HC2 b0n0 b1n0
+    | by have [_ M5 _] := Hs3on s3n0; apply: M5
+    | by have [_ _ M6] := Hs3on s3n0; apply: M6].
+Qed.
 
 Lemma inner_Fnonoverlap x0 x1 x2 y0 y1 y2 :
   ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->

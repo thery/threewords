@@ -3255,6 +3255,77 @@ have Hy : 1 - 2 * u <= y0 + y1 + y2 by split_Rabs; nra.
 rewrite Rabs_pos_eq; nra.
 Qed.
 
+(* Error assembly for the [eps5 <> 0] branch (paper omitted; doc/thm7-eps5.md).  *)
+(* When [eps5 <> 0] one source term is small, so the numerator [eps0+..+eps4]     *)
+(* drops to [26u^3-11.9u^4]; keeping the FULL [eps5] truncation term still fits    *)
+(* the [28u^3+107u^4] budget (the old draft's [<= 28u^3+103u^4]).  [num] is the    *)
+(* reduced numerator, [s5] the truncation error, [sm = sumR(vseb e)].            *)
+Lemma error_assembly_eps5 (num s5 sm xy : R) :
+  Rabs num <= 26 * (u * u * u) - 119 / 10 * (u * u * u * u) ->
+  Rabs s5 <= (2 * (u * u * u) + 42 / 10 * (u * u * u * u)) * Rabs sm ->
+  Rabs sm <= Rabs xy + (26 * (u * u * u) - 119 / 10 * (u * u * u * u)) ->
+  1 - 4 * u <= Rabs xy ->
+  Rabs (s5 + num) <= (28 * (u * u * u) + 107 * (u * u * u * u)) * Rabs xy.
+Proof.
+move=> Hnum Hs5 Hsm Hxy.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := u_le_64.
+have Ht := Rabs_triang s5 num.
+have Hxy0 : 0 <= Rabs xy by apply: Rabs_pos.
+have Hsm0 : 0 <= Rabs sm by apply: Rabs_pos.
+have Hs5' : Rabs s5 <= (2 * (u * u * u) + 42 / 10 * (u * u * u * u))
+    * (Rabs xy + (26 * (u * u * u) - 119 / 10 * (u * u * u * u))).
+  apply: (Rle_trans _ _ _ Hs5); apply: Rmult_le_compat_l; [nra | exact: Hsm].
+move: Ht Hnum Hs5' Hxy; set r := Rabs xy; set a := Rabs (s5 + num);
+  set b := Rabs s5; set d := Rabs num.
+move=> Ht Hnum Hs5' Hxy.
+have Hr : (26 * (u*u*u) + 1028/10 * (u*u*u*u)) * (1 - 4*u)
+    <= (26 * (u*u*u) + 1028/10 * (u*u*u*u)) * r
+  by apply: Rmult_le_compat_l; [nra | lra].
+have Hpoly : (2*(u*u*u) + 42/10*(u*u*u*u) + 1) * (26*(u*u*u) - 119/10*(u*u*u*u))
+    <= (26*(u*u*u) + 1028/10*(u*u*u*u)) * (1 - 4*u) by clear -Hu0 Hu64; nra.
+clear -Ht Hnum Hs5' Hr Hpoly; nra.
+Qed.
+
+(* [eps5 <> 0] forces one of the four "small term" cases (paper omitted; old       *)
+(* draft Theorem 10 / doc/thm7-eps5.md): in the complementary all-big case         *)
+(* ([u<=|x1|,|y1|]<2u, [u^2<=|x2|,|y2|]<2u^2, [|c|>=4u^2], [|z3|>=4u^2]) the        *)
+(* leading terms are all divisible by [8u^3] and [|z00+ +b0+b1+c+z3|<5], so a      *)
+(* fourth nonzero P-nonoverlapping limb would be [<8u^3], impossible -- hence       *)
+(* [eps5 = 0], contradicting the hypothesis.  THE hard divisibility chunk.        *)
+Lemma eps5nz_forces_small x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  let c := RND (nth 0 bb 2 + x1 * y1) in
+  let z3 := RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+             + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)) in
+  let e := vecSum
+    [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1; c; z3] in
+  sumR (vseb e) - sumR (vsebK 3 e) <> 0 ->
+  [\/ Rabs y2 < u * u, Rabs x2 < u * u, Rabs c < 4 * (u * u) | Rabs z3 < 4 * (u * u)].
+Proof.
+Admitted.
+
+(* In any of the four small-term cases the numerator [x*y - sumR e] (= [eps0+..    *)
+(* +eps4]) drops from [28u^3-11.9u^4] to [26u^3-11.9u^4]: one [eps_i] halves        *)
+(* ([eps1]/[eps2] via [|x0 y2|]/[|x2 y0|] < 2u^2, [eps4] via [|c|<4u^2] so          *)
+(* [|b2+x1 y1|<8u^2->... ], [eps3] via [|z3|<4u^2]).  Reuses the [eps_i] bounds.   *)
+Lemma eps5nz_numerator x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  let c := RND (nth 0 bb 2 + x1 * y1) in
+  let z3 := RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+             + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)) in
+  let e := vecSum
+    [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1; c; z3] in
+  [\/ Rabs y2 < u * u, Rabs x2 < u * u, Rabs c < 4 * (u * u) | Rabs z3 < 4 * (u * u)] ->
+  Rabs ((x0 + x1 + x2) * (y0 + y1 + y2) - sumR e)
+    <= 26 * (u * u * u) - 119 / 10 * (u * u * u * u).
+Proof.
+Admitted.
+
 (* The [eps5 <> 0] case of the error bound (paper Section 6.2, part 2: "the      *)
 (* error is shown not too large when eps5 <> 0", details OMITTED in the paper).  *)
 (* The naive triangle [|eps0..4| + |eps5|] over-counts here (it reaches ~30u^3), *)
@@ -3274,7 +3345,50 @@ Lemma ThreeProd_error_eps5nz x0 x1 x2 y0 y1 y2 :
      (28 * (u * u * u) + 107 * (u * u * u * u)) *
        Rabs ((x0 + x1 + x2) * (y0 + y1 + y2)).
 Proof.
-Admitted.
+move=> Hc Nx Ny bb e HE5.
+have Hsz5 : size e = 5%N by rewrite /e size_vecSum.
+have Fbb : {in bb, forall z, format z}.
+  apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
+  by move=> /orP[/eqP->|/orP[/eqP->|/eqP->]]; apply: generic_format_round.
+have Fnthbb : forall i, format (nth 0 bb i).
+  move=> i; case: (ltnP i (size bb)) => Hi;
+    last by rewrite nth_default //; exact: generic_format_0.
+  by apply: Fbb; apply: mem_nth.
+have Fe : {in e, forall z, format z}.
+  apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
+  move=> /orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/eqP->]]]];
+    try apply: generic_format_round; apply: Fnthbb.
+have Fno : Fnonoverlap e by rewrite /e /bb; apply: (inner_Fnonoverlap Hc Nx Ny).
+have Hle : (Z.of_nat (size e) <= p + 1)%Z by rewrite Hsz5; lia.
+have [Pno Hsumeq] := @vseb_Pnonoverlap p Hp2 choice choice_sym e Hle Fe Fno.
+have Fvse : {in vseb e, forall z, format z}
+  by apply: (@format_vseb p Hp2 choice e Fe).
+have Hdisj := eps5nz_forces_small Hc Nx Ny HE5.
+have Hnum := eps5nz_numerator Nx Ny Hdisj.
+have Hnum2 : Rabs ((x0 + x1 + x2) * (y0 + y1 + y2) - sumR e)
+    <= 26 * (u * u * u) - 119 / 10 * (u * u * u * u) by exact: Hnum.
+have Hs5 := eps5_bound Pno Fvse u_le_64.
+have Hsm : Rabs (sumR (vseb e))
+    <= Rabs ((x0 + x1 + x2) * (y0 + y1 + y2))
+       + (26 * (u * u * u) - 119 / 10 * (u * u * u * u)).
+  rewrite Hsumeq.
+  have H1 : sumR e = (x0 + x1 + x2) * (y0 + y1 + y2)
+      + (sumR e - (x0 + x1 + x2) * (y0 + y1 + y2)) by ring.
+  rewrite {1}H1; apply: (Rle_trans _ _ _ (Rabs_triang _ _)).
+  have -> : Rabs (sumR e - (x0 + x1 + x2) * (y0 + y1 + y2))
+      = Rabs ((x0 + x1 + x2) * (y0 + y1 + y2) - sumR e) by rewrite Rabs_minus_sym.
+  move: Hnum2; lra.
+have Hident : sumR (vsebK 3 e) - (x0 + x1 + x2) * (y0 + y1 + y2)
+    = -((sumR (vseb e) - sumR (vsebK 3 e))
+        + ((x0 + x1 + x2) * (y0 + y1 + y2) - sumR e)).
+  by rewrite Hsumeq; ring.
+rewrite Hident Rabs_Ropp.
+apply: (error_assembly_eps5 (sm := sumR (vseb e))).
+- exact: Hnum2.
+- exact: Hs5.
+- exact: Hsm.
+- exact: (xy_ge Nx Ny).
+Qed.
 
 (* Section 6.2, part 2 -- relative error [<= 28u^3 + 107u^4] (normalised).       *)
 (* [ThreeProd_norm_eq] gives [TWval (ThreeProd x y) = sumR (vsebK 3 e)]; the     *)

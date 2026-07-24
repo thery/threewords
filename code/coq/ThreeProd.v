@@ -3287,12 +3287,30 @@ have Hpoly : (2*(u*u*u) + 42/10*(u*u*u*u) + 1) * (26*(u*u*u) - 119/10*(u*u*u*u))
 clear -Ht Hnum Hs5' Hr Hpoly; nra.
 Qed.
 
+(* The all-big case (paper omitted; old draft Theorem 10 / doc/thm7-eps5.md): when  *)
+(* [u^2<=|y2|], [u^2<=|x2|], [4u^2<=|c|] and [4u^2<=|z3|] the leading terms          *)
+(* [z00+, b0, b1, c, z3] are all divisible by [8u^3] and [|z00+ +b0+b1+c+z3| < 5],   *)
+(* so [|r0| <= 5]; a fourth nonzero P-nonoverlapping limb of [vseb e] would then be  *)
+(* [< 8u^3] yet a nonzero multiple of [8u^3], impossible.  Hence VSEB(3) drops       *)
+(* nothing and [eps5 = 0].  THE hard divisibility chunk (see doc/thm7-eps5.md).     *)
+Lemma eps5_zero_all_big x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  let c := RND (nth 0 bb 2 + x1 * y1) in
+  let z3 := RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+             + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)) in
+  let e := vecSum
+    [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1; c; z3] in
+  u * u <= Rabs y2 -> u * u <= Rabs x2 ->
+  4 * (u * u) <= Rabs c -> 4 * (u * u) <= Rabs z3 ->
+  sumR (vseb e) - sumR (vsebK 3 e) = 0.
+Proof.
+Admitted.
+
 (* [eps5 <> 0] forces one of the four "small term" cases (paper omitted; old       *)
-(* draft Theorem 10 / doc/thm7-eps5.md): in the complementary all-big case         *)
-(* ([u<=|x1|,|y1|]<2u, [u^2<=|x2|,|y2|]<2u^2, [|c|>=4u^2], [|z3|>=4u^2]) the        *)
-(* leading terms are all divisible by [8u^3] and [|z00+ +b0+b1+c+z3|<5], so a      *)
-(* fourth nonzero P-nonoverlapping limb would be [<8u^3], impossible -- hence       *)
-(* [eps5 = 0], contradicting the hypothesis.  THE hard divisibility chunk.        *)
+(* draft Theorem 10 / doc/thm7-eps5.md).  Contrapositive of [eps5_zero_all_big]:   *)
+(* if none of the four smallness bounds holds we are all-big, forcing [eps5 = 0].  *)
 Lemma eps5nz_forces_small x0 x1 x2 y0 y1 y2 :
   ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
   let bb := vecSum
@@ -3305,7 +3323,13 @@ Lemma eps5nz_forces_small x0 x1 x2 y0 y1 y2 :
   sumR (vseb e) - sumR (vsebK 3 e) <> 0 ->
   [\/ Rabs y2 < u * u, Rabs x2 < u * u, Rabs c < 4 * (u * u) | Rabs z3 < 4 * (u * u)].
 Proof.
-Admitted.
+move=> Hc Nx Ny bb c z3 e HE5.
+case: (Rlt_le_dec (Rabs y2) (u * u)) => Hy2; first by apply: Or41.
+case: (Rlt_le_dec (Rabs x2) (u * u)) => Hx2; first by apply: Or42.
+case: (Rlt_le_dec (Rabs c) (4 * (u * u))) => Hcb; first by apply: Or43.
+case: (Rlt_le_dec (Rabs z3) (4 * (u * u))) => Hz3b; first by apply: Or44.
+by case: HE5; apply: (eps5_zero_all_big Hc Nx Ny).
+Qed.
 
 (* In any of the four small-term cases the numerator [x*y - sumR e] (= [eps0+..    *)
 (* +eps4]) drops from [28u^3-11.9u^4] to [26u^3-11.9u^4]: one [eps_i] halves        *)

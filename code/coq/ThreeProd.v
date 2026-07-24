@@ -1755,12 +1755,29 @@ Lemma inner_head_Fnonoverlap x0 x1 x2 y0 y1 y2 :
 Proof.
 Admitted.
 
+(* The Lemma-1 divisibility core (paper Section 6.2 part 1): [a = RN(z01+ + z10+)]*)
+(* is divisible by [ulp(s3)].  Via Lemma 1 [half_ulp_div_RN_add] on the larger    *)
+(* operand (WLOG [|x1| >= |y1|]): [1/2 ulp(x1) | a], and [1/2 ulp(x1) >= ulp(s3)]  *)
+(* from the [x1]-relative bound [|s3| <= 10 ulp(x1)].  This is the sole remaining  *)
+(* crux of [inner_inputs_imul].                                                   *)
+Lemma a_imul_ulp_s3 x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let s3 := dwh (TwoSum (RND (nth 0 (vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)]) 2
+      + x1 * y1))
+             (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+                 + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))) in
+  s3 <> 0 ->
+  is_imul (RND (RND (x0 * y1) + RND (x1 * y0))) (ulp s3).
+Proof.
+Admitted.
+
 (* The shared divisibility crux (paper Section 6.2 part 1): when [s3 <> 0], the   *)
 (* leading input [z00+] and the [b0, b1] limbs are all divisible by [ulp(s3)].    *)
-(* [z00+]: [ulp(z00+) >= 2u > ulp(s3)].  [b0, b1]: Lemma 1 gives                   *)
-(* [1/2 ulp(x1) | b0, b1] and [1/2 ulp(x1) >= ulp(s3)] (WLOG [|x1| >= |y1|]).      *)
-(* Feeds both [e4_dominates] (item b) and the [I]-set study                       *)
-(* [inner_head_Fnonoverlap] (item a).                                            *)
+(* [z00+]: [ulp(z00+) >= 2u > ulp(s3)].  [z00-]: [is_imul _ 4u^2] ([z00m_imul]).   *)
+(* [b0 = RN(z00- + a)], [b1 = z00- + a - b0]: divisible via [a_imul_ulp_s3] +      *)
+(* [is_imul_add]/[is_imul_pow_round]/[is_imul_minus].  Feeds both [e4_dominates]   *)
+(* (item b) and the [I]-set study [inner_head_Fnonoverlap] (item a).             *)
 Lemma inner_inputs_imul x0 x1 x2 y0 y1 y2 :
   ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
   let bb := vecSum
@@ -1772,7 +1789,84 @@ Lemma inner_inputs_imul x0 x1 x2 y0 y1 y2 :
   [/\ is_imul (RND (x0 * y0)) (ulp s3),
       is_imul (nth 0 bb 0) (ulp s3) & is_imul (nth 0 bb 1) (ulp s3)].
 Proof.
-Admitted.
+move=> Hc Nx Ny bb s3 Hs3n0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := u_le_64.
+have [[Fx0 Fx1 Fx2] _ _ _ _] := Nx.
+have [[Fy0 Fy1 Fy2] _ _ _ _] := Ny.
+have Hz10m2 : Rabs (RND (x1 * y0 - RND (x1 * y0))) <= 2 * (u * u).
+  rewrite round_generic; first by apply: (z10m_bound Nx Ny).
+  rewrite (_ : x1 * y0 - RND (x1 * y0) = -(RND (x1 * y0) - x1 * y0)); last by ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hz01m2 : Rabs (RND (x0 * y1 - RND (x0 * y1))) <= 2 * (u * u).
+  rewrite round_generic; first by apply: (z01m_bound Nx Ny).
+  rewrite (_ : x0 * y1 - RND (x0 * y1) = -(RND (x0 * y1) - x0 * y1)); last by ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hz3 := z3_bound (z31_bound Hz10m2 (x0y2_bound Nx Ny))
+                     (z32_bound Hz01m2 (x2y0_bound Nx Ny)).
+have Fbb : {in bb, forall z, format z}.
+  apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
+  by move=> /orP[/eqP->|/orP[/eqP->|/eqP->]]; apply: generic_format_round.
+have Hb2 : Rabs (nth 0 bb 2) <= 4 * (u * u).
+  have Hb2eq : nth 0 bb 2 = RND (x0 * y1) + RND (x1 * y0)
+      - RND (RND (x0 * y1) + RND (x1 * y0)).
+    rewrite /bb (vecSum3 (generic_format_round _ _ _ _)
+      (generic_format_round _ _ _ _) (generic_format_round _ _ _ _)) /=; ring.
+  by rewrite Hb2eq; apply: (b2_bound Nx Ny).
+have Hc8 : Rabs (RND (nth 0 bb 2 + x1 * y1)) <= 8 * (u * u)
+  by apply: c_bound => //; apply: (x1y1_bound Nx Ny).
+have Hs3E : s3 = RND (RND (nth 0 bb 2 + x1 * y1)
+    + RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+         + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))
+  by rewrite /s3 TwoSum_hi.
+have Hs3_20 : Rabs s3 <= 20 * (u * u) by rewrite Hs3E; apply: s3_bound.
+have P32 : pow (5 - 2 * p) = 32 * (u * u).
+  rewrite (_ : (5 - 2 * p = (4 - 2 * p) + 1)%Z); last by lia.
+  rewrite bpow_plus pow_4m2p.
+  have -> : pow 1 = 2 by rewrite /= /Z.pow_pos /=; lra.
+  ring.
+have Hmagle : (mag beta s3 <= 5 - 2 * p)%Z.
+  apply: mag_le_bpow => //; rewrite P32; move: Hs3_20 Hu0; nra.
+have Hgle : (cexp s3 <= 5 - 3 * p)%Z by rewrite /cexp /FLX_exp; lia.
+have Hulps3 : ulp s3 = pow (cexp s3) by apply: ulp_neq_0.
+have Fz00p : format (RND (x0 * y0)) by apply: generic_format_round.
+have Hz00p1 : 1 <= RND (x0 * y0) by apply: (z00p_lb Nx Ny).
+have Hmagge : (1 <= mag beta (RND (x0 * y0)))%Z.
+  apply: mag_ge_bpow; rewrite pow0E; move: Hz00p1; split_Rabs; lra.
+have Hz00p : is_imul (RND (x0 * y0)) (ulp s3).
+  rewrite Hulps3.
+  apply: (is_imul_pow_le (y1 := cexp (RND (x0 * y0)))); last first.
+    have Ecx1 : (cexp s3 = mag beta s3 - p)%Z by rewrite /cexp /fexp /FLX_exp.
+    have Ecx2 : (cexp (RND (x0 * y0)) = mag beta (RND (x0 * y0)) - p)%Z
+      by rewrite /cexp /fexp /FLX_exp.
+    rewrite Ecx1 Ecx2; lia.
+  exact: (format_imul_cexp Fz00p).
+have Hz00m : is_imul (RND (x0 * y0 - RND (x0 * y0))) (ulp s3).
+  rewrite Hulps3 round_generic; last first.
+    rewrite (_ : x0 * y0 - RND (x0 * y0) = -(RND (x0 * y0) - x0 * y0)); last by ring.
+    by apply: generic_format_opp; exact: format_err_mul.
+  apply: (is_imul_pow_le (y1 := (2 - 2 * p)%Z)); last by lia.
+  rewrite pow_2m2p; exact: (z00m_imul Nx Ny).
+have Fz00mf : format (RND (x0 * y0 - RND (x0 * y0))) by apply: generic_format_round.
+have Fz01pf : format (RND (x0 * y1)) by apply: generic_format_round.
+have Fz10pf : format (RND (x1 * y0)) by apply: generic_format_round.
+have Hbbeq : bb = [:: RND (RND (x0 * y0 - RND (x0 * y0))
+                         + RND (RND (x0 * y1) + RND (x1 * y0)));
+    RND (x0 * y0 - RND (x0 * y0)) + RND (RND (x0 * y1) + RND (x1 * y0))
+      - RND (RND (x0 * y0 - RND (x0 * y0)) + RND (RND (x0 * y1) + RND (x1 * y0)));
+    RND (x0 * y1) + RND (x1 * y0) - RND (RND (x0 * y1) + RND (x1 * y0))]
+  by rewrite /bb (vecSum3 Fz00mf Fz01pf Fz10pf).
+have Ha := a_imul_ulp_s3 Hc Nx Ny Hs3n0.
+move: Hz00m Ha; rewrite Hulps3 => Hz00m Ha.
+split.
+- by move: Hz00p; rewrite Hulps3.
+- rewrite Hbbeq /=.
+  by apply: is_imul_pow_round; apply: is_imul_add; [exact: Hz00m | exact: Ha].
+- rewrite Hbbeq /=.
+  apply: is_imul_minus.
+    by apply: is_imul_add; [exact: Hz00m | exact: Ha].
+  by apply: is_imul_pow_round; apply: is_imul_add; [exact: Hz00m | exact: Ha].
+Qed.
 
 (* Item (b) (paper Section 6.2 part 1): the trailing [e4 = dwl(TwoSum c z3)] is   *)
 (* finer than every nonzero output limb of the head VecSum -- [ulp(s3) >= 2|e4|]  *)

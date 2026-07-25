@@ -1,16 +1,14 @@
 # Algorithm 10 — 3Prodᶠᵃˢᵗ₃,₃ (fast product of two triple words)
 
-> **STATUS (2026-07-25).** `ThreeProdFast_isTW` is **PROVED**;
-> `ThreeProdFast_error` (`44u³ + 176u⁴`) is still `Admitted`.
-> `code/coq/ThreeProdFast.v` defines `ThreeProdFast` (Algorithm 10 transcribed
-> verbatim) and both statements. Part 1 re-instantiates the Algorithm-9
-> skeleton of `ThreeProd.v` (see `doc/thm7.md`, `doc/thm7-eps5.md`) — every
-> Section-6.1 bound and the four-case `I`-set study `inner_head_Fnonoverlap`
-> are reused *verbatim*, so the whole part-1 proof is ~450 new lines against
-> Algorithm 9's ~2450.
-> `doc/paper3.pdf` §6.4, p. 7 (the *faster version*); the details the published
-> paper omits ("the proof … [is] similar to those for Algorithm 9") are in
-> `doc/old-triplewors.pdf` §6.6 / Algorithm 13, which is reproduced below.
+> **STATUS (2026-07-25).** **COMPLETE — zero admits.** `ThreeProdFast_isTW`
+> and `ThreeProdFast_error` (`44u³ + 176u⁴`) are both `Qed` in
+> `code/coq/ThreeProdFast.v`, which defines `ThreeProdFast` (Algorithm 10
+> transcribed verbatim). Both proofs re-instantiate the Algorithm-9 skeleton of
+> `ThreeProd.v` (see `doc/thm7.md`, `doc/thm7-eps5.md`): every Section-6.1
+> bound, the four-case `I`-set study `inner_head_Fnonoverlap` and the
+> `eps0..eps5` error bounds are reused *verbatim*, the only new mathematics
+> being the extra source `eps4' = (c + z3) - s3`. `Print Assumptions` = classic
+> reals + funext, as everywhere else in the development.
 > Setting FLX, `u = 2^{-p}`, `RN` = round-to-nearest (ties-to-even), `ufp`/`uls`
 > as in the paper; `p ≥ 6`.
 
@@ -126,7 +124,7 @@ than Algorithm 9's.
 |---|---|
 | Algorithm 10 | `ThreeProdFast` |
 | result is TW | `ThreeProdFast_isTW` (**proved**) |
-| error `44u³+176u⁴` | `ThreeProdFast_error` (**admitted**) |
+| error `44u³+176u⁴` | `ThreeProdFast_error` (**proved**) |
 
 What is reused from `ThreeProd.v` (all `Qed`, generalised over
 `p Hp2 Hp6 choice choice_sym` once the section is closed — applied with `@`;
@@ -165,11 +163,15 @@ New work specific to Algorithm 10 — part 1, **done**:
 3. `ThreeProdFast_norm_eq` (star identity), `ThreeProdFast_isTW_norm`,
    `ThreeProdFast_isTW`.
 
-Still to do — part 2 (the error bound):
+Part 2 (the error bound), **done**:
 
 4. `epsp4_bound` : `|(c + z₃) − s₃| ≤ 16u³` (from `c_bound`, `z3_bound` and
-   `round_err_le`).
-5. The error identity: `sumR (vecSum [z₀₀⁺; b₀; b₁; s₃]) − x̄ȳ = ε₀+…+ε₄+ε₄′`
-   (the four-input twin of `sumR_e_decomp`).
-6. Re-calibrated assemblies at `44u³ − 11.9u⁴` / `42u³ − 11.9u⁴`, and the
-   `ε₅ = 0` all-big argument for the four-limb list.
+   `round_err_le`, via the new `pow_5m2p`/`pow_5m3p`).
+5. `sumR_eF_decomp` — the error identity on the four-limb VecSum: Algorithm 9's
+   `sumR_e_decomp` plus the single extra term `c + z₃ − s₃`.
+6. `eps04p_sum` (`44u³ − 11.9u⁴`), `error_assembly_fast` (`44u³ + 176u⁴`),
+   `error_assembly_eps5_fast` (numerator `42u³ − 11.9u⁴` plus the full `ε₅`,
+   splitting the budget as `2u³+4.2u⁴` for `ε₅` and `42u³+171.8u⁴` for the
+   rest), `eps5nzF_forces_small`, `eps5nzF_numerator` and `eps5F_zero_all_big`
+   (the four-limb grid argument: `s₃ = RN(c + z₃)` inherits the `8u³` grid from
+   `c` and `z₃`).

@@ -1,16 +1,30 @@
 # Theorem 9 — Algorithm 13 (3Reci): the reciprocal of a triple word
 
-> **STATUS (2026-07-25).** **SKELETON.** `code/coq/ThreeReci.v` defines
-> Algorithm 13 (`ThreeReciAux`, instantiated as `ThreeReci` with Algorithm 11
-> and `ThreeReciFast` with Algorithm 12) and states its four results —
-> `ThreeReci_isTW`, `ThreeReciFast_isTW`, `ThreeReci_error`
-> (`11.5u³ + 1465u⁴`) and `ThreeReciFast_error` (`19u³ + 1502u⁴`) — all
-> `Admitted`. `doc/paper3.pdf` §8, Theorem 9, p. 9.
-> **The published paper gives no proof**: "the proof of Theorem 9, with the
-> modified versions of Algorithms 11 and 12, is given in the appendix"
-> (supplementary material, which is *not* part of `doc/paper3.pdf`). The plan
-> below is recovered from `doc/old-triplewors.pdf` §8 (its Algorithm 16), whose
-> constants are slightly weaker — see [Discrepancies](#discrepancies).
+> **STATUS (2026-07-25).** **isTW PROVED** (PR #131), error still open.
+> `ThreeReci_isTW`/`ThreeReciFast_isTW` are `Qed` on top of the whole §8.2
+> chain — `reciB_isDW` (the Newton word is a DW) and `reciBW_x_err`
+> (`|b̄x̄ − 1| ≤ 34u² + 123u³`) — modulo `head_one` (§8.3). 4 admits in
+> `code/coq/ThreeReci.v`: `ThreeProdDW_head_one`, `ThreeProdDWFast_head_one`,
+> `ThreeReci_error`, `ThreeReciFast_error`. PR #130 (skeleton) is merged.
+>
+> **§8.3 cannot be proved from the multiplier's OUTPUT.** `(1+2u, −2u+2u², …)`
+> is P-nonoverlapping and sums to `1 + O(u²)` with head `1+2u`, so `isTW`
+> alone never pins the head. The argument must run on the pre-VSEB VecSum
+> limbs, where `e₀`, `e₁` are the two words of ONE 2Sum, giving the genuine
+> half-ulp `2|e₁| ≤ ulp e₀`. Remaining plan: (1) `vecSum_head_sep` in
+> VecSum.v (= `magnitude_TwoSum` + `format_vecSumAux2`); (2) tail
+> `≤ 15/16·ulp e₀` from `Fnonoverlap_imm` + `uls_le_abs` (the paper's
+> `1 − 2⁻⁴` is `1/2+1/4+1/8+1/16` over the four tail limbs); (3) `head_eq_1`
+> (stated, admitted); (4) the bridge — `inner_Fnonoverlap` and
+> `sumR_e_decomp` are the hooks, but they assume BOTH arguments normalised
+> while `b̄ȳ ≈ 1` forces one into `(1/2, 1]`, so the head lemma must be stated
+> at `pow j` and the compensating scaling of `ThreeProdDW_scale` used.
+>
+> **`p ≥ 10` is genuinely needed**, not the old paper's `p ≥ 9`: `head_eq_1`'s
+> margins are `0.125u` above 1 and `0.0625u` below, so `36u² < 0.0625u`.
+> `doc/paper3.pdf` §8, Theorem 9 — the published proof is in supplementary
+> material we do not have; the route below is recovered from
+> `doc/old-triplewors.pdf` §8.
 > Setting FLX, `u = 2^{-p}`, `RN` = round-to-nearest (ties-to-even), `ufp`/`uls`
 > as in the paper; `p ≥ 10`.
 

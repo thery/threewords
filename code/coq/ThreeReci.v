@@ -19,11 +19,16 @@
 (* [3Prod_{2,3}] it calls: [ThreeReci] uses Algorithm 11 (accurate) and       *)
 (* [ThreeReciFast] uses Algorithm 12 (fast).                                  *)
 (*                                                                            *)
-(* STATUS: SKELETON.  The definition transcribes Algorithm 13 verbatim on top *)
-(* of [TwoProd] (Alg 3), [Fast2Sum] (Alg 1) and [ThreeProdDW]/                *)
-(* [ThreeProdDWFast] (Alg 11/12); the four theorems are stated and            *)
-(* [Admitted].  doc/paper3.pdf gives no proof of Theorem 9 (it is in the      *)
-(* supplementary material, which we do not have); the plan is recovered from  *)
+(* STATUS: correctness (part 1) is PROVED modulo ONE property.                *)
+(* [ThreeReci_isTW] and [ThreeReciFast_isTW] are [Qed], on top of the whole   *)
+(* Section 8.2 chain -- [reciB_isDW] ([b] is a double word) and               *)
+(* [reciBW_x_err] ([|b x - 1| <= 34u^2 + 123u^3]) -- and of [head_one], the   *)
+(* Section 8.3 property that the head limb of [3Prod_{2,3}(b, x)] is [1].     *)
+(* [head_one] is ADMITTED for both multipliers ([ThreeProdDW_head_one],       *)
+(* [ThreeProdDWFast_head_one]) and moves to ThreeProdDW.v / ThreeProdDWFast.v *)
+(* once proved.  The two error bounds (Theorem 9) are still [Admitted].       *)
+(* doc/paper3.pdf gives no proof of Theorem 9 (it is in the supplementary     *)
+(* material, which we do not have); the plan is recovered from                *)
 (* doc/old-triplewors.pdf Section 8 -- see doc/thm9.md for the full chain.    *)
 (* ---------------------------------------------------------------------------*)
 
@@ -827,27 +832,280 @@ by nra.
 Qed.
 
 (* ===========================================================================*)
+(*  Scale and sign equivariance of the Newton double word                     *)
+(*                                                                            *)
+(*  [b] is a reciprocal, so it scales by [pow (-c)] when the input scales by  *)
+(*  [pow c]: every line commutes with a power of two ([round_scale]), and the *)
+(*  intermediate [h11], [h1] -- which approximate [a x0] and [2 - a x] -- are *)
+(*  scale INVARIANT.  This is what reduces the Section 8.2 bound, proved on a *)
+(*  normalised input, to an arbitrary triple word.                            *)
+(* ===========================================================================*)
+Lemma reciA_scale x0 c :
+  x0 <> 0 -> reciA (x0 * pow c) = reciA x0 * pow (- c).
+Proof.
+move=> Hx0.
+have Hp0 : pow c <> 0 by apply: Rgt_not_eq; apply: bpow_gt_0.
+rewrite /reciA -(round_scale p choice _ (- c)).
+congr (RND _).
+by rewrite bpow_opp; field; split.
+Qed.
+
+Lemma reciA_opp x0 : x0 <> 0 -> reciA (- x0) = - reciA x0.
+Proof.
+move=> Hx0.
+rewrite /reciA.
+have -> : (1 + 2 * u) / - x0 = - ((1 + 2 * u) / x0) by field.
+by rewrite RN_sym.
+Qed.
+
+Lemma reciA_x0_scale x0 c :
+  x0 <> 0 -> reciA (x0 * pow c) * (x0 * pow c) = reciA x0 * x0.
+Proof.
+move=> Hx0.
+have Hp0 : pow c <> 0 by apply: Rgt_not_eq; apply: bpow_gt_0.
+by rewrite reciA_scale // bpow_opp; field.
+Qed.
+
+Lemma reciH11_scale x0 c :
+  x0 <> 0 -> reciH11 (x0 * pow c) = reciH11 x0.
+Proof. by move=> Hx0; rewrite /reciH11 reciA_x0_scale. Qed.
+
+Lemma reciH11_opp x0 : x0 <> 0 -> reciH11 (- x0) = reciH11 x0.
+Proof.
+move=> Hx0; rewrite /reciH11 reciA_opp //.
+by congr (RND _); ring.
+Qed.
+
+Lemma reciH1_scale x0 x1 c :
+  x0 <> 0 -> reciH1 (x0 * pow c) (x1 * pow c) = reciH1 x0 x1.
+Proof.
+move=> Hx0.
+have Hp0 : pow c <> 0 by apply: Rgt_not_eq; apply: bpow_gt_0.
+rewrite /reciH1 reciH11_scale // reciA_scale //.
+by congr (RND _); rewrite bpow_opp; field.
+Qed.
+
+Lemma reciH1_opp x0 x1 : x0 <> 0 -> reciH1 (- x0) (- x1) = reciH1 x0 x1.
+Proof.
+move=> Hx0; rewrite /reciH1 reciH11_opp // reciA_opp //.
+by congr (RND _); ring.
+Qed.
+
+Lemma reciB01_scale x0 c :
+  x0 <> 0 -> reciB01 (x0 * pow c) = reciB01 x0 * pow (- c).
+Proof.
+move=> Hx0.
+rewrite /reciB01 /= reciA_scale // -(round_scale p choice _ (- c)).
+by congr (RND _); ring.
+Qed.
+
+Lemma reciB01_opp x0 : x0 <> 0 -> reciB01 (- x0) = - reciB01 x0.
+Proof.
+move=> Hx0.
+rewrite /reciB01 /= reciA_opp //.
+by rewrite -RN_sym //; congr (RND _); ring.
+Qed.
+
+Lemma reciB11_scale x0 c :
+  x0 <> 0 -> reciB11 (x0 * pow c) = reciB11 x0 * pow (- c).
+Proof.
+move=> Hx0.
+rewrite /reciB11 /= reciA_scale //.
+have -> : reciA x0 * pow (- c) * (1 - 2 * u)
+        = reciA x0 * (1 - 2 * u) * pow (- c) by ring.
+rewrite (round_scale p choice).
+by rewrite -Rmult_minus_distr_r (round_scale p choice).
+Qed.
+
+Lemma reciB11_opp x0 : x0 <> 0 -> reciB11 (- x0) = - reciB11 x0.
+Proof.
+move=> Hx0.
+rewrite /reciB11 /= reciA_opp //.
+have -> : - reciA x0 * (1 - 2 * u) = - (reciA x0 * (1 - 2 * u)) by ring.
+rewrite RN_sym //.
+have -> : - (reciA x0 * (1 - 2 * u)) - - RND (reciA x0 * (1 - 2 * u))
+        = - (reciA x0 * (1 - 2 * u) - RND (reciA x0 * (1 - 2 * u))) by ring.
+by rewrite RN_sym.
+Qed.
+
+Lemma reciB12_scale x0 x1 c :
+  x0 <> 0 -> reciB12 (x0 * pow c) (x1 * pow c) = reciB12 x0 x1 * pow (- c).
+Proof.
+move=> Hx0.
+rewrite /reciB12 reciB11_scale // reciA_scale // reciH1_scale //
+        -(round_scale p choice _ (- c)).
+by congr (RND _); ring.
+Qed.
+
+Lemma reciB12_opp x0 x1 :
+  x0 <> 0 -> reciB12 (- x0) (- x1) = - reciB12 x0 x1.
+Proof.
+move=> Hx0.
+rewrite /reciB12 reciB11_opp // reciA_opp // reciH1_opp //.
+by rewrite -RN_sym //; congr (RND _); ring.
+Qed.
+
+Lemma reciBW_scale x0 x1 c :
+  x0 <> 0 ->
+  reciBW (x0 * pow c) (x1 * pow c) = scaleTW (- c) (reciBW x0 x1).
+Proof.
+move=> Hx0.
+rewrite /reciBW /reciB reciB01_scale // reciB12_scale //.
+rewrite /Fast2Sum /scaleTW /dwh /dwl.
+have Add : forall y z : R, y * pow (- c) + z * pow (- c) = (y + z) * pow (- c)
+  by move=> *; ring.
+have Sub : forall y z : R, y * pow (- c) - z * pow (- c) = (y - z) * pow (- c)
+  by move=> *; ring.
+by rewrite !(Add, Sub, (round_scale p choice)) Rmult_0_l.
+Qed.
+
+Lemma reciBW_opp x0 x1 :
+  x0 <> 0 -> reciBW (- x0) (- x1) = negTW (reciBW x0 x1).
+Proof.
+move=> Hx0.
+rewrite /reciBW /reciB reciB01_opp // reciB12_opp //.
+rewrite /Fast2Sum /negTW /dwh /dwl.
+have Add : forall y z : R, - y + - z = - (y + z) by move=> *; ring.
+have Sub : forall y z : R, - y - - z = - (y - z) by move=> *; ring.
+by rewrite !(Add, Sub, RN_sym) // Ropp_0.
+Qed.
+
+(* The Section 8.2 bound for an ARBITRARY triple word, by normalisation.      *)
+Lemma reciBW_x_err x :
+  isTW x -> tw0 x <> 0 ->
+  Rabs (TWval (reciBW (tw0 x) (tw1 x)) * TWval x - 1)
+    <= 34 * (u * u) + 123 * (u * u * u).
+Proof.
+move=> Hx Hx0.
+have [c _ [Hpos Hneg]] := (@isTW_normalize p Hp2 choice x Hx Hx0).
+have Hpc : 0 < pow c by apply: bpow_gt_0.
+case: x Hx Hx0 Hpos Hneg => x0 x1 x2 Hx Hx0 Hpos Hneg.
+rewrite tw0E tw1E.
+rewrite tw0E in Hx0 Hpos Hneg.
+have [Hlt | Hgt] := Rdichotomy _ _ Hx0.
+  have Hn := Hneg Hlt.
+  rewrite /scaleTW /negTW /tw_normP in Hn.
+  have Hx0n : - x0 <> 0 by lra.
+  have Hb := reciB_x_err Hn.
+  rewrite (reciBW_scale _ _ Hx0n) reciBW_opp // TWval_scale TWval_opp in Hb.
+  have HE : - TWval (reciBW x0 x1) * pow (- c)
+              * (- x0 * pow c + - x1 * pow c + - x2 * pow c)
+          = TWval (reciBW x0 x1) * TWval (TWR x0 x1 x2).
+    by rewrite /TWval bpow_opp; field; lra.
+  by rewrite HE in Hb.
+have Hn := Hpos Hgt.
+rewrite /scaleTW /tw_normP in Hn.
+have Hb := reciB_x_err Hn.
+rewrite (reciBW_scale _ _ Hx0) TWval_scale in Hb.
+have HE : TWval (reciBW x0 x1) * pow (- c)
+            * (x0 * pow c + x1 * pow c + x2 * pow c)
+        = TWval (reciBW x0 x1) * TWval (TWR x0 x1 x2).
+  by rewrite /TWval bpow_opp; field; lra.
+by rewrite HE in Hb.
+Qed.
+
+(* ===========================================================================*)
 (*  Correctness, part 1: the result is a triple-word number.                  *)
 (*                                                                            *)
-(*  Both products are calls to Algorithm 11 (resp. 12), whose result is a TW  *)
-(*  ([ThreeProdDW_isTW], [ThreeProdDWFast_isTW]) as soon as the first         *)
-(*  argument is a DW and the second one a TW.  So part 1 amounts to:          *)
-(*  (i) [b = Fast2Sum(b01, b12)] is a DW -- the Fast2Sum ordering hypothesis  *)
-(*      holds because [|b12| <= u |b01|] (doc/thm9.md);                       *)
-(*  (ii) [sub2TW] preserves [isTW], which needs [2 - i0] to keep the same     *)
-(*      ulp as [i0], i.e. the [i0 = 1] of old paper Section 8.3.              *)
+(*  Two ingredients, and both products are then covered by Algorithm 11's     *)
+(*  (resp. Algorithm 12's) own correctness:                                   *)
+(*  (i)  [b] is a double word ([reciB_isDW]);                                 *)
+(*  (ii) the head limb of [3Prod_{2,3}(b, x)] is exactly [1] -- old paper     *)
+(*       Section 8.3, the property that forces [p >= 10] -- so that [2 - _]   *)
+(*       keeps the same [ulp] and [sub2TW] preserves [isTW].                  *)
 (* ===========================================================================*)
+
+(* [2 - t] is a triple word as soon as [t]'s head is [1]: the head stays [1], *)
+(* so the two [ulp] gaps are unchanged, and the low limbs are just negated.   *)
+Lemma sub2TW_isTW t : isTW t -> tw0 t = 1 -> isTW (sub2TW t).
+Proof.
+case: t => t0 t1 t2 [F0 F1 F2 H1 H2] /= Ht0.
+rewrite Ht0.
+have -> : 2 - 1 = 1 by ring.
+split.
+- exact: format_1.
+- exact: generic_format_opp.
+- exact: generic_format_opp.
+- case: H1 => [->|H1]; first by left; rewrite Ropp_0.
+  by right; rewrite Rabs_Ropp -Ht0.
+case: H2 => [->|H2]; first by left; rewrite Ropp_0.
+by right; rewrite !Rabs_Ropp ulp_opp.
+Qed.
+
+(* What Section 8.3 delivers about a [3Prod_{2,3}] whose product is close to  *)
+(* [1]: its head limb is exactly [1].  Stated as a property of the multiplier *)
+(* so that both variants share the assembly below.                            *)
+Definition head_one (mul : twR -> twR -> twR) : Prop :=
+  forall b y, isDW b -> isTW y ->
+    Rabs (TWval b * TWval y - 1) <= 35 * (u * u) -> tw0 (mul b y) = 1.
+
+(* The generic assembly: given a [3Prod_{2,3}] that returns a triple word and *)
+(* satisfies [head_one], Algorithm 13 returns a triple word.                  *)
+Lemma ThreeReciAux_isTW mul :
+  (forall b y, isDW b -> isTW y -> isTW (mul b y)) ->
+  head_one mul ->
+  forall x, isTW x -> tw0 x <> 0 -> isTW (ThreeReciAux mul x).
+Proof.
+move=> Hmul Hhead x Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := u_le_1024.
+have Fx0 : format (tw0 x) by case: x Hx {Hx0} => x0 x1 x2 [].
+have Hx1 : tw1 x = 0 \/ Rabs (tw1 x) < ulp (tw0 x)
+  by case: x Hx {Hx0 Fx0} => x0 x1 x2 [].
+have HDW : isDW (reciBW (tw0 x) (tw1 x)) by apply: reciB_isDW.
+have Herr := reciBW_x_err Hx Hx0.
+have Herr35 : Rabs (TWval (reciBW (tw0 x) (tw1 x)) * TWval x - 1)
+                <= 35 * (u * u).
+  have Hu3 : u * u * u <= /1024 * (u * u) by nra.
+  by clear -Hu0 Hu1024 Hu3 Herr; nra.
+have Hprod := Hmul _ _ HDW Hx.
+have Hhead1 := Hhead _ _ HDW Hx Herr35.
+rewrite /ThreeReciAux.
+by apply: Hmul => //; apply: sub2TW_isTW.
+Qed.
+
+(* ===========================================================================*)
+(*  Section 8.3 -- the head limb of [3Prod_{2,3}(b, x)] is [1]                *)
+(*                                                                            *)
+(*  Old paper Section 8.3: [|e - 1| <= 35u^2] and [e] F-nonoverlapping give   *)
+(*  [|e0 - e| <= (1 - 2^-4) uls(e0)], so [|e0| >= 1 + 2u] would force         *)
+(*  [|e| >= 1 + 2^-3 u > 1 + 35u^2] -- excluded when [u < 1/280], i.e.        *)
+(*  [p >= 9].  This is Remark 9's precision constraint, and the ONLY admitted *)
+(*  step left in Algorithm 13's correctness.  It needs material internal to   *)
+(*  ThreeProdDW.v / ThreeProdDWFast.v (a [uls]-based bound on the tail of the *)
+(*  product's limbs, sharper than the [ulp] one [isTW] provides), and moves   *)
+(*  to those files once proved.                                               *)
+(* ===========================================================================*)
+Lemma ThreeProdDW_head_one :
+  ties_to_even choice -> head_one ThreeProdDW.
+Proof.
+Admitted.
+
+Lemma ThreeProdDWFast_head_one :
+  ties_to_even choice -> head_one ThreeProdDWFast.
+Proof.
+Admitted.
+
 Lemma ThreeReci_isTW x :
   ties_to_even choice ->
   isTW x -> tw0 x <> 0 -> isTW (ThreeReci x).
 Proof.
-Admitted.
+move=> Hc Hx Hx0.
+apply: (ThreeReciAux_isTW (mul := ThreeProdDW)) => //.
+  by move=> b y Hb Hy; apply: (@ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym).
+exact: ThreeProdDW_head_one.
+Qed.
 
 Lemma ThreeReciFast_isTW x :
   ties_to_even choice ->
   isTW x -> tw0 x <> 0 -> isTW (ThreeReciFast x).
 Proof.
-Admitted.
+move=> Hc Hx Hx0.
+apply: (ThreeReciAux_isTW (mul := ThreeProdDWFast)) => //.
+  by move=> b y Hb Hy;
+     apply: (@ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym).
+exact: ThreeProdDWFast_head_one.
+Qed.
 
 (* ===========================================================================*)
 (*  Correctness, part 2: the relative error (paper Theorem 9).                *)

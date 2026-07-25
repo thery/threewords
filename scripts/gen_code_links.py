@@ -64,7 +64,7 @@ COVERAGE = [
       ("error", R("ThreeProdFast_error", "ThreeProdFast.v"))], "done"),
     ("11",    "3Prod^acc (DW×TW)", R("ThreeProdDW", "ThreeProdDW.v"),
      [("isTW", R("ThreeProdDW_isTW", "ThreeProdDW.v")),
-      ("Thm 8", R("ThreeProdDW_error", "ThreeProdDW.v"))], "skel"),
+      ("Thm 8", R("ThreeProdDW_error", "ThreeProdDW.v"))], "done"),
     ("12",    "3Prod^fast (DW×TW)", None,
      [("err bound", None)], "no"),
     ("13",    "3Reci",     None,

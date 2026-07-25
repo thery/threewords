@@ -43,13 +43,13 @@ output is *not* F-nonoverlapping — machine-checked counterexample
 repairs it. Theorem 6 is false for 7 inputs (paper's own `[1-u,-1+2u,…]`
 witness). See `doc/thm6.md`.
 
-## §6–10 Multiplication, division, square root — Alg 9, 10 done, Alg 11 started
+## §6–10 Multiplication, division, square root — Alg 9, 10, 11 done
 
 | Alg | Name (ops) | Theorem | Formalised |
 |-----|------------|---------|-----------|
 | 9  | 3Prod^acc_{3,3}(x,y) (46, 2 tests) — TW × TW | **Thm 7** (err `28u³+107u⁴`, `p≥6`) | ✓ `ThreeProd`; `ThreeProd_isTW` + `ThreeProd_error` (`doc/thm7.md`, `doc/thm7-eps5.md`) |
 | 10 | 3Prod^fast_{3,3}(x,y) (38, 1 test) | err `44u³+176u⁴` | ✓ `ThreeProdFast`; `ThreeProdFast_isTW` + `ThreeProdFast_error` (`doc/alg10.md`) |
-| 11 | 3Prod^acc_{2,3}(x,y) (45, 2 tests) — DW × TW | **Thm 8** (err `10.5u³+39u⁴`, `p≥6`) | 🚧 `ThreeProdDW`; `ThreeProdDW_isTW` ✓ proved, `ThreeProdDW_error` admitted (`doc/thm8.md`) |
+| 11 | 3Prod^acc_{2,3}(x,y) (45, 2 tests) — DW × TW | **Thm 8** (err `10.5u³+39u⁴`, `p≥6`) | ✓ `ThreeProdDW`; `ThreeProdDW_isTW` + `ThreeProdDW_error` (`doc/thm8.md`) |
 | 12 | 3Prod^fast_{2,3}(x,y) (37, 1 test) | err `18u³+75u⁴` | — |
 | 13 | 3Reci(x) (73, 2 tests) — reciprocal (Newton) | **Thm 9** (`p≥10`) | — |
 | 14 | 3Div(z,x) (119, 4 tests) — quotient | **Thm 10** (err `24u³+1509u⁴`, `p≥10`) | — |
@@ -78,11 +78,11 @@ instantiated at binary64. All zero-admit.
 `s₃ = RN(c + z₃)`, whose low word `e₄` is dropped (one extra error source
 `|e₄| ≤ 16u³`, whence `44 = 28 + 16`).
 
-**In progress:** 3Prod^acc DW×TW (Alg 11 / Thm 8) — `ThreeProdDW` defined,
-`ThreeProdDW_isTW` **proved**, `ThreeProdDW_error` (`10.5u³+39u⁴`) stated and
-admitted (`doc/thm8.md`). Algorithm 11 is Algorithm 9 with `x₂ = 0`, so
-correctness is inherited from Theorem 7; the sharper error bound is not, and the
-paper omits its proof (recovered from `doc/old-triplewors.pdf` §7.4).
+**Formalised: the DW×TW product (Alg 11 / Thm 8).** `ThreeProdDW_isTW` and
+`ThreeProdDW_error` (`10.5u³+39u⁴`), zero admits (`doc/thm8.md`). Algorithm 11
+is Algorithm 9 with `x₂ = 0`, so correctness is inherited from Theorem 7; the
+sharper error bound is not, and the published paper omits its proof entirely —
+recovered from `doc/old-triplewors.pdf` §7.4.
 
 **Not formalised:** the fast DW×TW variant and the divide/reciprocal/sqrt half
 of the paper (Alg 12–18 / Thm 9–11).

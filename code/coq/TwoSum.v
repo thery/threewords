@@ -83,10 +83,27 @@ Lemma dwlE xh xl : dwl (DWR xh xl) = xl. Proof. by []. Qed.
 (* The high word of a 2Sum is the rounded sum.                                *)
 Lemma TwoSum_hi a b : dwh (TwoSum a b) = RND (a + b). Proof. by []. Qed.
 
+(* Algorithm 1 of the paper: the 3-operation Fast2Sum.  It is [TwoSum]        *)
+(* without the magnitude test, so it is only error-free when the exponent of  *)
+(* [b] does not exceed that of [a] ([Fast2Sum_correct_aux] of                 *)
+(* Fast2Sum_robust_flx.v); ordering the arguments is the caller's job.        *)
+Definition Fast2Sum (a b : R) : dwR :=
+  let s := RND (a + b) in
+  let z := RND (s - a) in
+  DWR s (RND (b - z)).
+
+(* The high word of a Fast2Sum is the rounded sum, as for [TwoSum].           *)
+Lemma Fast2Sum_hi a b : dwh (Fast2Sum a b) = RND (a + b). Proof. by []. Qed.
+
 Definition formatDWR (a : dwR) := let: DWR b c := a in format b /\ format c.
 
 Lemma format_TwoSum a b : format a -> format b -> formatDWR (TwoSum a b).
 Proof. by move=> Fa Fb; split; try apply: generic_format_round. Qed.
+
+(* Both words of a Fast2Sum are rounded values, hence floats -- no hypothesis *)
+(* on [a] and [b] is needed, unlike for its exactness.                        *)
+Lemma format_Fast2Sum a b : formatDWR (Fast2Sum a b).
+Proof. by split; apply: generic_format_round. Qed.
 
 (* The magnitude counterpart of [formatDWR]: in a 2Sum result [DWR s e]       *)
 (* the error word [e] is at most half an ulp of the high word [s].            *)

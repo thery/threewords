@@ -43,7 +43,7 @@ output is *not* F-nonoverlapping — machine-checked counterexample
 repairs it. Theorem 6 is false for 7 inputs (paper's own `[1-u,-1+2u,…]`
 witness). See `doc/thm6.md`.
 
-## §6–10 Multiplication, division, square root — Alg 9–12 done
+## §6–10 Multiplication, division, square root — Alg 9–12 done, Alg 13 started
 
 | Alg | Name (ops) | Theorem | Formalised |
 |-----|------------|---------|-----------|
@@ -51,7 +51,7 @@ witness). See `doc/thm6.md`.
 | 10 | 3Prod^fast_{3,3}(x,y) (38, 1 test) | err `44u³+176u⁴` | ✓ `ThreeProdFast`; `ThreeProdFast_isTW` + `ThreeProdFast_error` (`doc/alg10.md`) |
 | 11 | 3Prod^acc_{2,3}(x,y) (45, 2 tests) — DW × TW | **Thm 8** (err `10.5u³+39u⁴`, `p≥6`) | ✓ `ThreeProdDW`; `ThreeProdDW_isTW` + `ThreeProdDW_error` (`doc/thm8.md`) |
 | 12 | 3Prod^fast_{2,3}(x,y) (37, 1 test) | err `18u³+75u⁴` | ✓ `ThreeProdDWFast`; `ThreeProdDWFast_isTW` + `ThreeProdDWFast_error` (`doc/alg12.md`) |
-| 13 | 3Reci(x) (73, 2 tests) — reciprocal (Newton) | **Thm 9** (`p≥10`) | — |
+| 13 | 3Reci(x) (73, 2 tests) — reciprocal (Newton) | **Thm 9** (err `11.5u³+1465u⁴` with Alg 11, `19u³+1502u⁴` with Alg 12, `p≥10`) | 🚧 `ThreeReciAux`, `ThreeReci`, `ThreeReciFast`; `ThreeReci_isTW` + `ThreeReci_error` + `ThreeReciFast_*` stated, admitted (`doc/thm9.md`) |
 | 14 | 3Div(z,x) (119, 4 tests) — quotient | **Thm 10** (err `24u³+1509u⁴`, `p≥10`) | — |
 | 15 | 3SqRt(x) (127, 4 tests) — square root (Newton) | **Thm 11** (err `24u³+10260u⁴`, `p≥11`) | — |
 | 16–18 | appendix: sign-folded product variants | (support Thms 9–11) | — |
@@ -93,5 +93,15 @@ is shorter than Theorem 8's because it works with `s₃` instead of `c` and `z�
 **All four multiplication algorithms of §6–7 (Alg 9–12) are now proved, with
 zero admits.**
 
-**Not formalised:** the divide/reciprocal/sqrt half of the paper
-(Alg 13–18 / Thm 9–11).
+**Skeleton: the reciprocal (Alg 13 / Thm 9).** `ThreeReciAux` defines
+Algorithm 13 generically in the `3Prod₂,₃` it calls, instantiated as
+`ThreeReci` (Algorithm 11) and `ThreeReciFast` (Algorithm 12); the four results
+are stated and admitted. `paper3` gives no proof — it lives in supplementary
+material we do not have — so `doc/thm9.md` recovers the chain from
+`doc/old-triplewors.pdf` §8. The two products enter as black boxes with
+relative errors `δ₁` (Theorem 8, general inputs) and `δ₂ ≈ 1u³` (the second
+product's `ī` has head `1` and second limb `O(u²)`), whence
+`11.5 = 10.5 + 1` and `19 = 18 + 1`; `δ₂` is the one bound still to be derived.
+
+**Not formalised:** the rest of the divide/sqrt half of the paper
+(Alg 14–18 / Thm 10–11).

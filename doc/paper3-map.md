@@ -43,12 +43,12 @@ output is *not* F-nonoverlapping — machine-checked counterexample
 repairs it. Theorem 6 is false for 7 inputs (paper's own `[1-u,-1+2u,…]`
 witness). See `doc/thm6.md`.
 
-## §6–10 Multiplication, division, square root — Alg 9 done, Alg 10 started
+## §6–10 Multiplication, division, square root — Alg 9 and 10 done
 
 | Alg | Name (ops) | Theorem | Formalised |
 |-----|------------|---------|-----------|
 | 9  | 3Prod^acc_{3,3}(x,y) (46, 2 tests) — TW × TW | **Thm 7** (err `28u³+107u⁴`, `p≥6`) | ✓ `ThreeProd`; `ThreeProd_isTW` + `ThreeProd_error` (`doc/thm7.md`, `doc/thm7-eps5.md`) |
-| 10 | 3Prod^fast_{3,3}(x,y) (38, 1 test) | err `44u³+176u⁴` | 🚧 `ThreeProdFast`; `ThreeProdFast_isTW` ✓ proved, `ThreeProdFast_error` admitted (`doc/alg10.md`) |
+| 10 | 3Prod^fast_{3,3}(x,y) (38, 1 test) | err `44u³+176u⁴` | ✓ `ThreeProdFast`; `ThreeProdFast_isTW` + `ThreeProdFast_error` (`doc/alg10.md`) |
 | 11 | 3Prod^acc_{2,3}(x,y) (45, 2 tests) — DW × TW | **Thm 8** (err `10.5u³+39u⁴`, `p≥6`) | — |
 | 12 | 3Prod^fast_{2,3}(x,y) (37, 1 test) | err `18u³+75u⁴` | — |
 | 13 | 3Reci(x) (73, 2 tests) — reciprocal (Newton) | **Thm 9** (`p≥10`) | — |
@@ -72,11 +72,11 @@ instantiated at binary64. All zero-admit.
 `ThreeProd_isTW` and `ThreeProd_error` (`28u³+107u⁴`), zero admits
 (`doc/thm7.md`, `doc/thm7-eps5.md`), including Lemma 1.
 
-**In progress:** 3Prod^fast TW×TW (Alg 10) — `ThreeProdFast` defined,
-`ThreeProdFast_isTW` **proved**, `ThreeProdFast_error` (`44u³+176u⁴`) stated and
-admitted (`doc/alg10.md`). It shares the whole Algorithm-9 skeleton: the
-same terms up to `s₃ = RN(c + z₃)`, whose low word `e₄` is dropped (one extra
-error source `|e₄| ≤ 16u³`, whence `44 = 28 + 16`).
+**Formalised: the fast TW×TW product too.** 3Prod^fast (Alg 10) —
+`ThreeProdFast_isTW` and `ThreeProdFast_error` (`44u³+176u⁴`), zero admits
+(`doc/alg10.md`). It shares the whole Algorithm-9 skeleton: the same terms up to
+`s₃ = RN(c + z₃)`, whose low word `e₄` is dropped (one extra error source
+`|e₄| ≤ 16u³`, whence `44 = 28 + 16`).
 
-**Not formalised:** the rest of the multiply/divide/reciprocal/sqrt half of the
-paper (Alg 11–18 / Thm 8–11).
+**Not formalised:** the DW×TW products and the divide/reciprocal/sqrt half of
+the paper (Alg 11–18 / Thm 8–11).

@@ -12,15 +12,16 @@
 (* and one test, at the price of one extra error source [|e4| <= 16u^3],      *)
 (* whence [44u^3 = 28u^3 + 16u^3] instead of [28u^3].                         *)
 (*                                                                            *)
-(* STATUS: [ThreeProdFast_isTW] is PROVED; [ThreeProdFast_error] is still     *)
-(* [Admitted].  The definition transcribes Algorithm 10 verbatim on top of    *)
-(* [TwoProd] (Alg 3), [vecSum] (Alg 4) and [vsebK] (Alg 5).  The correctness  *)
-(* proof re-instantiates the Algorithm-9 skeleton of [ThreeProd.v]: the head  *)
-(* [VecSum(z00+, b0, b1, s3)] is LITERALLY the one of Algorithm 9, so         *)
-(* [inner_head_Fnonoverlap] (the four-case [I]-set study) applies unchanged   *)
-(* and no [e4] tail has to be handled; every Section-6.1 term bound is reused *)
-(* as is.  The error proof will reuse [eps0..eps5] plus the extra source      *)
-(* [eps4' = (c + z3) - s3].  See doc/alg10.md for the full plan.              *)
+(* STATUS: COMPLETE -- both theorems are PROVED, zero admits.  The definition *)
+(* transcribes Algorithm 10 verbatim on top of [TwoProd] (Alg 3), [vecSum]    *)
+(* (Alg 4) and [vsebK] (Alg 5), and both proofs re-instantiate the            *)
+(* Algorithm-9 skeleton of [ThreeProd.v]:                                     *)
+(*  - the head [VecSum(z00+, b0, b1, s3)] is LITERALLY Algorithm 9's inner    *)
+(*    list, so [inner_head_Fnonoverlap] (the four-case [I]-set study) applies *)
+(*    unchanged and no [e4] tail has to be handled;                           *)
+(*  - every Section-6.1 term bound and the [eps0..eps5] error bounds are      *)
+(*    reused as is, with the single extra source [eps4' = (c + z3) - s3].     *)
+(* See doc/alg10.md.                                                          *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -604,6 +605,34 @@ by apply: vseb_head3_dom => //; rewrite Hsz4.
 Qed.
 
 (* ===========================================================================*)
+(*  The head VecSum of Algorithm 10 is F-nonoverlapping.  It is LITERALLY     *)
+(*  Algorithm 9's inner list, so this is [inner_head_Fnonoverlap] verbatim -- *)
+(*  its [s3 = dwh (TwoSum c z3)] is [RN(c + z3)] by [TwoSum_hi].  Shared by   *)
+(*  [ThreeProdFast_isTW_norm] and [ThreeProdFast_error_norm] (the analogue of *)
+(*  Algorithm 9's [inner_Fnonoverlap], minus the [e4] tail).                  *)
+(* ===========================================================================*)
+Lemma innerF_Fnonoverlap x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  Fnonoverlap (vecSum
+    [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1;
+        RND (RND (nth 0 bb 2 + x1 * y1)
+           + RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+                + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))]).
+Proof.
+move=> Hc Nx Ny bb.
+have H := @inner_head_Fnonoverlap p Hp2 Hp6 choice choice_sym
+  x0 x1 x2 y0 y1 y2 Hc Nx Ny.
+have H2 : Fnonoverlap (vecSum
+  [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1;
+      dwh (TwoSum (RND (nth 0 bb 2 + x1 * y1))
+           (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+               + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))))]) by exact: H.
+by rewrite TwoSum_hi in H2.
+Qed.
+
+(* ===========================================================================*)
 (*  The star identity [(r0, VSEB(2)) = VSEB(3)] for Algorithm 10: the output  *)
 (*  is the first three limbs of [vseb e], with [e = VecSum(z00+, b0, b1, s3)] *)
 (*  the pre-truncation VecSum output.  [e1 <> 0] uses [vseb_star]             *)
@@ -705,19 +734,8 @@ have Fe : {in e, forall z, format z}.
   apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
   move=> /orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/eqP->]]];
     try apply: generic_format_round; apply: Fnthbb.
-(* The head VecSum is Algorithm 9's inner list: [inner_head_Fnonoverlap]      *)
-(* applies verbatim, its [dwh (TwoSum c z3)] being [RN(c + z3)] ([TwoSum_hi]).*)
-have Fno : Fnonoverlap e.
-  have H := @inner_head_Fnonoverlap p Hp2 Hp6 choice choice_sym
-    x0 x1 x2 y0 y1 y2 Hc Nx' Ny'.
-  have H2 : Fnonoverlap (vecSum
-    [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1;
-        dwh (TwoSum (RND (nth 0 bb 2 + x1 * y1))
-             (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
-                 + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))))]) by
-    exact: H.
-  rewrite TwoSum_hi in H2.
-  by rewrite /e.
+have Fno : Fnonoverlap e
+  by rewrite /e /bb; apply: (innerF_Fnonoverlap Hc Nx' Ny').
 have Pno : Pnonoverlap (vseb e).
   have Hle : (Z.of_nat (size e) <= p + 1)%Z by rewrite Hsz4; lia.
   by have [] := @vseb_Pnonoverlap p Hp2 choice choice_sym e Hle Fe Fno.
@@ -778,6 +796,773 @@ case: Hxsg => Hxs; case: Hysg => Hys.
 Qed.
 
 (* ===========================================================================*)
+(*  Section 6.4 -- the error analysis.  Algorithm 10 has the SAME six error   *)
+(*  sources [eps0..eps5] as Algorithm 9 (all bounds reused from ThreeProd.v)  *)
+(*  plus one more, the term it drops:                                         *)
+(*                                                                            *)
+(*    eps4' := (c + z3) - s3,   |eps4'| <= u ufp(12u^2 + 8u^2) <= 16u^3       *)
+(*                                                                            *)
+(*  so the numerator becomes [44u^3 - 11.9u^4] (44 = 28 + 16) and, over       *)
+(*  [x*y >= 1 - 4u], the relative error is [44u^3 + 176u^4].                  *)
+(* ===========================================================================*)
+
+Lemma pow_5m2p : pow (5 - 2 * p) = 32 * (u * u).
+Proof.
+rewrite (_ : (5 - 2 * p = 5 + - (2 * p))%Z); last by lia.
+by rewrite bpow_plus u2_pow /= /Z.pow_pos /=; lra.
+Qed.
+
+Lemma pow_5m3p : pow (5 - 3 * p) = 32 * (u * u * u).
+Proof.
+rewrite (_ : (5 - 3 * p = 5 + - (3 * p))%Z); last by lia.
+by rewrite bpow_plus u3_pow /= /Z.pow_pos /=; lra.
+Qed.
+
+(* [eps4' = (c + z3) - s3]: [<= 16u^3].  The extra source of Algorithm 10.    *)
+Lemma epsp4_bound c z3 :
+  Rabs c <= 8 * (u * u) -> Rabs z3 <= 12 * (u * u) ->
+  Rabs (c + z3 - RND (c + z3)) <= 16 * (u * u * u).
+Proof.
+move=> H1 H2.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hw : Rabs (c + z3) < pow (5 - 2 * p).
+  rewrite pow_5m2p.
+  have H3 := Rabs_triang c z3.
+  nra.
+have Herr := @round_err_le p Hp2 choice _ _ Hw.
+move: Herr; rewrite (_ : (5 - 2 * p - p = 5 - 3 * p)%Z); last by lia.
+rewrite pow_5m3p; nra.
+Qed.
+
+(* Summing the SIX constant error sources: [28u^3 - 11.9u^4 + 16u^3].         *)
+Lemma eps04p_sum e0 e1 e2 e3 e4 e4p :
+  Rabs e0 <= 8 * (u * u * u) - 119 / 10 * (u * u * u * u) ->
+  Rabs e1 <= 4 * (u * u * u) -> Rabs e2 <= 4 * (u * u * u) ->
+  Rabs e3 <= 8 * (u * u * u) -> Rabs e4 <= 4 * (u * u * u) ->
+  Rabs e4p <= 16 * (u * u * u) ->
+  Rabs (e0 + e1 + e2 + e3 + e4 + e4p) <=
+    44 * (u * u * u) - 119 / 10 * (u * u * u * u).
+Proof.
+move=> H0 H1 H2 H3 H4 H4p.
+have T0 := Rabs_triang (e0 + e1 + e2 + e3 + e4) e4p.
+have T1 := Rabs_triang (e0 + e1 + e2 + e3) e4.
+have T2 := Rabs_triang (e0 + e1 + e2) e3.
+have T3 := Rabs_triang (e0 + e1) e2.
+have T4 := Rabs_triang e0 e1.
+lra.
+Qed.
+
+(* Dividing the numerator by [|x*y| >= 1 - 4u] (the [eps5 = 0] branch).       *)
+Lemma error_assembly_fast err xy :
+  Rabs err <= 44 * (u * u * u) - 119 / 10 * (u * u * u * u) ->
+  1 - 4 * u <= Rabs xy ->
+  Rabs err <= (44 * (u * u * u) + 176 * (u * u * u * u)) * Rabs xy.
+Proof.
+move=> Hn Hxy.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := @u_le_64 p Hp6.
+set B := 44 * (u * u * u) + 176 * (u * u * u * u).
+have HB0 : 0 <= B by rewrite /B; nra.
+apply: (Rle_trans _ (B * (1 - 4 * u))); last first.
+  by apply: Rmult_le_compat_l.
+apply: (Rle_trans _ _ _ Hn).
+rewrite /B; nra.
+Qed.
+
+(* The error identity of Algorithm 10: the twin of [sumR_e_decomp] on the     *)
+(* FOUR-limb VecSum, with the extra [eps4' = c + z3 - s3].                    *)
+Lemma sumR_eF_decomp x0 x1 x2 y0 y1 y2
+    z00p z00m z01p z01m z10p z10m b c z31 z32 z3 s3 :
+  format x0 -> format x1 -> format y0 -> format y1 ->
+  TwoProd x0 y0 = (z00p, z00m) ->
+  TwoProd x0 y1 = (z01p, z01m) ->
+  TwoProd x1 y0 = (z10p, z10m) ->
+  b = vecSum [:: z00m; z01p; z10p] ->
+  c = RND (nth 0 b 2 + x1 * y1) ->
+  z31 = RND (z10m + x0 * y2) ->
+  z32 = RND (z01m + x2 * y0) ->
+  z3 = RND (z31 + z32) ->
+  s3 = RND (c + z3) ->
+  (x0 + x1 + x2) * (y0 + y1 + y2) -
+    sumR (vecSum [:: z00p; nth 0 b 0; nth 0 b 1; s3]) =
+    (x1 * y2 + x2 * y1 + x2 * y2) + (z10m + x0 * y2 - z31)
+    + (z01m + x2 * y0 - z32) + (z31 + z32 - z3) + (nth 0 b 2 + x1 * y1 - c)
+    + (c + z3 - s3).
+Proof.
+move=> Fx0 Fx1 Fy0 Fy1 HP00 HP01 HP10 Hb Hc H31 H32 H3 Hs3.
+(* Algorithm 9's five-term identity, reused as is ...                         *)
+have H5 := @sumR_e_decomp p Hp2 choice choice_sym x0 x1 x2 y0 y1 y2
+  z00p z00m z01p z01m z10p z10m b c z31 z32 z3
+  Fx0 Fx1 Fy0 Fy1 HP00 HP01 HP10 Hb Hc H31 H32 H3.
+have Fz00p : format z00p.
+  by have := @TwoProd_fmt1 p Hp2 choice x0 y0 Fx0 Fy0; rewrite HP00.
+have Fz00m : format z00m.
+  by have := @TwoProd_fmt2 p Hp2 choice x0 y0 Fx0 Fy0; rewrite HP00.
+have Fz01p : format z01p.
+  by have := @TwoProd_fmt1 p Hp2 choice x0 y1 Fx0 Fy1; rewrite HP01.
+have Fz10p : format z10p.
+  by have := @TwoProd_fmt1 p Hp2 choice x1 y0 Fx1 Fy0; rewrite HP10.
+have Fb : {in b, forall z, format z}.
+  rewrite Hb; apply: (@format_vecSum p Hp2 choice).
+  by move=> z; rewrite !inE => /or3P[] /eqP-> //.
+have Hsz : size b = 3%N by rewrite Hb size_vecSum.
+have Fb0 : format (nth 0 b 0) by apply: Fb; rewrite mem_nth // Hsz.
+have Fb1 : format (nth 0 b 1) by apply: Fb; rewrite mem_nth // Hsz.
+have Fc : format c by rewrite Hc; apply: generic_format_round.
+have Fz3 : format z3 by rewrite H3; apply: generic_format_round.
+have Fs3 : format s3 by rewrite Hs3; apply: generic_format_round.
+(* ... and the two VecSums are exact, so the four-limb sum differs from the   *)
+(* five-limb one exactly by [eps4' = c + z3 - s3].                            *)
+have Ee4 : sumR (vecSum [:: z00p; nth 0 b 0; nth 0 b 1; s3]) =
+           z00p + nth 0 b 0 + nth 0 b 1 + s3.
+  rewrite (@vecSum_sum p Hp2 choice choice_sym); last first.
+    by move=> z; rewrite !inE =>
+      /orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/eqP->]]] //.
+  by rewrite /=; ring.
+have Ee5 : sumR (vecSum [:: z00p; nth 0 b 0; nth 0 b 1; c; z3]) =
+           z00p + nth 0 b 0 + nth 0 b 1 + c + z3.
+  rewrite (@vecSum_sum p Hp2 choice choice_sym); last first.
+    by move=> z; rewrite !inE =>
+      /orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/eqP->]]]] //.
+  by rewrite /=; ring.
+rewrite Ee4; move: H5; rewrite Ee5 => H5; lra.
+Qed.
+
+(* The [eps5 = 0] core of the [eps5 <> 0] discussion (old paper Section 6.6,  *)
+(* "similarly to the previous case"): when every term is big, the leading     *)
+(* terms all live on the [8u^3] grid and [|sumR e| < 5], so a fourth nonzero  *)
+(* P-nonoverlapping limb would be [< 8u^3] -- impossible.  The twin of        *)
+(* [eps5_zero_all_big] on the four-limb list ([s3 = RN(c + z3)] inherits the  *)
+(* grid from [c] and [z3]).                                                   *)
+Lemma eps5F_zero_all_big x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  let c := RND (nth 0 bb 2 + x1 * y1) in
+  let z3 := RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+             + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)) in
+  let e := vecSum
+    [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1; RND (c + z3)] in
+  u * u <= Rabs x2 -> u * u <= Rabs y2 ->
+  4 * (u * u) <= Rabs c -> 4 * (u * u) <= Rabs z3 ->
+  sumR (vseb e) - sumR (vsebK 3 e) = 0.
+Proof.
+move=> Hc Nx Ny bb c z3 e Hx2h Hy2h Hcb Hz3b.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := @u_le_64 p Hp6.
+have [[Fx0 Fx1 Fx2] Hx0l Hx0r Hx1o Hx2o] := Nx.
+have [[Fy0 Fy1 Fy2] Hy0l Hy0r Hy1o Hy2o] := Ny.
+have Hu2 : u * u = pow (- (2 * p)) by rewrite u_pow -bpow_plus; congr bpow; lia.
+(* [u^2 <= |x2|] with [|x2| < ulp x1] forces [ulp x1 > u^2], hence [u <=      *)
+(* |x1|]: this is why the case split is on [x2], [y2] and not on [x1], [y1].  *)
+have Hderive : forall (w1 w2 : R), w2 = 0 \/ Rabs w2 < ulp w1 ->
+    u * u <= Rabs w2 -> u <= Rabs w1.
+  move=> w1 w2 Hw2o Hw2h.
+  have Hw2n0 : w2 <> 0.
+    by move=> H0; move: Hw2h; rewrite H0 Rabs_R0 => H; nra.
+  have Hw2lt : Rabs w2 < ulp w1 by case: Hw2o => // H0; case: Hw2n0.
+  have Hw1n0 : w1 <> 0.
+    move=> H0; move: Hw2lt; rewrite H0 ulp_FLX_0 => H.
+    by have := Rabs_pos w2; nra.
+  have Hmagw1 : (1 - p <= mag beta w1)%Z.
+    have Hulp : pow (- (2 * p)) < ulp w1 by rewrite -Hu2; lra.
+    move: Hulp; rewrite ulp_neq_0 // /cexp /fexp /FLX_exp => H.
+    by have := lt_bpow beta _ _ H; lia.
+  apply: (Rle_trans _ (pow (mag beta w1 - 1))).
+    by rewrite u_pow; apply: bpow_le; lia.
+  by have := ufp_le_abs Hw1n0; rewrite /ufp.
+have Hx1b : u <= Rabs x1 by apply: (Hderive x1 x2 Hx2o Hx2h).
+have Hy1b : u <= Rabs y1 by apply: (Hderive y1 y2 Hy2o Hy2h).
+(* Every leading term is a multiple of [8u^3 = pow (3 - 3p)] -- including     *)
+(* [s3 = RN(c + z3)], which inherits the grid from [c] and [z3].              *)
+pose g := (3 - 3 * p)%Z.
+have Himcx : forall x : R, format x -> (g <= cexp x)%Z -> is_imul x (pow g).
+  move=> x Fx Hcx.
+  by apply: (is_imul_pow_le (y1 := cexp x)); [exact: format_imul_cexp | exact:
+    Hcx].
+have Hcexp : forall x : R, cexp x = (mag beta x - p)%Z
+  by move=> x; rewrite /cexp /fexp /FLX_exp.
+have Iz00p : is_imul (RND (x0 * y0)) (pow g).
+  apply: Himcx; first by apply: generic_format_round.
+  rewrite Hcexp; have Hlb : 1 <= RND (x0 * y0)
+    by apply: (@z00p_lb p Hp2 choice x0 x1 x2 y0 y1 y2 Nx Ny).
+  suff : (1 <= mag beta (RND (x0 * y0)))%Z by rewrite /g; lia.
+  by apply: mag_ge_bpow; rewrite pow0E Rabs_pos_eq; lra.
+have Fu : format u by rewrite u_pow; apply: format_pow.
+have Iz00m : is_imul (RND (x0 * y0 - RND (x0 * y0))) (pow g).
+  rewrite round_generic; last first.
+    rewrite (_ : x0 * y0 - RND (x0 * y0) = -(RND (x0 * y0) - x0 * y0)); last by
+      ring.
+    by apply: generic_format_opp; exact: format_err_mul.
+  apply: (is_imul_pow_le (y1 := (2 - 2 * p)%Z)); last by rewrite /g; lia.
+  rewrite pow_2m2p; exact: (@z00m_imul p choice x0 x1 x2 y0 y1 y2 Nx Ny).
+have Iz01p : is_imul (RND (x0 * y1)) (pow g).
+  have Hge : u <= Rabs (RND (x0 * y1)).
+    apply: Rabs_round_le_l => //.
+    rewrite Rabs_mult (Rabs_pos_eq x0); last lra.
+    have := Rabs_pos y1; nra.
+  apply: Himcx; first by apply: generic_format_round.
+  rewrite Hcexp /g; suff : (1 - p <= mag beta (RND (x0 * y1)))%Z by lia.
+  apply: mag_ge_bpow; rewrite (_ : (1 - p - 1 = - p)%Z); last by lia.
+  by rewrite -u_pow.
+have Iz10p : is_imul (RND (x1 * y0)) (pow g).
+  have Hge : u <= Rabs (RND (x1 * y0)).
+    apply: Rabs_round_le_l => //.
+    rewrite Rabs_mult (Rabs_pos_eq y0); last lra.
+    have := Rabs_pos x1; nra.
+  apply: Himcx; first by apply: generic_format_round.
+  rewrite Hcexp /g; suff : (1 - p <= mag beta (RND (x1 * y0)))%Z by lia.
+  apply: mag_ge_bpow; rewrite (_ : (1 - p - 1 = - p)%Z); last by lia.
+  by rewrite -u_pow.
+have Ia : is_imul (RND (RND (x0 * y1) + RND (x1 * y0))) (pow g)
+  by apply: is_imul_pow_round; apply: is_imul_add.
+have Fz00mf : format (RND (x0 * y0 - RND (x0 * y0))) by apply:
+  generic_format_round.
+have Fz01pf : format (RND (x0 * y1)) by apply: generic_format_round.
+have Fz10pf : format (RND (x1 * y0)) by apply: generic_format_round.
+have Hbbe : bb = [:: RND (RND (x0 * y0 - RND (x0 * y0))
+                         + RND (RND (x0 * y1) + RND (x1 * y0)));
+    RND (x0 * y0 - RND (x0 * y0)) + RND (RND (x0 * y1) + RND (x1 * y0))
+      - RND (RND (x0 * y0 - RND (x0 * y0)) + RND (RND (x0 * y1) + RND (x1 *
+        y0)));
+    RND (x0 * y1) + RND (x1 * y0) - RND (RND (x0 * y1) + RND (x1 * y0))]
+  by rewrite /bb (@vecSum3 p Hp2 choice choice_sym _ _ _ Fz00mf Fz01pf Fz10pf).
+have Ib0 : is_imul (nth 0 bb 0) (pow g).
+  by rewrite Hbbe /=; apply: is_imul_pow_round; apply: is_imul_add;
+    [exact: Iz00m | exact: Ia].
+have Ib1 : is_imul (nth 0 bb 1) (pow g).
+  rewrite Hbbe /=; apply: is_imul_minus.
+    by apply: is_imul_add; [exact: Iz00m | exact: Ia].
+  by apply: is_imul_pow_round; apply: is_imul_add; [exact: Iz00m | exact: Ia].
+have Ic : is_imul c (pow g).
+  apply: Himcx; first by rewrite /c; apply: generic_format_round.
+  rewrite Hcexp /g; suff : (3 - 2 * p <= mag beta c)%Z by lia.
+  apply: mag_ge_bpow; rewrite (_ : (3 - 2 * p - 1 = 2 - 2 * p)%Z); last by lia.
+  by rewrite pow_2m2p.
+have Iz3 : is_imul z3 (pow g).
+  apply: Himcx; first by rewrite /z3; apply: generic_format_round.
+  rewrite Hcexp /g; suff : (3 - 2 * p <= mag beta z3)%Z by lia.
+  apply: mag_ge_bpow; rewrite (_ : (3 - 2 * p - 1 = 2 - 2 * p)%Z); last by lia.
+  by rewrite pow_2m2p.
+have Is3 : is_imul (RND (c + z3)) (pow g)
+  by apply: is_imul_pow_round; apply: is_imul_add.
+have Fz00pf : format (RND (x0 * y0)) by apply: generic_format_round.
+have Fs3f : format (RND (c + z3)) by apply: generic_format_round.
+have Fbb : {in bb, forall z, format z}.
+  apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
+  by move=> /orP[/eqP->|/orP[/eqP->|/eqP->]]; apply: generic_format_round.
+have Fb0 : format (nth 0 bb 0) by apply: Fbb; rewrite /bb mem_nth //
+  size_vecSum.
+have Fb1 : format (nth 0 bb 1) by apply: Fbb; rewrite /bb mem_nth //
+  size_vecSum.
+pose l0 := [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1; RND (c + z3)].
+have Feinp : {in l0, forall z, format z}.
+  move=> z; rewrite !inE
+    => /orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/eqP->]]] //.
+have Ieinp : {in l0, forall z, is_imul z (pow g)}.
+  move=> z; rewrite !inE
+    => /orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/eqP->]]] //.
+have Ie : {in e, forall z, is_imul z (pow g)}
+  by rewrite /e; apply: vecSum_imul_forward.
+have Fe : {in e, forall z, format z}
+  by rewrite /e; apply: (@format_vecSum p Hp2 choice).
+have Ivse : {in vseb e, forall z, is_imul z (pow g)}
+  by apply: vseb_imul_forward.
+have Hsz4 : size e = 4%N by rewrite /e size_vecSum.
+have Fno : Fnonoverlap e
+  by rewrite /e /bb; apply: (innerF_Fnonoverlap Hc Nx Ny).
+have Hle : (Z.of_nat (size e) <= p + 1)%Z by rewrite Hsz4; lia.
+have [Pno Hsumeq] := @vseb_Pnonoverlap p Hp2 choice choice_sym e Hle Fe Fno.
+have Fvse : {in vseb e, forall z, format z}
+  by apply: (@format_vseb p Hp2 choice e Fe).
+have Hsume : sumR e = RND (x0 * y0) + nth 0 bb 0 + nth 0 bb 1 + RND (c + z3).
+  rewrite /e (@vecSum_sum p Hp2 choice choice_sym); last by apply: Feinp.
+  by rewrite /=; ring.
+have Hsplit : sumR (vseb e) - sumR (vsebK 3 e) = sumR (drop 3 (vseb e))
+  by rewrite /vsebK -{1}(cat_take_drop 3 (vseb e)) sumR_cat; ring.
+rewrite Hsplit.
+have RNrel : forall t : R, Rabs (RND t) <= (1 + u) * Rabs t.
+  move=> t; have Ht := relative_error_le beta Hp2 choice t.
+  have H2 : Rabs (RND t) <= Rabs t + Rabs (RND t - t)
+    by have := Rabs_triang t (RND t - t);
+       rewrite (_ : t + (RND t - t) = RND t); [lra | ring].
+  have := Rabs_pos t; nra.
+have Hz00mb : Rabs (RND (x0 * y0 - RND (x0 * y0))) <= 2 * u.
+  rewrite round_generic;
+    first by apply: (@z00m_bound p Hp2 choice x0 x1 x2 y0 y1 y2 Nx Ny).
+  rewrite (_ : x0 * y0 - RND (x0 * y0) = -(RND (x0 * y0) - x0 * y0)); last by
+    ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hz01pb := @z01p_bound p Hp2 choice x0 x1 x2 y0 y1 y2 Nx Ny.
+have Hz10pb := @z10p_bound p Hp2 choice x0 x1 x2 y0 y1 y2 Nx Ny.
+have Hab : Rabs (RND (RND (x0 * y1) + RND (x1 * y0))) <= 9 * u.
+  apply: (Rle_trans _ _ _ (RNrel _)).
+  have := Rabs_triang (RND (x0 * y1)) (RND (x1 * y0)); nra.
+have Hb01 : nth 0 bb 0 + nth 0 bb 1
+    = RND (x0 * y0 - RND (x0 * y0)) + RND (RND (x0 * y1) + RND (x1 * y0))
+  by rewrite Hbbe /=; ring.
+have Hz00pu : RND (x0 * y0) < 4
+  by apply: (@z00p_ub p Hp2 choice x0 x1 x2 y0 y1 y2 Nx Ny).
+have Hz00pl : 1 <= RND (x0 * y0)
+  by apply: (@z00p_lb p Hp2 choice x0 x1 x2 y0 y1 y2 Nx Ny).
+have Hz10m2 : Rabs (RND (x1 * y0 - RND (x1 * y0))) <= 2 * (u * u).
+  rewrite round_generic;
+    first by apply: (@z10m_bound p Hp2 choice x0 x1 x2 y0 y1 y2 Nx Ny).
+  rewrite (_ : x1 * y0 - RND (x1 * y0) = -(RND (x1 * y0) - x1 * y0)); last by
+    ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hz01m2 : Rabs (RND (x0 * y1 - RND (x0 * y1))) <= 2 * (u * u).
+  rewrite round_generic;
+    first by apply: (@z01m_bound p Hp2 choice x0 x1 x2 y0 y1 y2 Nx Ny).
+  rewrite (_ : x0 * y1 - RND (x0 * y1) = -(RND (x0 * y1) - x0 * y1)); last by
+    ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hz3ub : Rabs z3 <= 12 * (u * u)
+  := @z3_bound p Hp2 Hp6 choice _ _
+       (@z31_bound p Hp2 Hp6 choice _ _ _ Hz10m2
+          (@x0y2_bound p Hp2 x0 x1 x2 y0 y1 y2 Nx Ny))
+       (@z32_bound p Hp2 Hp6 choice _ _ _ Hz01m2
+          (@x2y0_bound p Hp2 x0 x1 x2 y0 y1 y2 Nx Ny)).
+have Hb2 : Rabs (nth 0 bb 2) <= 4 * (u * u).
+  have Hb2eq : nth 0 bb 2 = RND (x0 * y1) + RND (x1 * y0)
+      - RND (RND (x0 * y1) + RND (x1 * y0)).
+    rewrite /bb (@vecSum3 p Hp2 choice choice_sym _ _ _
+      (generic_format_round _ _ _ _) (generic_format_round _ _ _ _)
+      (generic_format_round _ _ _ _)) /=; ring.
+  by rewrite Hb2eq; apply: (@b2_bound p Hp2 choice x0 x1 x2 y0 y1 y2 Nx Ny).
+have Hc8 : Rabs c <= 8 * (u * u)
+  := @c_bound p Hp2 Hp6 choice _ _ _ Hb2 (@x1y1_bound p x0 x1 x2 y0 y1 y2 Nx
+       Ny).
+have Hs3b : Rabs (RND (c + z3)) <= 20 * (u * u)
+  := @s3_bound p Hp2 Hp6 choice _ _ Hc8 Hz3ub.
+have Hb01b : Rabs (nth 0 bb 0 + nth 0 bb 1) <= 11 * u.
+  rewrite Hb01.
+  have := Rabs_triang (RND (x0 * y0 - RND (x0 * y0)))
+                      (RND (RND (x0 * y1) + RND (x1 * y0))); lra.
+(* [|sumR e| < 5], so [|r0| <= 5] and a fourth nonzero P-nonoverlapping limb  *)
+(* would be [< 8u^3] -- yet a nonzero multiple of [8u^3].  Contradiction.     *)
+have Hsum4 : Rabs (sumR e) < 5.
+  rewrite Hsume.
+  have -> : RND (x0 * y0) + nth 0 bb 0 + nth 0 bb 1 + RND (c + z3)
+      = RND (x0 * y0) + (nth 0 bb 0 + nth 0 bb 1) + RND (c + z3) by ring.
+  set S := nth 0 bb 0 + nth 0 bb 1.
+  have T1 := Rabs_triang (RND (x0 * y0) + S) (RND (c + z3)).
+  have T2 := Rabs_triang (RND (x0 * y0)) S.
+  have Hz00pa : Rabs (RND (x0 * y0)) < 4 by rewrite Rabs_pos_eq; lra.
+  have HS : Rabs S <= 11 * u by exact: Hb01b.
+  clear -T1 T2 Hz00pa HS Hs3b Hu0 Hu64; nra.
+have Hsvse : Rabs (sumR (vseb e)) < 5 by rewrite Hsumeq.
+have Hstep : forall (i : nat) (K : Z), nth 0 (vseb e) i.+1 <> 0 ->
+    (i.+1 < size (vseb e))%N -> Rabs (nth 0 (vseb e) i) < pow K ->
+    Rabs (nth 0 (vseb e) i.+1) < pow (K - p).
+  move=> i K Hn1 Hlt HK.
+  have [Hz|Hb] := Pno i Hlt; first by case: Hn1.
+  apply: (Rlt_le_trans _ _ _ Hb).
+  have Hni : nth 0 (vseb e) i <> 0.
+    move=> H0; move: Hb; rewrite H0 ulp_FLX_0 => Hb'.
+    have := Rabs_pos (nth 0 (vseb e) i.+1); lra.
+  rewrite ulp_neq_0 //; apply: bpow_le.
+  rewrite Hcexp.
+  suff : (mag beta (nth 0%R (vseb e) i) <= K)%Z by lia.
+  by apply: mag_le_bpow.
+have Hn3 : nth 0 (vseb e) 3 = 0.
+  case: (Req_dec (nth 0 (vseb e) 0) 0) => [Hr0|Hr0n].
+    have H1 := @nth_step_zero p Hp2 (vseb e) 0 Pno Fvse Hr0.
+    have H2 := @nth_step_zero p Hp2 (vseb e) 1 Pno Fvse H1.
+    exact: (@nth_step_zero p Hp2 (vseb e) 2 Pno Fvse H2).
+  case: (Req_dec (nth 0 (vseb e) 3) 0) => [//|Hn3n].
+  have Hn2n : nth 0 (vseb e) 2 <> 0
+    by move=> H; apply: Hn3n; apply: (@nth_step_zero p Hp2 (vseb e) 2 Pno Fvse
+      H).
+  have Hn1n : nth 0 (vseb e) 1 <> 0
+    by move=> H; apply: Hn2n; apply: (@nth_step_zero p Hp2 (vseb e) 1 Pno Fvse
+      H).
+  have Hsz3 : (3 < size (vseb e))%N
+    by rewrite ltnNge; apply/negP => Hge; apply: Hn3n; rewrite nth_default.
+  have Hsz2 : (2 < size (vseb e))%N by apply: ltn_trans Hsz3.
+  have Hsz1 : (1 < size (vseb e))%N by apply: ltn_trans Hsz2.
+  have Hr08 : Rabs (nth 0 (vseb e) 0) < pow 3.
+    have Hlow := @sumR_ufp_lower p Hp2 (vseb e) Pno Fvse Hr0n.
+    have HU := ufp_gt_0 (nth 0 (vseb e) 0).
+    have Hufp8 : ufp (nth 0 (vseb e) 0) < pow 3.
+      have Hp38 : pow 3 = 8 by rewrite /= /Z.pow_pos /=; lra.
+      clear -Hlow Hsvse Hu0 Hu64 HU Hp38; nra.
+    apply: (Rlt_le_trans _ _ _ (bpow_mag_gt beta (nth 0 (vseb e) 0))).
+    apply: bpow_le.
+    by move: Hufp8; rewrite /ufp => H; have := lt_bpow beta _ _ H; lia.
+  have Hm1 := Hstep 0%N (3%Z) Hn1n Hsz1 Hr08.
+  have Hm2 := Hstep 1%N (3 - p)%Z Hn2n Hsz2 Hm1.
+  have Hm3 := Hstep 2%N (3 - p - p)%Z Hn3n Hsz3 Hm2.
+  have Hge : pow g <= Rabs (nth 0 (vseb e) 3).
+    apply: is_imul_pow_le_abs; last exact: Hn3n.
+    by apply: Ivse; apply: mem_nth.
+  have Hpg : (3 - p - p - p = g)%Z by rewrite /g; lia.
+  by rewrite Hpg in Hm3; lra.
+apply: (@small_head_zero p Hp2).
+- exact: Pnonoverlap_drop.
+- by move=> z /mem_drop; apply: Fvse.
+- by rewrite nth_drop addn0.
+Qed.
+
+(* [eps5 <> 0] forces one of the four small-term cases.                       *)
+Lemma eps5nzF_forces_small x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  let c := RND (nth 0 bb 2 + x1 * y1) in
+  let z3 := RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+             + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)) in
+  let e := vecSum
+    [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1; RND (c + z3)] in
+  sumR (vseb e) - sumR (vsebK 3 e) <> 0 ->
+  [\/ Rabs y2 < u * u, Rabs x2 < u * u, Rabs c < 4 * (u * u) | Rabs z3 < 4 * (u
+    * u)].
+Proof.
+move=> Hc Nx Ny bb c z3 e HE5.
+case: (Rlt_le_dec (Rabs y2) (u * u)) => Hy2; first by apply: Or41.
+case: (Rlt_le_dec (Rabs x2) (u * u)) => Hx2; first by apply: Or42.
+case: (Rlt_le_dec (Rabs c) (4 * (u * u))) => Hcb; first by apply: Or43.
+case: (Rlt_le_dec (Rabs z3) (4 * (u * u))) => Hz3b; first by apply: Or44.
+by case: HE5; apply: (eps5F_zero_all_big Hc Nx Ny).
+Qed.
+
+(* In any of the four small cases the numerator drops from [44u^3 - 11.9u^4]  *)
+(* to [42u^3 - 11.9u^4]: one of [eps1..eps4] halves to [2u^3].                *)
+Lemma eps5nzF_numerator x0 x1 x2 y0 y1 y2 :
+  tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  let c := RND (nth 0 bb 2 + x1 * y1) in
+  let z3 := RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+             + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)) in
+  let e := vecSum
+    [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1; RND (c + z3)] in
+  [\/ Rabs y2 < u * u, Rabs x2 < u * u, Rabs c < 4 * (u * u) | Rabs z3 < 4 * (u
+    * u)] ->
+  Rabs ((x0 + x1 + x2) * (y0 + y1 + y2) - sumR e)
+    <= 42 * (u * u * u) - 119 / 10 * (u * u * u * u).
+Proof.
+move=> Nx Ny bb c z3 e Hdisj.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := @u_le_64 p Hp6.
+have [[Fx0 Fx1 Fx2] Hx0l Hx0r Hx1o Hx2o] := Nx.
+have [[Fy0 Fy1 Fy2] Hy0l Hy0r Hy1o Hy2o] := Ny.
+set z10m := RND (x1 * y0 - RND (x1 * y0)).
+set z01m := RND (x0 * y1 - RND (x0 * y1)).
+set z31 := RND (z10m + x0 * y2).
+set z32 := RND (z01m + x2 * y0).
+have Hz10m : Rabs z10m <= 2 * (u * u).
+  rewrite /z10m round_generic;
+    first by apply: (@z10m_bound p Hp2 choice x0 x1 x2 y0 y1 y2 Nx Ny).
+  rewrite (_ : x1 * y0 - RND (x1 * y0) = -(RND (x1 * y0) - x1 * y0)); last by
+    ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hz01m : Rabs z01m <= 2 * (u * u).
+  rewrite /z01m round_generic;
+    first by apply: (@z01m_bound p Hp2 choice x0 x1 x2 y0 y1 y2 Nx Ny).
+  rewrite (_ : x0 * y1 - RND (x0 * y1) = -(RND (x0 * y1) - x0 * y1)); last by
+    ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hx0y2 := @x0y2_bound p Hp2 x0 x1 x2 y0 y1 y2 Nx Ny.
+have Hx2y0 := @x2y0_bound p Hp2 x0 x1 x2 y0 y1 y2 Nx Ny.
+have Hx1y1 := @x1y1_bound p x0 x1 x2 y0 y1 y2 Nx Ny.
+have Hz31 := @z31_bound p Hp2 Hp6 choice _ _ _ Hz10m Hx0y2.
+have Hz32 := @z32_bound p Hp2 Hp6 choice _ _ _ Hz01m Hx2y0.
+have Hz3b := @z3_bound p Hp2 Hp6 choice _ _ Hz31 Hz32.
+have Hb2 : Rabs (nth 0 bb 2) <= 4 * (u * u).
+  have Hb2eq : nth 0 bb 2 = RND (x0 * y1) + RND (x1 * y0)
+      - RND (RND (x0 * y1) + RND (x1 * y0)).
+    rewrite /bb (@vecSum3 p Hp2 choice choice_sym _ _ _
+      (generic_format_round _ _ _ _) (generic_format_round _ _ _ _)
+      (generic_format_round _ _ _ _)) /=; ring.
+  by rewrite Hb2eq; apply: (@b2_bound p Hp2 choice x0 x1 x2 y0 y1 y2 Nx Ny).
+have Hc8 : Rabs c <= 8 * (u * u)
+  by apply: (@c_bound p Hp2 Hp6 choice _ _ _ Hb2 Hx1y1).
+have Hdecomp := @sumR_eF_decomp x0 x1 x2 y0 y1 y2
+  (RND (x0 * y0)) (RND (x0 * y0 - RND (x0 * y0)))
+  (RND (x0 * y1)) z01m (RND (x1 * y0)) z10m bb c z31 z32 z3 (RND (c + z3))
+  Fx0 Fx1 Fy0 Fy1 erefl erefl erefl erefl erefl erefl erefl erefl erefl.
+have -> : (x0 + x1 + x2) * (y0 + y1 + y2) - sumR e
+    = (x1 * y2 + x2 * y1 + x2 * y2) + (z10m + x0 * y2 - z31)
+      + (z01m + x2 * y0 - z32) + (z31 + z32 - z3)
+      + (nth 0 bb 2 + x1 * y1 - c) + (c + z3 - RND (c + z3))
+  by exact: Hdecomp.
+have He0 := @eps0_bound p Hp2 Hp6 x0 x1 x2 y0 y1 y2 Nx Ny.
+have He1 := @eps1_bound p Hp2 choice _ _ _ Hz10m Hx0y2.
+have He2 := @eps2_bound p Hp2 choice _ _ _ Hz01m Hx2y0.
+have He3 := @eps3_bound p Hp2 choice _ _ Hz31 Hz32.
+have He4 := @eps4_bound p Hp2 choice _ _ _ Hb2 Hx1y1.
+have Hep4 := @epsp4_bound c z3 Hc8 Hz3b.
+have T0 := Rabs_triang ((x1 * y2 + x2 * y1 + x2 * y2) + (z10m + x0 * y2 - z31)
+      + (z01m + x2 * y0 - z32) + (z31 + z32 - z3)
+      + (nth 0 bb 2 + x1 * y1 - c)) (c + z3 - RND (c + z3)).
+have T1 := Rabs_triang ((x1 * y2 + x2 * y1 + x2 * y2) + (z10m + x0 * y2 - z31)
+      + (z01m + x2 * y0 - z32) + (z31 + z32 - z3)) (nth 0 bb 2 + x1 * y1 - c).
+have T2 := Rabs_triang ((x1 * y2 + x2 * y1 + x2 * y2) + (z10m + x0 * y2 - z31)
+      + (z01m + x2 * y0 - z32)) (z31 + z32 - z3).
+have T3 := Rabs_triang ((x1 * y2 + x2 * y1 + x2 * y2) + (z10m + x0 * y2 - z31))
+      (z01m + x2 * y0 - z32).
+have T4 := Rabs_triang (x1 * y2 + x2 * y1 + x2 * y2) (z10m + x0 * y2 - z31).
+rewrite -/z31 in He1.
+rewrite -/z32 in He2.
+rewrite -/z31 -/z32 -/z3 in He3.
+rewrite -/c in He4.
+have Hp2m3 : pow (2 - 3 * p) = 4 * (u * u * u).
+  rewrite (_ : (2 - 3 * p = 2 + - (3 * p))%Z); last by lia.
+  by rewrite bpow_plus u3_pow /= /Z.pow_pos /=; lra.
+(* Reusable [Hred]: a rounded value below [4u^2] has error at most [2u^3].    *)
+have Hred : forall t : R, Rabs (RND t) < 4 * (u * u) ->
+    Rabs (t - RND t) <= 2 * (u * u * u).
+  move=> t Hlt.
+  have Herr := @error_le_half_ulp_round beta (FLX_exp p)
+    (FLX_exp_valid p) (FLX_exp_monotone p) choice t.
+  have Hulp : ulp (RND t) <= 4 * (u * u * u).
+    case: (Req_dec (RND t) 0) => [Hz|Hn0].
+      rewrite Hz ulp_FLX_0; clear -Hu0; nra.
+    rewrite ulp_neq_0 //.
+    apply: (Rle_trans _ (pow (2 - 3 * p))); last by rewrite Hp2m3; apply:
+      Rle_refl.
+    have Hmag : (mag beta (RND t) <= 2 - 2 * p)%Z.
+      by apply: mag_le_bpow; [exact: Hn0 | rewrite pow_2m2p; exact: Hlt].
+    apply: bpow_le.
+    have Hcx : cexp (RND t) = (mag beta (RND t) - p)%Z
+      by rewrite /cexp /fexp /FLX_exp.
+    rewrite Hcx; lia.
+  have Hpp : Prec_gt_0 p by rewrite /Prec_gt_0; lia.
+  move: (Herr Hpp); rewrite Rabs_minus_sym; lra.
+(* Each of the four small cases halves one [eps_i] to [2u^3]: 44 - 2 = 42.    *)
+case: Hdisj => [Hy2 | Hx2 | Hcs | Hz3s].
+- have He1' : Rabs (z10m + x0 * y2 - z31) <= 2 * (u * u * u).
+    have Hw : Rabs (z10m + x0 * y2) < pow (2 - 2 * p).
+      rewrite pow_2m2p.
+      have Hxy : Rabs (x0 * y2) < 2 * (u * u).
+        rewrite Rabs_mult (Rabs_pos_eq x0); last lra.
+        clear -Hx0l Hx0r Hy2 Hu0; have := Rabs_pos y2; nra.
+      have H3 := Rabs_triang z10m (x0 * y2); clear -Hz10m Hxy H3; lra.
+    have Herr := @round_err_le p Hp2 choice _ _ Hw.
+    move: Herr; rewrite (_ : (2 - 2 * p - p = 2 - 3 * p)%Z) ?Hp2m3 -/z31;
+      last by lia.
+    lra.
+  lra.
+- have He2' : Rabs (z01m + x2 * y0 - z32) <= 2 * (u * u * u).
+    have Hw : Rabs (z01m + x2 * y0) < pow (2 - 2 * p).
+      rewrite pow_2m2p.
+      have Hxy : Rabs (x2 * y0) < 2 * (u * u).
+        rewrite Rabs_mult (Rabs_pos_eq y0); last lra.
+        clear -Hx2 Hy0l Hy0r Hu0; have := Rabs_pos x2; nra.
+      have H3 := Rabs_triang z01m (x2 * y0); clear -Hz01m Hxy H3; lra.
+    have Herr := @round_err_le p Hp2 choice _ _ Hw.
+    move: Herr; rewrite (_ : (2 - 2 * p - p = 2 - 3 * p)%Z) ?Hp2m3 -/z32;
+      last by lia.
+    lra.
+  lra.
+- have He4' : Rabs (nth 0 bb 2 + x1 * y1 - c) <= 2 * (u * u * u).
+    by apply: (Hred (nth 0 bb 2 + x1 * y1)); rewrite -/c.
+  lra.
+- have He3' : Rabs (z31 + z32 - z3) <= 2 * (u * u * u).
+    by apply: (Hred (z31 + z32)); rewrite -/z3.
+  lra.
+Qed.
+
+(* Error assembly for the [eps5 <> 0] branch: the reduced numerator plus the  *)
+(* full [eps5] still fits [44u^3 + 176u^4] (with far more [u^4] slack than    *)
+(* Algorithm 9's [28u^3 + 107u^4]).                                           *)
+Lemma error_assembly_eps5_fast (num s5 sm xy : R) :
+  Rabs num <= 42 * (u * u * u) - 119 / 10 * (u * u * u * u) ->
+  Rabs s5 <= (2 * (u * u * u) + 42 / 10 * (u * u * u * u)) * Rabs sm ->
+  Rabs sm <= Rabs xy + (42 * (u * u * u) - 119 / 10 * (u * u * u * u)) ->
+  1 - 4 * u <= Rabs xy ->
+  Rabs (s5 + num) <= (44 * (u * u * u) + 176 * (u * u * u * u)) * Rabs xy.
+Proof.
+move=> Hnum Hs5 Hsm Hxy.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := @u_le_64 p Hp6.
+have Ht := Rabs_triang s5 num.
+have Hxy0 : 0 <= Rabs xy by apply: Rabs_pos.
+have Hsm0 : 0 <= Rabs sm by apply: Rabs_pos.
+have Hs5' : Rabs s5 <= (2 * (u * u * u) + 42 / 10 * (u * u * u * u))
+    * (Rabs xy + (42 * (u * u * u) - 119 / 10 * (u * u * u * u))).
+  apply: (Rle_trans _ _ _ Hs5); apply: Rmult_le_compat_l; [nra | exact: Hsm].
+move: Ht Hnum Hs5' Hxy; set r := Rabs xy; set a := Rabs (s5 + num);
+  set b := Rabs s5; set d := Rabs num.
+move=> Ht Hnum Hs5' Hxy.
+have Hr : (42 * (u*u*u) + 1718/10 * (u*u*u*u)) * (1 - 4*u)
+    <= (42 * (u*u*u) + 1718/10 * (u*u*u*u)) * r
+  by apply: Rmult_le_compat_l; [nra | lra].
+have Hpoly : (2*(u*u*u) + 42/10*(u*u*u*u) + 1) * (42*(u*u*u) - 119/10*(u*u*u*u))
+    <= (42*(u*u*u) + 1718/10*(u*u*u*u)) * (1 - 4*u) by clear -Hu0 Hu64; nra.
+clear -Ht Hnum Hs5' Hr Hpoly; nra.
+Qed.
+
+(* The [eps5 <> 0] branch of the error bound.                                 *)
+Lemma ThreeProdFast_error_eps5nz x0 x1 x2 y0 y1 y2 :
+  ties_to_even choice -> tw_norm x0 x1 x2 -> tw_norm y0 y1 y2 ->
+  let bb := vecSum
+    [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 * y0)] in
+  let e := vecSum
+    [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1;
+        RND (RND (nth 0 bb 2 + x1 * y1)
+           + RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+                + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))] in
+  sumR (vseb e) - sumR (vsebK 3 e) <> 0 ->
+  Rabs (sumR (vsebK 3 e) - (x0 + x1 + x2) * (y0 + y1 + y2)) <=
+     (44 * (u * u * u) + 176 * (u * u * u * u)) *
+       Rabs ((x0 + x1 + x2) * (y0 + y1 + y2)).
+Proof.
+move=> Hc Nx Ny bb e HE5.
+have Hsz4 : size e = 4%N by rewrite /e size_vecSum.
+have Fbb : {in bb, forall z, format z}.
+  apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
+  by move=> /orP[/eqP->|/orP[/eqP->|/eqP->]]; apply: generic_format_round.
+have Fnthbb : forall i, format (nth 0 bb i).
+  move=> i; case: (ltnP i (size bb)) => Hi;
+    last by rewrite nth_default //; exact: generic_format_0.
+  by apply: Fbb; apply: mem_nth.
+have Fe : {in e, forall z, format z}.
+  apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
+  move=> /orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/eqP->]]];
+    try apply: generic_format_round; apply: Fnthbb.
+have Fno : Fnonoverlap e
+  by rewrite /e /bb; apply: (innerF_Fnonoverlap Hc Nx Ny).
+have Hle : (Z.of_nat (size e) <= p + 1)%Z by rewrite Hsz4; lia.
+have [Pno Hsumeq] := @vseb_Pnonoverlap p Hp2 choice choice_sym e Hle Fe Fno.
+have Fvse : {in vseb e, forall z, format z}
+  by apply: (@format_vseb p Hp2 choice e Fe).
+have Hdisj := eps5nzF_forces_small Hc Nx Ny HE5.
+have Hnum := eps5nzF_numerator Nx Ny Hdisj.
+have Hnum2 : Rabs ((x0 + x1 + x2) * (y0 + y1 + y2) - sumR e)
+    <= 42 * (u * u * u) - 119 / 10 * (u * u * u * u) by exact: Hnum.
+have Hs5 := @eps5_bound p Hp2 choice e Pno Fvse (@u_le_64 p Hp6).
+have Hsm : Rabs (sumR (vseb e))
+    <= Rabs ((x0 + x1 + x2) * (y0 + y1 + y2))
+       + (42 * (u * u * u) - 119 / 10 * (u * u * u * u)).
+  rewrite Hsumeq.
+  have H1 : sumR e = (x0 + x1 + x2) * (y0 + y1 + y2)
+      + (sumR e - (x0 + x1 + x2) * (y0 + y1 + y2)) by ring.
+  rewrite {1}H1; apply: (Rle_trans _ _ _ (Rabs_triang _ _)).
+  have -> : Rabs (sumR e - (x0 + x1 + x2) * (y0 + y1 + y2))
+      = Rabs ((x0 + x1 + x2) * (y0 + y1 + y2) - sumR e) by rewrite
+        Rabs_minus_sym.
+  move: Hnum2; lra.
+have Hident : sumR (vsebK 3 e) - (x0 + x1 + x2) * (y0 + y1 + y2)
+    = -((sumR (vseb e) - sumR (vsebK 3 e))
+        + ((x0 + x1 + x2) * (y0 + y1 + y2) - sumR e)).
+  by rewrite Hsumeq; ring.
+rewrite Hident Rabs_Ropp.
+apply: (@error_assembly_eps5_fast _ _ (sumR (vseb e))).
+- exact: Hnum2.
+- exact: Hs5.
+- exact: Hsm.
+- exact: (@xy_ge p Hp2 Hp6 x0 x1 x2 y0 y1 y2 Nx Ny).
+Qed.
+
+(* Section 6.4, normalised (paper WLOG [1 <= x0, y0 < 2]).                    *)
+Lemma ThreeProdFast_error_norm x y :
+  ties_to_even choice -> tw_normP x -> tw_normP y ->
+  Rabs (TWval (ThreeProdFast x y) - TWval x * TWval y) <=
+     (44 * (u * u * u) + 176 * (u * u * u * u)) * Rabs (TWval x * TWval y).
+Proof.
+move=> Hc Nx Ny.
+case: x Nx => x0 x1 x2 Nx.
+case: y Ny => y0 y1 y2 Ny.
+have Nx' : tw_norm x0 x1 x2 by exact: Nx.
+have Ny' : tw_norm y0 y1 y2 by exact: Ny.
+rewrite (ThreeProdFast_norm_eq Hc Nx' Ny').
+set bb := vecSum [:: RND (x0 * y0 - RND (x0 * y0)); RND (x0 * y1); RND (x1 *
+  y0)].
+set e := vecSum [:: RND (x0 * y0); nth 0 bb 0; nth 0 bb 1;
+  RND (RND (nth 0 bb 2 + x1 * y1)
+     + RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+          + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))].
+have HTW3 : TWval (TWR (nth 0 (vseb e) 0) (nth 0 (vseb e) 1) (nth 0 (vseb e) 2))
+    = sumR (vsebK 3 e).
+  rewrite /TWval /vsebK.
+  case E : (vseb e) => [|v0 [|v1 [|v2 r]]] /=.
+  - ring.
+  - ring.
+  - ring.
+  - rewrite take0 /=; ring.
+rewrite HTW3.
+have HXY : TWval (TWR x0 x1 x2) * TWval (TWR y0 y1 y2)
+    = (x0 + x1 + x2) * (y0 + y1 + y2) by rewrite /TWval.
+rewrite HXY.
+case: (Req_dec (sumR (vseb e) - sumR (vsebK 3 e)) 0) => [HE5z|HE5n]; last first.
+  by apply: (ThreeProdFast_error_eps5nz Hc Nx' Ny' HE5n).
+have [[Fx0 Fx1 Fx2] _ _ _ _] := Nx'.
+have [[Fy0 Fy1 Fy2] _ _ _ _] := Ny'.
+have Hz10m : Rabs (RND (x1 * y0 - RND (x1 * y0))) <= 2 * (u * u).
+  rewrite round_generic;
+    first by apply: (@z10m_bound p Hp2 choice x0 x1 x2 y0 y1 y2 Nx' Ny').
+  rewrite (_ : x1 * y0 - RND (x1 * y0) = -(RND (x1 * y0) - x1 * y0)); last by
+    ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hz01m : Rabs (RND (x0 * y1 - RND (x0 * y1))) <= 2 * (u * u).
+  rewrite round_generic;
+    first by apply: (@z01m_bound p Hp2 choice x0 x1 x2 y0 y1 y2 Nx' Ny').
+  rewrite (_ : x0 * y1 - RND (x0 * y1) = -(RND (x0 * y1) - x0 * y1)); last by
+    ring.
+  by apply: generic_format_opp; exact: format_err_mul.
+have Hx0y2 := @x0y2_bound p Hp2 x0 x1 x2 y0 y1 y2 Nx' Ny'.
+have Hx2y0 := @x2y0_bound p Hp2 x0 x1 x2 y0 y1 y2 Nx' Ny'.
+have Hx1y1 := @x1y1_bound p x0 x1 x2 y0 y1 y2 Nx' Ny'.
+have Hz31 := @z31_bound p Hp2 Hp6 choice _ _ _ Hz10m Hx0y2.
+have Hz32 := @z32_bound p Hp2 Hp6 choice _ _ _ Hz01m Hx2y0.
+have Hz3 := @z3_bound p Hp2 Hp6 choice _ _ Hz31 Hz32.
+have Hb2 : Rabs (nth 0 bb 2) <= 4 * (u * u).
+  have Hb2eq : nth 0 bb 2 = RND (x0 * y1) + RND (x1 * y0)
+      - RND (RND (x0 * y1) + RND (x1 * y0)).
+    rewrite /bb (@vecSum3 p Hp2 choice choice_sym _ _ _
+      (generic_format_round _ _ _ _) (generic_format_round _ _ _ _)
+      (generic_format_round _ _ _ _)) /=; ring.
+  by rewrite Hb2eq;
+     apply: (@b2_bound p Hp2 choice x0 x1 x2 y0 y1 y2 Nx' Ny').
+have Hc8 : Rabs (RND (nth 0 bb 2 + x1 * y1)) <= 8 * (u * u)
+  by apply: (@c_bound p Hp2 Hp6 choice _ _ _ Hb2 Hx1y1).
+have Hsz4 : size e = 4%N by rewrite /e size_vecSum.
+have Fbb : {in bb, forall z, format z}.
+  apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
+  by move=> /orP[/eqP->|/orP[/eqP->|/eqP->]]; apply: generic_format_round.
+have Fnthbb : forall i, format (nth 0 bb i).
+  move=> i; case: (ltnP i (size bb)) => Hi;
+    last by rewrite nth_default //; exact: generic_format_0.
+  by apply: Fbb; apply: mem_nth.
+have Fe : {in e, forall z, format z}.
+  apply: (@format_vecSum p Hp2 choice) => z; rewrite !inE.
+  move=> /orP[/eqP->|/orP[/eqP->|/orP[/eqP->|/eqP->]]];
+    try apply: generic_format_round; apply: Fnthbb.
+have Fno : Fnonoverlap e
+  by rewrite /e /bb; apply: (innerF_Fnonoverlap Hc Nx' Ny').
+have Hle : (Z.of_nat (size e) <= p + 1)%Z by rewrite Hsz4; lia.
+have [_ Hsumeq] := @vseb_Pnonoverlap p Hp2 choice choice_sym e Hle Fe Fno.
+have Hdecomp := @sumR_eF_decomp x0 x1 x2 y0 y1 y2
+  (RND (x0 * y0)) (RND (x0 * y0 - RND (x0 * y0)))
+  (RND (x0 * y1)) (RND (x0 * y1 - RND (x0 * y1)))
+  (RND (x1 * y0)) (RND (x1 * y0 - RND (x1 * y0)))
+  bb
+  (RND (nth 0 bb 2 + x1 * y1))
+  (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2))
+  (RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))
+  (RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+      + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0)))
+  (RND (RND (nth 0 bb 2 + x1 * y1)
+      + RND (RND (RND (x1 * y0 - RND (x1 * y0)) + x0 * y2)
+           + RND (RND (x0 * y1 - RND (x0 * y1)) + x2 * y0))))
+  Fx0 Fx1 Fy0 Fy1 erefl erefl erefl erefl erefl erefl erefl erefl erefl.
+have Hk3 : sumR (vsebK 3 e) = sumR e by rewrite -Hsumeq; lra.
+rewrite Hk3.
+apply: error_assembly_fast; last by apply: (@xy_ge p Hp2 Hp6 x0 x1 x2 y0 y1 y2
+  Nx' Ny').
+rewrite Rabs_minus_sym /e Hdecomp.
+apply: eps04p_sum.
+- exact: (@eps0_bound p Hp2 Hp6 x0 x1 x2 y0 y1 y2 Nx' Ny').
+- exact: (@eps1_bound p Hp2 choice _ _ _ Hz10m Hx0y2).
+- exact: (@eps2_bound p Hp2 choice _ _ _ Hz01m Hx2y0).
+- exact: (@eps3_bound p Hp2 choice _ _ Hz31 Hz32).
+- exact: (@eps4_bound p Hp2 choice _ _ _ Hb2 Hx1y1).
+- exact: (@epsp4_bound _ _ Hc8 Hz3).
+Qed.
+
+(* ===========================================================================*)
 (*  Correctness, part 2: relative error of [ThreeProdFast] is                 *)
 (*  [<= 44u^3 + 176u^4].                                                      *)
 (*                                                                            *)
@@ -799,6 +1584,55 @@ Lemma ThreeProdFast_error x y :
   Rabs (TWval (ThreeProdFast x y) - TWval x * TWval y) <=
      (44 * (u * u * u) + 176 * (u * u * u * u)) * Rabs (TWval x * TWval y).
 Proof.
-Admitted.
+move=> Hc Hx Hy.
+set C := (44 * _ + _).
+case: (Req_dec (tw0 x) 0) => [x0z | x0n].
+  rewrite (@isTW_zero_lead p Hp2 x Hx x0z) ThreeProdFast_0l.
+  have -> : TWval (TWR 0 0 0) = 0 by rewrite /TWval; ring.
+  by rewrite Rmult_0_l Rminus_0_r Rabs_R0 Rmult_0_r; apply: Rle_refl.
+case: (Req_dec (tw0 y) 0) => [y0z | y0n].
+  rewrite (@isTW_zero_lead p Hp2 y Hy y0z) ThreeProdFast_0r.
+  have -> : TWval (TWR 0 0 0) = 0 by rewrite /TWval; ring.
+  by rewrite Rmult_0_r Rminus_0_r Rabs_R0 Rmult_0_r; apply: Rle_refl.
+have [cx _ [Hxp Hxn]] := @isTW_normalize p Hp2 choice x Hx x0n.
+have [cy _ [Hyp Hyn]] := @isTW_normalize p Hp2 choice y Hy y0n.
+have Hxsg : 0 < tw0 x \/ tw0 x < 0 by lra.
+have Hysg : 0 < tw0 y \/ tw0 y < 0 by lra.
+apply: (@error_scale_transfer (cx + cy)%Z (TWval (ThreeProdFast x y))
+                              (TWval x * TWval y) C).
+case: Hxsg => Hxs; case: Hysg => Hys.
+- have Hn := ThreeProdFast_error_norm Hc (Hxp Hxs) (Hyp Hys).
+  rewrite ThreeProdFast_scale !TWval_scale in Hn.
+  rewrite (_ : TWval x * pow cx * (TWval y * pow cy) = TWval x * TWval y * pow
+    (cx + cy)) in Hn; last by rewrite bpow_plus; ring.
+  exact Hn.
+- have Hn := ThreeProdFast_error_norm Hc (Hxp Hxs) (Hyn Hys).
+  rewrite ThreeProdFast_scale ThreeProdFast_opp_r !TWval_scale !TWval_opp in Hn.
+  move: Hn.
+  have E : TWval x * pow cx * (- TWval y * pow cy) = - (TWval x * TWval y * pow
+    (cx + cy)) by rewrite bpow_plus; ring.
+  rewrite E.
+  have E2 : - TWval (ThreeProdFast x y) * pow (cx + cy) - - (TWval x * TWval y *
+    pow (cx + cy)) = - (TWval (ThreeProdFast x y) * pow (cx + cy) - TWval x *
+    TWval y * pow (cx + cy)) by ring.
+  by rewrite E2 !Rabs_Ropp.
+- have Hn := ThreeProdFast_error_norm Hc (Hxn Hxs) (Hyp Hys).
+  rewrite ThreeProdFast_scale ThreeProdFast_opp !TWval_scale !TWval_opp in Hn.
+  move: Hn.
+  have E : - TWval x * pow cx * (TWval y * pow cy) = - (TWval x * TWval y * pow
+    (cx + cy)) by rewrite bpow_plus; ring.
+  rewrite E.
+  have E2 : - TWval (ThreeProdFast x y) * pow (cx + cy) - - (TWval x * TWval y *
+    pow (cx + cy)) = - (TWval (ThreeProdFast x y) * pow (cx + cy) - TWval x *
+    TWval y * pow (cx + cy)) by ring.
+  by rewrite E2 !Rabs_Ropp.
+- have Hn := ThreeProdFast_error_norm Hc (Hxn Hxs) (Hyn Hys).
+  have Hxy : ThreeProdFast (negTW x) (negTW y) = ThreeProdFast x y.
+    by rewrite ThreeProdFast_opp ThreeProdFast_opp_r negTW_id.
+  rewrite ThreeProdFast_scale Hxy !TWval_scale !TWval_opp in Hn.
+  rewrite (_ : - TWval x * pow cx * (- TWval y * pow cy) = TWval x * TWval y *
+    pow (cx + cy)) in Hn; last by rewrite bpow_plus; ring.
+  exact Hn.
+Qed.
 
 End SecThreeProdFast.

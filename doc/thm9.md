@@ -156,9 +156,16 @@ later, purely operational refinement.
 | `h₀` | computed, `h₀ ← 2 − h₀,₁` (exact, Sterbenz) | virtual constant `1 − 2u` |
 
 The two saved operations are exactly the `2Prod(x₀,a)` head and the `2 − h₀,₁`
-of the old version. We state `paper3`'s constants; the recovered chain above
-must be checked to actually yield them (it is stated with slack, so the `u⁴`
-term is where any surprise will show up).
+of the old version.
+
+**Decision: the theorems state `paper3`'s bounds** — `11.5u³ + 1465u⁴` and
+`19u³ + 1502u⁴` (`ThreeReci_error`, `ThreeReciFast_error`). The old paper's
+chain is only the *route*; it is written with slack (its own `1473u⁴` /
+`1510u⁴`), so wherever it falls short of `1465`/`1502` the intermediate
+constants have to be tightened — the statement is not to be weakened to the old
+values. Only the `u⁴` terms are at stake: both papers agree on `11.5u³` and
+`19u³`, and the `u⁴` slack sits in the `1172u⁴` Newton residue and in the
+`(1 + 71u²)`/`(1 + 107u²)` factors, all of which are stated generously above.
 
 ## New ingredients (nothing like them in the development yet)
 

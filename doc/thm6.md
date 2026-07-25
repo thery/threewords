@@ -152,7 +152,7 @@ Mapping the sketch onto the development (`p`/`emin`-generic, `l = x₀…x₅`):
 | `\|sᵢ\| ≤ 2 ufp(x_{i−1})`, `\|sᵢ\| ≤ 4 ufp(xᵢ)` | **Qed** — `VecSum.vecSum_run_ufp` |
 | (per-step error bound, used by the case study) | **Qed** — `VecSum.vecSum_err_ufp` (`\|e_{i+1}\| ≤ 2u ufp(xᵢ)`) |
 | ties-to-even boundary tie needed by step 1 | **Qed** — `VecSum.RN_midpoint_even` |
-| "deduce conditions on `i`" + the three-way case study | **open** — `TWSum.vecSum_vseb_Pnonoverlap`, the project's only admit |
+| "deduce conditions on `i`" + the three-way case study | **Qed** — `Thm6.vecSum_vseb_Pnonoverlap` (the full case study lives in `code/coq/Thm6.v`) |
 
 Deviations from the paper that the development already had to make, and why —
 worth knowing before trusting the sketch's phrasing:
@@ -353,15 +353,22 @@ Work from §5, not from §2.
 
 ---
 
-### Known blocker
+### The blocker, and how it was closed
+
+**Resolved (2026-07-20, `code/coq/Thm6.v`, zero admits).** The route taken was
+the second of the two options below — a direct coupled `VecSum`+`VSEB` argument
+following the case study above, carried by a walk invariant (`vsebDom`) plus a
+grid invariant that rules out the tie (`RN_imul_no_tie`).  The paragraph is kept
+because it explains why the obvious route does *not* work.
 
 `VSEB.vsebAux_Pnonoverlap` re-establishes its invariant through `Fnonoverlap` at
 four points (`Fnonoverlap_TwoSum_merge`, `Fnonoverlap_head2`,
 `Fnonoverlap_TwoSum_err`, `vsebAux_head_lt`), so it cannot be applied to the
-`VecSum` output directly — that output is not F-nonoverlapping.  Closing the
-admit needs either a weaker invariant that the `VecSum` output *does* satisfy and
+`VecSum` output directly — that output is not F-nonoverlapping.  Closing it
+needed either a weaker invariant that the `VecSum` output *does* satisfy and
 VSEB still preserves (candidate: the factor-2 relaxation `|e_{i+1}| ≤ uls(eᵢ)`;
 the `CEThm6` witness has `|7/8| ≤ uls(−1) = 1` but `> ½ uls(−1)`), or a direct
-coupled `VecSum`+`VSEB` argument following the case study above.  Caution: under
+coupled `VecSum`+`VSEB` argument following the case study above — the latter is
+what `Thm6.v` does.  Caution: under
 the relaxed bound `|e| ≤ |ϵ|` becomes possible, so the `r = 0` branch is no
 longer vacuous and leading cancellation must be handled.

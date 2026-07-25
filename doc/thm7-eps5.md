@@ -1,5 +1,12 @@
 # Theorem 7 (Alg 9), §6.2 part 2 — the `ε₅ ≠ 0` error case
 
+> **STATUS (2026-07-25).** **COMPLETE — zero admits.** The obligations this note
+> maps out are all `Qed` in `code/coq/ThreeProd.v`: `ThreeProd_error_eps5nz`,
+> `eps5nz_forces_small`, `eps5nz_numerator`, `error_assembly_eps5` and the
+> all-big case `eps5_zero_all_big` (with the reusable grid machinery
+> `vsebAux_imul_forward` / `vseb_imul_forward`).  The same argument was then
+> re-instantiated for Algorithms 10, 11 and 12.
+
 This is the piece the published paper (`doc/paper3.pdf`) **omits** ("the error
 is shown not too large when `ε₅ ≠ 0`, details omitted"). The full argument
 survives in the older draft `doc/old-triplewors.pdf` as the proof of its

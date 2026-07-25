@@ -123,7 +123,7 @@ Links point at the Rocq definition/theorem. ✅ proved · 🚧 skeleton (definit
 | Alg | Paper object | Theorem | Status |
 |----:|--------------|---------|:------:|
 | 1 | Fast2Sum | [correctness](https://github.com/thery/threewords/blob/main/code/coq/Fast2Sum_robust_flx.v#L381) | ✅ |
-| 2 | [2Sum](https://github.com/thery/threewords/blob/main/code/coq/TwoSum.v#L67) | [correctness](https://github.com/thery/threewords/blob/main/code/coq/TwoSum.v#L465) | ✅ |
+| 2 | [2Sum](https://github.com/thery/threewords/blob/main/code/coq/TwoSum.v#L67) | [correctness](https://github.com/thery/threewords/blob/main/code/coq/TwoSum.v#L482) | ✅ |
 | 3 | [2Prod](https://github.com/thery/threewords/blob/main/code/coq/MULTmore.v#L149) | [correctness](https://github.com/thery/threewords/blob/main/code/coq/MULTmore.v#L152) | ✅ |
 | 4 | [VecSum](https://github.com/thery/threewords/blob/main/code/coq/VecSum.v#L110) | [Thm 1](https://github.com/thery/threewords/blob/main/code/coq/VecSum.v#L668) + [Cor 1](https://github.com/thery/threewords/blob/main/code/coq/VecSum.v#L855) | ✅ |
 | 5 | [VSEB](https://github.com/thery/threewords/blob/main/code/coq/VSEB.v#L118) | [Thm 2](https://github.com/thery/threewords/blob/main/code/coq/VSEB.v#L468) | ✅ |
@@ -135,7 +135,7 @@ Links point at the Rocq definition/theorem. ✅ proved · 🚧 skeleton (definit
 | 10 | [3Prod^fast (TW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdFast.v#L106) | [isTW](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdFast.v#L765) + [error](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdFast.v#L1581) | ✅ |
 | 11 | [3Prod^acc (DW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDW.v#L114) | [isTW](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDW.v#L175) + [Thm 8](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDW.v#L1220) | ✅ |
 | 12 | [3Prod^fast (DW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDWFast.v#L109) | [isTW](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDWFast.v#L157) + [error](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDWFast.v#L685) | ✅ |
-| 13 | 3Reci | Thm 9 | ❌ |
+| 13 | [3Reci](https://github.com/thery/threewords/blob/main/code/coq/ThreeReci.v#L136) | [isTW](https://github.com/thery/threewords/blob/main/code/coq/ThreeReci.v#L165) + [Thm 9 acc](https://github.com/thery/threewords/blob/main/code/coq/ThreeReci.v#L194) + [Thm 9 fast](https://github.com/thery/threewords/blob/main/code/coq/ThreeReci.v#L203) | 🚧 |
 | 14 | 3Div | Thm 10 | ❌ |
 | 15 | 3SqRt | Thm 11 | ❌ |
 
@@ -152,7 +152,7 @@ its own `Makefile` and `_CoqProject`, so it builds on its own with
 | File | Contents |
 |------|----------|
 | `Uls.v`       | `uls x`, the weight of the rightmost nonzero bit of a float, its 2‑adic valuation helpers, and the `is_imul` "multiple of a power of two" machinery. |
-| `TwoSum.v`    | The error-free transform 2Sum (Algorithm 2): exactness, the format and half-ulp magnitude of its two words, and the divisibility of its error. |
+| `TwoSum.v`    | The error-free transforms 2Sum (Algorithm 2) and `Fast2Sum` (Algorithm 1): exactness, the format and half-ulp magnitude of the two words, and the divisibility of the error. |
 | `Nonoverlap.v`| Separation predicates on sequences of floats: P-nonoverlapping (Priest, Def. 1), the pairwise-ulp order, magnitude-sortedness, and the list sum `sumR`. |
 | `TWR.v`       | Triple-word numbers `twR` (Def. 5): a P-nonoverlapping triplet of floats, its projectors and real value. |
 | `Merge.v`     | Merge two magnitude-sorted float sequences into one; preserves format, size and exact sum, and yields the pairwise-ulp order for two triple words. |
@@ -165,6 +165,7 @@ its own `Makefile` and `_CoqProject`, so it builds on its own with
 | `ThreeProdFast.v` | Algorithm 10 (3Prodᶠᵃˢᵗ₃,₃), the fast product of two triple words (8 operations and 1 test cheaper: the low word `e₄` of `s₃ = RN(c + z₃)` is dropped). Its two correctness results — `ThreeProdFast_isTW` (the result is a triple word) and `ThreeProdFast_error` (relative error `≤ 44u³ + 176u⁴`) — both proved, reusing Algorithm 9's Section-6.1 bounds, its four-case `inner_head_Fnonoverlap` and its `ε₀…ε₅` bounds verbatim; see `doc/alg10.md`. |
 | `ThreeProdDW.v` | Algorithm 11 (3Prodᵃᶜᶜ₂,₃), the product of a **double** word by a triple word — Algorithm 9 with `x₂ = 0`. Its two correctness results — `ThreeProdDW_isTW` (Theorem 7 at `x₂ = 0`) and `ThreeProdDW_error` (**paper Theorem 8**, relative error `≤ 10.5u³ + 39u⁴`) — both proved; the paper omits the proof of Theorem 8, recovered in `doc/thm8.md`; the paper omits the proof of Theorem 8, recovered in `doc/thm8.md`. |
 | `ThreeProdDWFast.v` | Algorithm 12 (3Prodᶠᵃˢᵗ₂,₃), the fast product of a double word by a triple word — Algorithm 10 with `x₂ = 0`. Its two correctness results — `ThreeProdDWFast_isTW` (Algorithm 10 at `x₂ = 0`) and `ThreeProdDWFast_error` (relative error `≤ 18u³ + 75u⁴`) — both proved; the paper omits the error proof, recovered in `doc/alg12.md`; see `doc/alg12.md`. |
+| `ThreeReci.v` | Algorithm 13 (3Reci), the **reciprocal** of a triple word by one Newton-Raphson step (`p ≥ 10`), generic in the DW × TW product it calls: `ThreeReci` uses Algorithm 11 and `ThreeReciFast` Algorithm 12. **Skeleton**: the definition is complete, its four results — `ThreeReci_isTW`, `ThreeReciFast_isTW`, `ThreeReci_error` (**paper Theorem 9**, relative error `≤ 11.5u³ + 1465u⁴`) and `ThreeReciFast_error` (`≤ 19u³ + 1502u⁴`) — are stated and admitted; the paper's proof is in unavailable supplementary material, so the plan is recovered from `doc/old-triplewors.pdf` §8 in `doc/thm9.md`. |
 
 ### `code/ocaml/`
 

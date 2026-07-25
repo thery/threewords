@@ -1065,6 +1065,39 @@ by apply: Hmul => //; apply: sub2TW_isTW.
 Qed.
 
 (* ===========================================================================*)
+(*  Towards Section 8.3: the two facts the head argument runs on              *)
+(*                                                                            *)
+(*  GENERIC, both of them -- [vecSum_head_sep] belongs in VecSum.v and        *)
+(*  [head_eq_1] in Uls.v/Nonoverlap.v; they are kept here until the head      *)
+(*  lemma lands, to avoid rebuilding the stack for a moving target.           *)
+(* ===========================================================================*)
+
+(* STEP 1 of the head argument, to be stated and proved in VecSum.v: the      *)
+(* first TWO limbs of a VecSum output are the two words of a single 2Sum      *)
+(* ([vecSum (a :: b :: l) = dwh (TwoSum a s) :: dwl (TwoSum a s) :: _] with   *)
+(* [s = (vecSumAux (b :: l)).2]), so they satisfy the DOUBLE-WORD separation  *)
+(* [2|e1| <= ulp e0] -- [magnitude_TwoSum] on that 2Sum, with                 *)
+(* [format_vecSumAux2] for [format s].  This is strictly better than the      *)
+(* P-nonoverlap [|e1| < ulp e0] of Theorem 1, and it is exactly the factor 2  *)
+(* the head argument needs: the triple [(1 + 2u, -2u + 2u^2, ...)] IS         *)
+(* P-nonoverlapping and sums to [1 + O(u^2)], so NO argument based on the     *)
+(* output of the algorithm alone can pin its head to [1].                     *)
+
+(* The head argument itself, as pure floating-point arithmetic: a float [e0]  *)
+(* whose tail is at most [15/16] of an ulp and whose total is within [36u^2]  *)
+(* of [1] MUST be [1].  The [15/16] is the paper's [1 - 2^-4]: it is the      *)
+(* geometric sum [1/2 + 1/4 + 1/8 + 1/16] of the four tail limbs against the  *)
+(* half-ulp first one.  The margins are [0.125u] above [1] and [0.0625u]      *)
+(* below, so [36u^2] must stay below [0.0625u] -- i.e. [u < 1/576], which is  *)
+(* [p >= 10] and NOT [p >= 9] (the old paper's claim; at [p = 9] the lower    *)
+(* margin fails).                                                             *)
+Lemma head_eq_1 e0 t :
+  format e0 -> Rabs t <= 15 / 16 * ulp e0 ->
+  Rabs (e0 + t - 1) <= 36 * (u * u) -> e0 = 1.
+Proof.
+Admitted.
+
+(* ===========================================================================*)
 (*  Section 8.3 -- the head limb of [3Prod_{2,3}(b, x)] is [1]                *)
 (*                                                                            *)
 (*  Old paper Section 8.3: [|e - 1| <= 35u^2] and [e] F-nonoverlapping give   *)

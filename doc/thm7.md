@@ -1,12 +1,14 @@
 # Theorem 7 — 3Prod (product of two triple words)
 
-> **STATUS (2026-07-23).** Lemma 1 proved. **WLOG reduction COMPLETE**: both
-> `ThreeProd_isTW` and `ThreeProd_error` are PROVED, reduced (FLX scale +
-> sign equivariance, degenerate zero-factor cases) to the *normalised* forms
-> `ThreeProd_isTW_norm` / `ThreeProd_error_norm`, which carry the §6.2 math and
-> are still admitted.  **All §6.1 term bounds are proved** (see the table
-> below): `z00p`, `z00m` (+ `4u² | z00m`), `z01p`/`z10p`, `z01m`/`z10m`,
-> `z31`/`z32`, `b2`, `c`, `z3`, `s3`.
+> **STATUS (2026-07-25).** **COMPLETE — zero admits.** `ThreeProd_isTW` and
+> `ThreeProd_error` (`28u³ + 107u⁴`) are both `Qed` in `code/coq/ThreeProd.v`,
+> and so is everything they rest on: Lemma 1 (`half_ulp_div_RN_add`), the FLX
+> WLOG reduction to `ThreeProd_isTW_norm` / `ThreeProd_error_norm`, all the §6.1
+> term bounds, the four-case `I`-set study `inner_head_Fnonoverlap`, the star
+> identity, and the `ε₅ ≠ 0` case (`doc/thm7-eps5.md`).
+> `Print Assumptions` = classical reals + funext.
+> This skeleton was then re-instantiated for Algorithms 10, 11 and 12 — see
+> `doc/alg10.md`, `doc/thm8.md`, `doc/alg12.md`.
 > `doc/paper3.pdf` §6, p. 6–7.
 > Setting FLX, `u = 2^{-p}`, `RN` = round-to-nearest (ties-to-even), `ufp`/`uls`
 > as in the paper. This is the FIRST algorithm of the multiplication half
@@ -164,7 +166,8 @@ The bound is tight: at `p = 53` the witness (2) in the paper attains
      `tw_normP`, the zero-factor cases (`ThreeProd_0l`/`_0r` via
      `vecSumAux_zeros`/`vsebAux_zeros`/`TwoSum00`), and `error_scale_transfer`;
    - **`ThreeProd_isTW` and `ThreeProd_error` are DISCHARGED** by these onto
-     `ThreeProd_isTW_norm` / `ThreeProd_error_norm` (normalised, admitted).
+     `ThreeProd_isTW_norm` / `ThreeProd_error_norm` (normalised; both now
+     proved as well).
    These lemmas are the reusable skeleton for the Alg-10…18 variants, which the
    paper proves "similarly".
 4. §6.1 term bounds as named lemmas — **done**.  Input bounds (`tw_norm_ulp0`,

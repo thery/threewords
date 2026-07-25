@@ -1,9 +1,11 @@
 # Theorem 5 — RoundTW (round a triple word to the nearest float)
 
-> **STATUS (2026-07-22).** `RN_add_lt_quarter`, `RoundTW_add_float`,
-> `is_imul_gap`, `RN_between_midp` (replacing the vague `RN_add_notmid`/
-> `RN_add_mid` placeholders) and `RoundTW_correct` are **proved**. One admit
-> remains: `RoundTW_cond` (the tie-detector). **A bug was found**: Algorithm 7's
+> **STATUS (2026-07-25).** **COMPLETE — zero admits.** `RoundTW_correct` and
+> everything under it (`RN_add_lt_quarter`, `RoundTW_add_float`, `is_imul_gap`,
+> `RN_between_midp` — which replaced the vague `RN_add_notmid`/`RN_add_mid`
+> placeholders — and the tie-detector `RoundTW_cond`, whose six-value case study
+> is where `p ≥ 4` is spent) are `Qed` in `code/coq/TWSum.v`.
+> **A bug was found**: Algorithm 7's
 > inner `(⋆)` test polarity is inverted — the directional branch must fire on
 > `RN(-(3/2u-2u²)x0) <> x1`, not `= x1`. `RoundTW`/`RoundTW_cond` in `TWSum.v`
 > now use the corrected condition. See `doc/roundtw-erratum.md` and
@@ -125,10 +127,10 @@ So the honest helper interfaces are:
 - `RN_add_mid m d : is_midpoint m -> Rabs d < ½ ulp(round_DN m) -> RN(m+d) = RU/RD/RN m by sign of d`, with `|x₂| < ulp x₁ ≤ ½ ulp g` (again `2 ulp x₁ ≤ ulp x₀`);
 - `RoundTW_add_float`: `2 ulp x₁ ≤ ulp(x₀+x₁)`, so `|x₂| < ½ ulp(x₀+x₁)` and the float rounds back to itself.
 
-## Fill status (in progress)
+## Fill status — DONE (kept as the map of the proof)
 
-Skeleton merged (`RoundTW` def + `is_midpoint` + 5 helper/theorem admits, plus
-the foundational `RN_add_lt_quarter`). Order of attack when resuming:
+All of the following are proved; the list is the order in which they were
+attacked and still reads as the structure of `RoundTW_correct`:
 
 1. **`RN_add_lt_quarter`** (`format f -> |d| < ¼ ulp f -> RN(f+d) = f`) — the
    foundational rounding lemma. Provable via `round_N_le_midp` /

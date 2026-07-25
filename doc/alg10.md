@@ -1,10 +1,13 @@
 # Algorithm 10 — 3Prodᶠᵃˢᵗ₃,₃ (fast product of two triple words)
 
-> **STATUS (2026-07-25).** SKELETON. `code/coq/ThreeProdFast.v` defines
-> `ThreeProdFast` (Algorithm 10 transcribed verbatim) and states its two
-> correctness results, `ThreeProdFast_isTW` and `ThreeProdFast_error`
-> (`44u³ + 176u⁴`); both are `Admitted`. The proofs re-instantiate the
-> Algorithm-9 skeleton of `ThreeProd.v` (see `doc/thm7.md`, `doc/thm7-eps5.md`).
+> **STATUS (2026-07-25).** `ThreeProdFast_isTW` is **PROVED**;
+> `ThreeProdFast_error` (`44u³ + 176u⁴`) is still `Admitted`.
+> `code/coq/ThreeProdFast.v` defines `ThreeProdFast` (Algorithm 10 transcribed
+> verbatim) and both statements. Part 1 re-instantiates the Algorithm-9
+> skeleton of `ThreeProd.v` (see `doc/thm7.md`, `doc/thm7-eps5.md`) — every
+> Section-6.1 bound and the four-case `I`-set study `inner_head_Fnonoverlap`
+> are reused *verbatim*, so the whole part-1 proof is ~450 new lines against
+> Algorithm 9's ~2450.
 > `doc/paper3.pdf` §6.4, p. 7 (the *faster version*); the details the published
 > paper omits ("the proof … [is] similar to those for Algorithm 9") are in
 > `doc/old-triplewors.pdf` §6.6 / Algorithm 13, which is reproduced below.
@@ -122,38 +125,51 @@ than Algorithm 9's.
 | paper object | Rocq |
 |---|---|
 | Algorithm 10 | `ThreeProdFast` |
-| result is TW | `ThreeProdFast_isTW` (**admitted**) |
+| result is TW | `ThreeProdFast_isTW` (**proved**) |
 | error `44u³+176u⁴` | `ThreeProdFast_error` (**admitted**) |
 
-What to reuse from `ThreeProd.v` (all `Qed`, generalised over
-`p Hp2 Hp6 choice choice_sym` once the section is closed — bind them with
-`Local Notation` shims):
+What is reused from `ThreeProd.v` (all `Qed`, generalised over
+`p Hp2 Hp6 choice choice_sym` once the section is closed — applied with `@`;
+the local `vecSum`/`vseb`/… notations are re-declared in `ThreeProdFast.v`):
 
-- **WLOG reduction**: `tw_norm`, `isTW_normalize`, `error_scale_transfer`, and
-  the scale/sign equivariance pattern `ThreeProd_scale` / `ThreeProd_opp` /
-  `ThreeProd_opp_r` / `ThreeProd_0l` / `ThreeProd_0r` — to be re-proved for
-  `ThreeProdFast` by the same list-induction script (they are the only genuinely
-  new "plumbing" lemmas).
+- **WLOG reduction**: `tw_norm`, `tw_normP`, `isTW_normalize`, `isTW_scale`,
+  `isTW_opp`, `isTW_zero_lead`, `error_scale_transfer`, and the generic
+  scale/sign machinery (`round_scale`, `vecSum_scale`, `vsebK_scale`,
+  `TwoProd_scale` and their `_opp` twins, `vsebAux_zeros`). The five wrappers
+  `ThreeProdFast_scale` / `_opp` / `_opp_r` / `_0l` / `_0r` are re-proved by the
+  same scripts as Algorithm 9's (only the last VecSum line changes: four inputs
+  and the extra `s3 = RN(c + z3)` rounding).
 - **§6.1 term bounds** (identical terms): `z00p_lb`/`z00p_ub`, `z00m_bound`,
   `z00m_imul`, `z01p_bound`/`z10p_bound`, `z01m_bound`/`z10m_bound`, `b2_bound`,
   `c_bound`, `z31_bound`/`z32_bound`, `z3_bound`, `s3_bound`, `x1y1_bound`,
   `x0y2_bound`/`x2y0_bound`.
 - **part 1**: `inner_head_Fnonoverlap` (the four-case `I`-set study — the single
-  most expensive lemma of Theorem 7, reused *verbatim*), `s3_div_facts`,
-  `s3_le_15max`, `b01_imul_half_ulp`, `vseb_star`, `vseb_head3_e1zero`,
-  `vecSum_top_round`, `vseb_cons_round`, `Pnonoverlap_isTW3`,
-  `vseb_Pnonoverlap` (Thm 2).
+  most expensive lemma of Theorem 7, reused *verbatim*: its `s3` is
+  `dwh (TwoSum c z3)`, which is Algorithm 10's `RN(c + z3)` by `TwoSum_hi`),
+  `vseb_star` (`e₁ ≠ 0` half, generic in the list), `Pnonoverlap_isTW3`,
+  `vseb_Pnonoverlap` (Thm 2), `format_vecSum` / `format_vseb`, and the NEW
+  shared `vseb_head3_dom` (the generic VSEB head-domination read-off, factored
+  out of `vseb_head3_e1zero` so both algorithms use it).
 - **part 2**: `eps0_bound` … `eps4_bound`, `eps04_sum`, `eps5_bound`
   (Thm 3 truncation at `k = 3`), `xy_ge`, `eps5_zero_all_big`,
   `eps5nz_forces_small`, and the assembly pattern `error_assembly` /
   `error_assembly_eps5` (re-calibrated to `44u³ + 176u⁴`).
 
-New work specific to Algorithm 10:
+New work specific to Algorithm 10 — part 1, **done**:
 
-1. `ThreeProdFast_scale` / `_opp` / `_opp_r` / `_0l` / `_0r` and the normalised
-   forms `ThreeProdFast_isTW_norm` / `ThreeProdFast_error_norm`.
-2. `epsp4_bound` : `|(c + z₃) − s₃| ≤ 16u³` (from `c_bound`, `z3_bound` and
+1. `ThreeProdFast_scale` / `_opp` / `_opp_r` / `_0l` / `_0r` (the WLOG
+   plumbing).
+2. `vsebFast_head3_e1zero` — the `e₁ = 0` half of the star identity on the
+   FOUR-limb `e`; same script as `vseb_head3_e1zero` with one running-sum step
+   fewer (`|s₃| ≤ 20u²`, `|RN(b₁+s₃)| ≤ 32u²`, `|RN(b₀+…)| ≤ 11u`).
+3. `ThreeProdFast_norm_eq` (star identity), `ThreeProdFast_isTW_norm`,
+   `ThreeProdFast_isTW`.
+
+Still to do — part 2 (the error bound):
+
+4. `epsp4_bound` : `|(c + z₃) − s₃| ≤ 16u³` (from `c_bound`, `z3_bound` and
    `round_err_le`).
-3. The error identity: `sumR (vecSum [z₀₀⁺; b₀; b₁; s₃]) − x̄ȳ = ε₀+…+ε₄+ε₄′`
+5. The error identity: `sumR (vecSum [z₀₀⁺; b₀; b₁; s₃]) − x̄ȳ = ε₀+…+ε₄+ε₄′`
    (the four-input twin of `sumR_e_decomp`).
-4. Re-calibrated assemblies at `44u³ − 11.9u⁴` / `42u³ − 11.9u⁴`.
+6. Re-calibrated assemblies at `44u³ − 11.9u⁴` / `42u³ − 11.9u⁴`, and the
+   `ε₅ = 0` all-big argument for the four-limb list.

@@ -48,7 +48,7 @@ witness). See `doc/thm6.md`.
 | Alg | Name (ops) | Theorem | Formalised |
 |-----|------------|---------|-----------|
 | 9  | 3Prod^acc_{3,3}(x,y) (46, 2 tests) — TW × TW | **Thm 7** (err `28u³+107u⁴`, `p≥6`) | ✓ `ThreeProd`; `ThreeProd_isTW` + `ThreeProd_error` (`doc/thm7.md`, `doc/thm7-eps5.md`) |
-| 10 | 3Prod^fast_{3,3}(x,y) (38, 1 test) | err `44u³+176u⁴` | 🚧 `ThreeProdFast`; `ThreeProdFast_isTW`/`ThreeProdFast_error` skeleton (`doc/alg10.md`) |
+| 10 | 3Prod^fast_{3,3}(x,y) (38, 1 test) | err `44u³+176u⁴` | 🚧 `ThreeProdFast`; `ThreeProdFast_isTW` ✓ proved, `ThreeProdFast_error` admitted (`doc/alg10.md`) |
 | 11 | 3Prod^acc_{2,3}(x,y) (45, 2 tests) — DW × TW | **Thm 8** (err `10.5u³+39u⁴`, `p≥6`) | — |
 | 12 | 3Prod^fast_{2,3}(x,y) (37, 1 test) | err `18u³+75u⁴` | — |
 | 13 | 3Reci(x) (73, 2 tests) — reciprocal (Newton) | **Thm 9** (`p≥10`) | — |
@@ -73,8 +73,8 @@ instantiated at binary64. All zero-admit.
 (`doc/thm7.md`, `doc/thm7-eps5.md`), including Lemma 1.
 
 **In progress:** 3Prod^fast TW×TW (Alg 10) — `ThreeProdFast` defined,
-`ThreeProdFast_isTW` / `ThreeProdFast_error` (`44u³+176u⁴`) stated (skeleton,
-proofs to follow; `doc/alg10.md`). It shares the whole Algorithm-9 skeleton: the
+`ThreeProdFast_isTW` **proved**, `ThreeProdFast_error` (`44u³+176u⁴`) stated and
+admitted (`doc/alg10.md`). It shares the whole Algorithm-9 skeleton: the
 same terms up to `s₃ = RN(c + z₃)`, whose low word `e₄` is dropped (one extra
 error source `|e₄| ≤ 16u³`, whence `44 = 28 + 16`).
 

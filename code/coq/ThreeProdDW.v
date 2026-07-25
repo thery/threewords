@@ -12,11 +12,12 @@
 (* bound is not -- taking [x2 = 0] into account gives [10.5u^3 + 39u^4]       *)
 (* instead of [28u^3 + 107u^4].                                               *)
 (*                                                                            *)
-(* STATUS: SKELETON.  The definition transcribes Algorithm 11 verbatim on top *)
-(* of [TwoProd] (Alg 3), [vecSum] (Alg 4) and [vsebK] (Alg 5); the two        *)
-(* theorems are stated and [Admitted].  The published paper omits the proof of*)
-(* Theorem 8 ("the proof is omitted"); it is recovered from                   *)
-(* doc/old-triplewors.pdf Section 7.4 -- see doc/thm8.md for the full plan.   *)
+(* STATUS: [ThreeProdDW_isTW] is PROVED (it is Theorem 7 at [x2 = 0]);        *)
+(* [ThreeProdDW_error] is still [Admitted].  The definition transcribes       *)
+(* Algorithm 11 verbatim on top of [TwoProd] (Alg 3), [vecSum] (Alg 4) and    *)
+(* [vsebK] (Alg 5).  doc/paper3.pdf omits the proof of Theorem 8 altogether;  *)
+(* it is recovered from doc/old-triplewors.pdf Section 7.4 -- see             *)
+(* doc/thm8.md for the full plan.                                             *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -131,6 +132,37 @@ Definition ThreeProdDW (x y : twR) : twR :=
   | [::]            => TWR e0 0 0
   end.
 
+(* A double word is a triple word with a zero third limb: the DW separation   *)
+(* [2|x1| <= ulp x0] is stronger than the P-nonoverlapping [|x1| < ulp x0].   *)
+Lemma isDW_isTW x : isDW x -> isTW x.
+Proof.
+case: x => x0 x1 x2 [F0 F1 -> Hsep].
+split=> //; first exact: generic_format_0.
+- case: Hsep => [->|Hs]; first by left.
+  case: (Req_dec x1 0) => [->|Hx1n]; first by left.
+  by right; have := Rabs_pos_lt _ Hx1n; lra.
+- by left.
+Qed.
+
+(* ===========================================================================*)
+(*  Algorithm 11 IS Algorithm 9 at [x2 = 0]: the only difference is           *)
+(*  [z32 = RN(z01- + 0 * y0) = z01-], since [z01-] is a rounded value, hence  *)
+(*  a float ([round_generic]).  This is the paper's                           *)
+(*  "Algorithm 11 is a particular case of Algorithm 9".                       *)
+(* ===========================================================================*)
+Lemma ThreeProdDW_eq x y :
+  ThreeProdDW x y = ThreeProd (TWR (tw0 x) (tw1 x) 0) y.
+Proof.
+case: x => x0 x1 x2; case: y => y0 y1 y2.
+rewrite /ThreeProdDW /ThreeProd.
+have F01m : format (TwoProd x0 y1).2 by apply: generic_format_round.
+case E00 : (TwoProd x0 y0) => [z00p z00m].
+case E01 : (TwoProd x0 y1) => [z01p z01m].
+case E10 : (TwoProd x1 y0) => [z10p z10m].
+have F01 : format z01m by move: F01m; rewrite E01.
+by rewrite Rmult_0_l Rplus_0_r (round_generic _ _ _ _ F01).
+Qed.
+
 (* ===========================================================================*)
 (*  Correctness, part 1: [ThreeProdDW x y] is a triple-word number.           *)
 (*                                                                            *)
@@ -144,7 +176,12 @@ Lemma ThreeProdDW_isTW x y :
   ties_to_even choice ->
   isDW x -> isTW y -> isTW (ThreeProdDW x y).
 Proof.
-Admitted.
+move=> Hc Hx Hy.
+rewrite ThreeProdDW_eq.
+apply: (@ThreeProd_isTW p Hp2 Hp6 choice choice_sym) => //.
+have Hx' := isDW_isTW Hx.
+by case: x Hx Hx' => x0 x1 x2 [_ _ -> _].
+Qed.
 
 (* ===========================================================================*)
 (*  Theorem 8: relative error of [ThreeProdDW] is [<= 10.5u^3 + 39u^4].       *)

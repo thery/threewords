@@ -1,9 +1,11 @@
 # Theorem 8 — 3Prodᵃᶜᶜ₂,₃ (product of a double word by a triple word)
 
-> **STATUS (2026-07-25).** SKELETON. `code/coq/ThreeProdDW.v` defines `isDW`
-> and `ThreeProdDW` (Algorithm 11 transcribed verbatim) and states its two
-> correctness results, `ThreeProdDW_isTW` and `ThreeProdDW_error`
-> (`10.5u³ + 39u⁴`); both are `Admitted`.
+> **STATUS (2026-07-25).** `ThreeProdDW_isTW` is **PROVED**;
+> `ThreeProdDW_error` (`10.5u³ + 39u⁴`) is still `Admitted`.
+> `code/coq/ThreeProdDW.v` defines `isDW` and `ThreeProdDW` (Algorithm 11
+> transcribed verbatim). Part 1 is three short lemmas — `isDW_isTW`,
+> `ThreeProdDW_eq` (Algorithm 11 = Algorithm 9 at `x₂ = 0`) and
+> `ThreeProd_isTW`.
 > `doc/paper3.pdf` §7, p. 7–8. The published paper omits the proof of
 > Theorem 8 entirely ("the proof is omitted"); it is recovered from
 > `doc/old-triplewors.pdf` §7 (Algorithm 14 / Theorem 11), reproduced below.
@@ -126,14 +128,15 @@ in binary64, `(x₀,x₁) = (1+3·2²⁷u, u−2²⁷u²)` and
 |---|---|
 | DW number | `isDW` (a `twR` with `x₂ = 0` and `2\|x₁\| ≤ ulp x₀`) |
 | Algorithm 11 | `ThreeProdDW` |
-| result is TW | `ThreeProdDW_isTW` (**admitted**) |
+| result is TW | `ThreeProdDW_isTW` (**proved**), via `isDW_isTW` + `ThreeProdDW_eq` |
 | Theorem 8 (`10.5u³+39u⁴`) | `ThreeProdDW_error` (**admitted**) |
 
 Reuse plan (as for Algorithm 10 — see `doc/alg10.md`):
 
-- **part 1** is a one-liner: `ThreeProdDW_eq` (`ThreeProdDW x̄ ȳ =
-  ThreeProd (x₀,x₁,0) ȳ`, since `RN(z₀₁⁻ + 0·y₀) = z₀₁⁻` by `round_generic` on
-  `format_err_mul`) plus `isDW_isTW` and `ThreeProd_isTW`.
+- **part 1 is done**, and it is indeed a one-liner: `ThreeProdDW_eq`
+  (`ThreeProdDW x̄ ȳ = ThreeProd (x₀,x₁,0) ȳ`, since `RN(z₀₁⁻ + 0·y₀) = z₀₁⁻`
+  — `z₀₁⁻` is a rounded value, hence a float, so `round_generic` applies) plus
+  `isDW_isTW` and `ThreeProd_isTW`.
 - **part 2** re-instantiates the Algorithm-9 error skeleton with `x₂ = 0`: the
   WLOG scale/sign reduction, `error_decomp`/`sumR_e_decomp`, `eps5_bound`
   (generic), `eps5_zero_all_big`-style divisibility, `vecSum_imul_forward`,

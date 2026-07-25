@@ -14,12 +14,10 @@
 (* the error bound is not -- taking [x2 = 0] into account gives               *)
 (* [18u^3 + 75u^4] instead of [44u^3 + 176u^4].                               *)
 (*                                                                            *)
-(* STATUS: SKELETON.  The definition transcribes Algorithm 12 verbatim on top *)
-(* of [TwoProd] (Alg 3), [vecSum] (Alg 4) and [vsebK] (Alg 5); the two        *)
-(* theorems are stated and [Admitted].  As for Theorem 8, doc/paper3.pdf      *)
-(* gives                                                                      *)
-(* no proof of the error bound; it is recovered from doc/old-triplewors.pdf   *)
-(* Section 7.5 -- see doc/alg12.md for the full plan.                         *)
+(* STATUS: [ThreeProdDWFast_isTW] is PROVED (it is Theorem 7's fast sibling,  *)
+(* Algorithm 10, at [x2 = 0]); [ThreeProdDWFast_error] is still [Admitted].   *)
+(* As for Theorem 8, doc/paper3.pdf gives no proof of the error bound; it is  *)
+(* recovered from doc/old-triplewors.pdf Section 7.5 -- see doc/alg12.md.     *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -129,6 +127,24 @@ Definition ThreeProdDWFast (x y : twR) : twR :=
   end.
 
 (* ===========================================================================*)
+(*  Algorithm 12 IS Algorithm 10 at [x2 = 0]: the only difference is          *)
+(*  [z32 = RN(z01- + 0 * y0) = z01-], since [z01-] is a rounded value, hence  *)
+(*  a float ([round_generic]).                                                *)
+(* ===========================================================================*)
+Lemma ThreeProdDWFast_eq x y :
+  ThreeProdDWFast x y = ThreeProdFast (TWR (tw0 x) (tw1 x) 0) y.
+Proof.
+case: x => x0 x1 x2; case: y => y0 y1 y2.
+rewrite /ThreeProdDWFast /ThreeProdFast.
+have F01m : format (TwoProd x0 y1).2 by apply: generic_format_round.
+case E00 : (TwoProd x0 y0) => [z00p z00m].
+case E01 : (TwoProd x0 y1) => [z01p z01m].
+case E10 : (TwoProd x1 y0) => [z10p z10m].
+have F01 : format z01m by move: F01m; rewrite E01.
+by rewrite Rmult_0_l Rplus_0_r (round_generic _ _ _ _ F01).
+Qed.
+
+(* ===========================================================================*)
 (*  Correctness, part 1: [ThreeProdDWFast x y] is a triple-word number.       *)
 (*                                                                            *)
 (*  As in Section 7.1, this is inherited: Algorithm 12 is Algorithm 10 at     *)
@@ -140,7 +156,12 @@ Lemma ThreeProdDWFast_isTW x y :
   ties_to_even choice ->
   isDW x -> isTW y -> isTW (ThreeProdDWFast x y).
 Proof.
-Admitted.
+move=> Hc Hx Hy.
+rewrite ThreeProdDWFast_eq.
+apply: (@ThreeProdFast_isTW p Hp2 Hp6 choice choice_sym) => //.
+have Hx' := isDW_isTW Hx.
+by case: x Hx Hx' => x0 x1 x2 [_ _ -> _].
+Qed.
 
 (* ===========================================================================*)
 (*  The error bound: [<= 18u^3 + 75u^4] (paper Section 7.2).                  *)

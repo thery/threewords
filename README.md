@@ -134,7 +134,7 @@ Links point at the Rocq definition/theorem. ✅ proved · 🚧 skeleton (definit
 | 9 | [3Prod^acc (TW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L93) | [Thm 7](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L4066) + [error](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L4112) | ✅ |
 | 10 | [3Prod^fast (TW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdFast.v#L106) | [isTW](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdFast.v#L765) + [error](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdFast.v#L1581) | ✅ |
 | 11 | [3Prod^acc (DW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDW.v#L114) | [isTW](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDW.v#L175) + [Thm 8](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDW.v#L1220) | ✅ |
-| 12 | [3Prod^fast (DW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDWFast.v#L109) | [isTW](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDWFast.v#L139) + [error](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDWFast.v#L163) | 🚧 |
+| 12 | [3Prod^fast (DW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDWFast.v#L107) | [isTW](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDWFast.v#L155) + [error](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdDWFast.v#L184) | 🚧 |
 | 13 | 3Reci | Thm 9 | ❌ |
 | 14 | 3Div | Thm 10 | ❌ |
 | 15 | 3SqRt | Thm 11 | ❌ |
@@ -164,7 +164,7 @@ its own `Makefile` and `_CoqProject`, so it builds on its own with
 | `ThreeProd.v` | **Paper Theorem 7**: Algorithm 9 (3Prodᵃᶜᶜ₃,₃), the accurate product of two triple words. Its two correctness results — `ThreeProd_isTW` and `ThreeProd_error` (relative error `≤ 28u³ + 107u⁴`, `p ≥ 6`); see `doc/thm7.md` and `doc/thm7-eps5.md`. |
 | `ThreeProdFast.v` | Algorithm 10 (3Prodᶠᵃˢᵗ₃,₃), the fast product of two triple words (8 operations and 1 test cheaper: the low word `e₄` of `s₃ = RN(c + z₃)` is dropped). Its two correctness results — `ThreeProdFast_isTW` (the result is a triple word) and `ThreeProdFast_error` (relative error `≤ 44u³ + 176u⁴`) — both proved, reusing Algorithm 9's Section-6.1 bounds, its four-case `inner_head_Fnonoverlap` and its `ε₀…ε₅` bounds verbatim; see `doc/alg10.md`. |
 | `ThreeProdDW.v` | Algorithm 11 (3Prodᵃᶜᶜ₂,₃), the product of a **double** word by a triple word — Algorithm 9 with `x₂ = 0`. Its two correctness results — `ThreeProdDW_isTW` (Theorem 7 at `x₂ = 0`) and `ThreeProdDW_error` (**paper Theorem 8**, relative error `≤ 10.5u³ + 39u⁴`) — both proved; the paper omits the proof of Theorem 8, recovered in `doc/thm8.md`; the paper omits the proof of Theorem 8, recovered in `doc/thm8.md`. |
-| `ThreeProdDWFast.v` | Algorithm 12 (3Prodᶠᵃˢᵗ₂,₃), the fast product of a double word by a triple word — Algorithm 10 with `x₂ = 0`. `ThreeProdDWFast_isTW` and `ThreeProdDWFast_error` (relative error `≤ 18u³ + 75u⁴`) are **stated, proofs in progress**; see `doc/alg12.md`. |
+| `ThreeProdDWFast.v` | Algorithm 12 (3Prodᶠᵃˢᵗ₂,₃), the fast product of a double word by a triple word — Algorithm 10 with `x₂ = 0`. `ThreeProdDWFast_isTW` is **proved** (Algorithm 10 at `x₂ = 0`); `ThreeProdDWFast_error` (relative error `≤ 18u³ + 75u⁴`) is **stated, proof in progress**; see `doc/alg12.md`. |
 
 ### `code/ocaml/`
 

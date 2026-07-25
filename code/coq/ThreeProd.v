@@ -3287,6 +3287,61 @@ have Hpoly : (2*(u*u*u) + 42/10*(u*u*u*u) + 1) * (26*(u*u*u) - 119/10*(u*u*u*u))
 clear -Ht Hnum Hs5' Hr Hpoly; nra.
 Qed.
 
+(* [vsebAux]/[vseb] forward the [pow g] grid: a 2Sum of multiples of [pow g] has    *)
+(* both words multiples of [pow g], so the whole VSEB walk stays on the grid.       *)
+Lemma vsebAux_imul_forward g l : forall eps : R,
+  format eps -> {in l, forall z, format z} ->
+  is_imul eps (pow g) -> {in l, forall z, is_imul z (pow g)} ->
+  {in vsebAux eps l, forall z, is_imul z (pow g)}.
+Proof.
+have Hdw : forall a b : R, format a -> format b ->
+    is_imul a (pow g) -> is_imul b (pow g) ->
+    is_imul (dwh (TwoSum a b)) (pow g) /\ is_imul (dwl (TwoSum a b)) (pow g).
+  move=> a b Fa Fb Ia Ib.
+  have Hhi : dwh (TwoSum a b) = RND (a + b) by rewrite (TwoSum_hi p choice).
+  have Hsum : dwh (TwoSum a b) + dwl (TwoSum a b) = a + b
+    by exact: (TwoSum_correct_loc Hp2 choice_sym Fa Fb).
+  split; first by rewrite Hhi; apply: is_imul_pow_round; apply: is_imul_add.
+  have -> : dwl (TwoSum a b) = a + b - dwh (TwoSum a b) by lra.
+  apply: is_imul_minus; first by apply: is_imul_add.
+  by rewrite Hhi; apply: is_imul_pow_round; apply: is_imul_add.
+elim: l => [|e l IH] eps Feps Fl Ieps Il z.
+  by rewrite /= inE => /eqP->.
+have Fe : format e by apply: Fl; rewrite inE eqxx.
+have Ie : is_imul e (pow g) by apply: Il; rewrite inE eqxx.
+have Fl' : {in l, forall z, format z}
+  by move=> t tl; apply: Fl; rewrite inE tl orbT.
+have Il' : {in l, forall z, is_imul z (pow g)}
+  by move=> t tl; apply: Il; rewrite inE tl orbT.
+have [Hdh Hdl] := Hdw eps e Feps Fe Ieps Ie.
+have [Fr Fet] := @format_TwoSum p Hp2 choice eps e Feps Fe.
+clear Fl Il.
+case: l IH Fl' Il' => [|e2 l'] IH Fl' Il'.
+  move: z Hdh Hdl; rewrite vsebAux_1; case: (TwoSum eps e) => y0 y1 /= z Hdh Hdl.
+  by rewrite !inE => /orP[/eqP->|/eqP->].
+move: z; rewrite vsebAux_consS.
+clear Fr Fet.
+have FT := @format_TwoSum p Hp2 choice eps e Feps Fe.
+move: Hdh Hdl FT; case E : (TwoSum eps e) => [r et] Hdh Hdl [Fr Fet].
+case: (Req_EM_T et 0) => [et0|etn0].
+  change (forall z, z \in vsebAux r (e2 :: l') -> is_imul z (pow g)).
+  exact: (IH r Fr Fl' Hdh Il').
+change (forall z, z \in r :: vsebAux et (e2 :: l') -> is_imul z (pow g)).
+move=> z; rewrite inE => /orP[/eqP->|]; first exact: Hdh.
+exact: (IH et Fet Fl' Hdl Il').
+Qed.
+
+Lemma vseb_imul_forward g l :
+  {in l, forall z, format z} -> {in l, forall z, is_imul z (pow g)} ->
+  {in vseb l, forall z, is_imul z (pow g)}.
+Proof.
+case: l => [//|e0 l] Fl Il /=; apply: vsebAux_imul_forward.
+- by apply: Fl; rewrite inE eqxx.
+- by move=> t tl; apply: Fl; rewrite inE tl orbT.
+- by apply: Il; rewrite inE eqxx.
+by move=> t tl; apply: Il; rewrite inE tl orbT.
+Qed.
+
 (* The all-big case (paper omitted; old draft Theorem 10 / doc/thm7-eps5.md): when  *)
 (* [u^2<=|y2|], [u^2<=|x2|], [4u^2<=|c|] and [4u^2<=|z3|] the leading terms          *)
 (* [z00+, b0, b1, c, z3] are all divisible by [8u^3] and [|z00+ +b0+b1+c+z3| < 5],   *)

@@ -43,12 +43,12 @@ output is *not* F-nonoverlapping — machine-checked counterexample
 repairs it. Theorem 6 is false for 7 inputs (paper's own `[1-u,-1+2u,…]`
 witness). See `doc/thm6.md`.
 
-## §6–10 Multiplication, division, square root — none formalised
+## §6–10 Multiplication, division, square root — Alg 9 done, Alg 10 started
 
 | Alg | Name (ops) | Theorem | Formalised |
 |-----|------------|---------|-----------|
-| 9  | 3Prod^acc_{3,3}(x,y) (46, 2 tests) — TW × TW | **Thm 7** (err `28u³+107u⁴`, `p≥6`) | 🚧 `ThreeProd`; `ThreeProd_isTW`/`ThreeProd_error` skeleton (`doc/thm7.md`) |
-| 10 | 3Prod^fast_{3,3}(x,y) (38, 1 test) | err `44u³+176u⁴` | — |
+| 9  | 3Prod^acc_{3,3}(x,y) (46, 2 tests) — TW × TW | **Thm 7** (err `28u³+107u⁴`, `p≥6`) | ✓ `ThreeProd`; `ThreeProd_isTW` + `ThreeProd_error` (`doc/thm7.md`, `doc/thm7-eps5.md`) |
+| 10 | 3Prod^fast_{3,3}(x,y) (38, 1 test) | err `44u³+176u⁴` | 🚧 `ThreeProdFast`; `ThreeProdFast_isTW`/`ThreeProdFast_error` skeleton (`doc/alg10.md`) |
 | 11 | 3Prod^acc_{2,3}(x,y) (45, 2 tests) — DW × TW | **Thm 8** (err `10.5u³+39u⁴`, `p≥6`) | — |
 | 12 | 3Prod^fast_{2,3}(x,y) (37, 1 test) | err `18u³+75u⁴` | — |
 | 13 | 3Reci(x) (73, 2 tests) — reciprocal (Newton) | **Thm 9** (`p≥10`) | — |
@@ -56,8 +56,9 @@ witness). See `doc/thm6.md`.
 | 15 | 3SqRt(x) (127, 4 tests) — square root (Newton) | **Thm 11** (err `24u³+10260u⁴`, `p≥11`) | — |
 | 16–18 | appendix: sign-folded product variants | (support Thms 9–11) | — |
 
-Supporting: **Lemma 1** (`½ulp(x) ∣ RN(x+y)`) — used in the Thm 7 proof — not
-formalised (only needed for multiplication).
+Supporting: **Lemma 1** (`½ulp(x) ∣ RN(x+y)`) — used in the Thm 7 proof — is
+`ThreeProd.half_ulp_div_RN_add` (it needs `format y` and `x <> 0`, both left
+implicit in the paper).
 
 ## Summary
 
@@ -67,9 +68,15 @@ and the general Theorem 3 truncation bound (Alg 5); ToTW with Theorem 4
 (Alg 6); and TWSum with Theorem 6 and its `2u³+4.2u⁴` error bound (Alg 8),
 instantiated at binary64. All zero-admit.
 
-**In progress:** 3Prod^acc TW×TW (Alg 9 / Thm 7) — `ThreeProd` defined,
-`ThreeProd_isTW` / `ThreeProd_error` stated (skeleton, proofs to follow;
-`doc/thm7.md`).
+**Formalised: the accurate TW×TW product.** 3Prod^acc (Alg 9 / Thm 7) —
+`ThreeProd_isTW` and `ThreeProd_error` (`28u³+107u⁴`), zero admits
+(`doc/thm7.md`, `doc/thm7-eps5.md`), including Lemma 1.
+
+**In progress:** 3Prod^fast TW×TW (Alg 10) — `ThreeProdFast` defined,
+`ThreeProdFast_isTW` / `ThreeProdFast_error` (`44u³+176u⁴`) stated (skeleton,
+proofs to follow; `doc/alg10.md`). It shares the whole Algorithm-9 skeleton: the
+same terms up to `s₃ = RN(c + z₃)`, whose low word `e₄` is dropped (one extra
+error source `|e₄| ≤ 16u³`, whence `44 = 28 + 16`).
 
 **Not formalised:** the rest of the multiply/divide/reciprocal/sqrt half of the
-paper (Alg 10–18 / Thm 8–11).
+paper (Alg 11–18 / Thm 8–11).

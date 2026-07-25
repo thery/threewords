@@ -131,8 +131,8 @@ Links point at the Rocq definition/theorem. ✅ proved · 🚧 skeleton (definit
 | 6 | [ToTW](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L129) | [Thm 4](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L314) | ✅ |
 | 7 | [RoundTW](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L364) | [Thm 5](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L1031) | ✅ |
 | 8 | [TWSum](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L1209) | [Thm 6](https://github.com/thery/threewords/blob/main/code/coq/Thm6.v#L4365) + [error](https://github.com/thery/threewords/blob/main/code/coq/TWSum.v#L1326) | ✅ |
-| 9 | [3Prod^acc (TW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L93) | [Thm 7](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L4048) + [error](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L4094) | ✅ |
-| 10 | [3Prod^fast (TW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdFast.v#L97) | [isTW](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdFast.v#L139) + [error](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdFast.v#L161) | 🚧 |
+| 9 | [3Prod^acc (TW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L93) | [Thm 7](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L4066) + [error](https://github.com/thery/threewords/blob/main/code/coq/ThreeProd.v#L4112) | ✅ |
+| 10 | [3Prod^fast (TW×TW)](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdFast.v#L105) | [isTW](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdFast.v#L747) + [error](https://github.com/thery/threewords/blob/main/code/coq/ThreeProdFast.v#L796) | 🚧 |
 | 11–12 | 3Prod (DW×TW) | Thm 8 | ❌ |
 | 13 | 3Reci | Thm 9 | ❌ |
 | 14 | 3Div | Thm 10 | ❌ |
@@ -161,7 +161,7 @@ its own `Makefile` and `_CoqProject`, so it builds on its own with
 | `CEThm6.v`    | A machine-checked counterexample showing Theorem 6 *cannot* be strengthened: the raw `VecSum` output is not F-nonoverlapping (input `[15;15;15/16;15/16]` at `p = 4` gives `[32;-1;7/8;0]`). VSEB is what repairs the overlap. |
 | `TWSum.v`     | Algorithm 8 (TWSum): the sum of two triple words. Its two correctness results — `TWSum_isTW` (the result is a triple word) and `TWSum_error` (relative error `≤ 2u³ + 4.2u⁴`). |
 | `ThreeProd.v` | **Paper Theorem 7**: Algorithm 9 (3Prodᵃᶜᶜ₃,₃), the accurate product of two triple words. Its two correctness results — `ThreeProd_isTW` and `ThreeProd_error` (relative error `≤ 28u³ + 107u⁴`, `p ≥ 6`); see `doc/thm7.md` and `doc/thm7-eps5.md`. |
-| `ThreeProdFast.v` | Algorithm 10 (3Prodᶠᵃˢᵗ₃,₃), the fast product of two triple words (8 operations and 1 test cheaper: the low word `e₄` of `s₃ = RN(c + z₃)` is dropped). `ThreeProdFast_isTW` and `ThreeProdFast_error` (relative error `≤ 44u³ + 176u⁴`) are **stated, proofs in progress**; see `doc/alg10.md`. |
+| `ThreeProdFast.v` | Algorithm 10 (3Prodᶠᵃˢᵗ₃,₃), the fast product of two triple words (8 operations and 1 test cheaper: the low word `e₄` of `s₃ = RN(c + z₃)` is dropped). `ThreeProdFast_isTW` (the result is a triple word) is **proved** — it reuses Algorithm 9's Section-6.1 bounds and its four-case `inner_head_Fnonoverlap` verbatim; `ThreeProdFast_error` (relative error `≤ 44u³ + 176u⁴`) is **stated, proof in progress**. See `doc/alg10.md`. |
 
 ### `code/ocaml/`
 

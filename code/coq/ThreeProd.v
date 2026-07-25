@@ -3034,6 +3034,33 @@ case E : (vecSumAux (b :: l)) => [es s] /=.
 by rewrite -(TwoSum_hi p choice a s); case: (TwoSum a s).
 Qed.
 
+(* The generic read-off behind the [e1 = 0] star case, SHARED by Algorithm 9  *)
+(* ([vseb_head3_e1zero]) and Algorithm 10 ([vsebFast_head3_e1zero] in         *)
+(* ThreeProdFast.v): a head limb [>= 3/4] dominating every other limb         *)
+(* ([2|x| < u]) is emitted first by VSEB, so the first three limbs of         *)
+(* [vseb l] are [l0] and the first two of [vseb (behead l)].  No algorithm    *)
+(* specifics -- only [vsebAux_dom_nth].                                       *)
+Lemma vseb_head3_dom l :
+  {in l, forall z, format z} -> (0 < size l)%N -> 3 / 4 <= nth 0 l 0 ->
+  (forall x, x \in behead l -> 2 * Rabs x < u) ->
+  nth 0 (vseb l) 0 = nth 0 l 0 /\
+  nth 0 (vseb l) 1 = nth 0 (vseb (behead l)) 0 /\
+  nth 0 (vseb l) 2 = nth 0 (vseb (behead l)) 1.
+Proof.
+move=> Fl Hsz He0 Hdom.
+have Hl0 : l = nth 0 l 0 :: behead l by case: (l) Hsz => [|a s].
+have Hkey : forall j, nth 0 (vseb l) j = nth 0 (nth 0 l 0 :: vseb (behead l)) j.
+  move=> j.
+  have -> : vseb l = vsebAux (nth 0 l 0) (behead l) by rewrite {1}Hl0.
+  apply: vsebAux_dom_nth => //.
+    by apply: Fl; rewrite Hl0 inE eqxx.
+  by move=> z zI; apply: Fl; rewrite Hl0 inE zI orbT.
+split; [|split].
+- by rewrite (Hkey 0%N).
+- by rewrite (Hkey 1%N).
+- by rewrite (Hkey 2%N).
+Qed.
+
 (* The [e1 = 0] half of the star identity (paper Section 6.2, part 1): when   *)
 (* the second VecSum limb vanishes, [|s1|,|s2|,|s3| < 16u <= 1/2 ufp(z00+)],  *)
 (* so the next nonzero limb is still [< 1/2 ulp(e0)] and [VSEB] reproduces    *)
@@ -3238,16 +3265,7 @@ have Hbeh_dom : forall x, x \in behead e -> 2 * Rabs x < u.
   case: i Hi Hnth Hnth' Hi5 => [|i'] Hi Hnth Hnth' Hi5.
     by rewrite He1 Rabs_R0; have := u_gt_0; move=> H; nra.
   by apply: Hdom.
-have Hkey : forall j, nth 0 (vseb e) j = nth 0 (nth 0 e 0 :: vseb (behead e)) j.
-  move=> j.
-  have -> : vseb e = vsebAux (nth 0 e 0) (behead e) by rewrite {1}He0e.
-  apply: vsebAux_dom_nth => //.
-    by apply: Fe; rewrite He0e inE eqxx.
-  by move=> z zI; apply: Fe; rewrite He0e inE zI orbT.
-split; [|split].
-- by rewrite (Hkey 0%N).
-- by rewrite (Hkey 1%N).
-- by rewrite (Hkey 2%N).
+by apply: vseb_head3_dom => //; rewrite Hsz5.
 Qed.
 
 (* The paper's star identity [(r0, VSEB(2)) = VSEB(3)]: [ThreeProd (x, y)]'s  *)

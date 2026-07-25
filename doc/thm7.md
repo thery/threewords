@@ -112,7 +112,9 @@ dropped by VSEB. A naive analysis:
 
 (`ε₅` is the Theorem-3 truncation bound at `k = 3`.) Now
 `x̄, ȳ ≥ 1 − (2u−2u²) − (2u²−2u³) ≥ 1 − 2u`, so `x̄ȳ ≥ 1 − 4u`. The error is
-shown not too large when `ε₅ ≠ 0` (details omitted in the paper), giving
+shown not too large when `ε₅ ≠ 0` (details omitted in *this* paper but
+recovered from `doc/old-triplewors.pdf`; see **`doc/thm7-eps5.md`** for the full
+four-case argument and its Coq map to `ThreeProd_error_eps5nz`), giving
 
 ```
 |r̄ − x̄ȳ| / |x̄ȳ| ≤ (28u³ − 11.9u⁴)/(1 − 4u) ≤ 28u³ + 107u⁴.

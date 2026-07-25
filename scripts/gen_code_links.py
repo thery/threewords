@@ -58,7 +58,7 @@ COVERAGE = [
       ("error", R("TWSum_error", "TWSum.v"))], "done"),
     ("9",     "3Prod^acc (TW×TW)", R("ThreeProd", "ThreeProd.v"),
      [("Thm 7", R("ThreeProd_isTW", "ThreeProd.v")),
-      ("error", R("ThreeProd_error", "ThreeProd.v"))], "skel"),
+      ("error", R("ThreeProd_error", "ThreeProd.v"))], "done"),
     ("10",    "3Prod^fast (TW×TW)", None,
      [("err bound", None)], "no"),
     ("11–12", "3Prod (DW×TW)", None,

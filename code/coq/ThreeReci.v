@@ -152,6 +152,165 @@ Definition ThreeReci (x : twR) : twR := ThreeReciAux ThreeProdDW x.
 Definition ThreeReciFast (x : twR) : twR := ThreeReciAux ThreeProdDWFast x.
 
 (* ===========================================================================*)
+(*  The starting point [a = RN((1 + 2u)/x0)] (paper Section 8)                *)
+(*                                                                            *)
+(*  [1 + 2u] is the SUCCESSOR of [1], and that is exactly what makes          *)
+(*  [RN(x * RN((1 + 2u)/x)) = 1 + 2u] hold for EVERY nonzero float [x] -- the *)
+(*  fact the paper calls straightforward, and which turns [h0] into the       *)
+(*  constant [1 - 2u].  Scaling and sign reduce it to [1 <= x < 2], where     *)
+(*  there are three cases: [x = 1] and [x = 1 + 2u] are exact, and for        *)
+(*  [x >= 1 + 4u] the quotient lies in [[1/2, 1)], so it is rounded with an   *)
+(*  error at most [u/2], which [x < 2] turns into a distance STRICTLY below   *)
+(*  the half-ulp [u] of [1 + 2u].                                             *)
+(* ===========================================================================*)
+(* [p >= 10] caps [u] at [2^-10] -- the counterpart, for Algorithm 13, of the *)
+(* [u <= 1/64] that the multiplication algorithms spend their [p >= 6] on.    *)
+Lemma u_le_1024 : u <= / 1024.
+Proof.
+have -> : / 1024 = pow (-10) by rewrite /= /Z.pow_pos /=; lra.
+by rewrite (u_pow p); apply: bpow_le; lia.
+Qed.
+
+Lemma format_1 : format 1.
+Proof. exact: generic_format_FLX_1. Qed.
+
+Lemma succ_1 : succ beta fexp 1 = 1 + 2 * u.
+Proof.
+rewrite succ_FLX_1.
+have -> : (- p + 1 = 1 - p)%Z by lia.
+by rewrite (pow_1mp p).
+Qed.
+
+Lemma format_1p2u : format (1 + 2 * u).
+Proof. by rewrite -succ_1; apply: generic_format_succ; apply: format_1. Qed.
+
+Lemma ulp_1p2u : ulp (1 + 2 * u) = 2 * u.
+Proof.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu4 : u <= /4 by have := u_le_1024; lra.
+have Hne : 1 + 2 * u <> 0 by lra.
+have Hmag : (mag beta (1 + 2 * u) = 1%Z :> Z).
+  apply: (mag_unique_pos beta (1 + 2 * u) 1); split.
+    have E0 : pow (1 - 1) = 1 by [].
+    by rewrite E0; lra.
+  have E1 : pow 1 = 2 by [].
+  by rewrite E1; lra.
+by rewrite ulp_neq_0 // /cexp /fexp Hmag (pow_1mp p).
+Qed.
+
+Lemma succ_1p2u : succ beta fexp (1 + 2 * u) = 1 + 4 * u.
+Proof.
+have Hu0 : 0 < u by apply: u_gt_0.
+by rewrite succ_eq_pos ?ulp_1p2u; lra.
+Qed.
+
+Lemma pred_1p2u : Ulp.pred beta fexp (1 + 2 * u) = 1.
+Proof. by rewrite -succ_1 pred_succ //; apply: format_1. Qed.
+
+(* Anything strictly within the half-ulp [u] of [1 + 2u] rounds to it: the    *)
+(* two midpoints are [(1 + pred) / 2 = 1 + u] and [(1 + succ) / 2 = 1 + 3u].  *)
+Lemma RN_eq_1p2u t : Rabs (t - (1 + 2 * u)) < u -> RND t = 1 + 2 * u.
+Proof.
+move=> Ht.
+have Hu0 : 0 < u by apply: u_gt_0.
+have [Ht1 Ht2] := Rabs_def2 _ _ Ht.
+apply: Rle_antisym.
+  by apply: round_N_le_midp; [apply: format_1p2u | rewrite succ_1p2u; lra].
+by apply: round_N_ge_midp; [apply: format_1p2u | rewrite pred_1p2u; lra].
+Qed.
+
+(* The normalised case [1 <= x < 2].                                          *)
+Lemma round_div_1p2u_norm x :
+  format x -> 1 <= x < 2 -> RND (x * RND ((1 + 2 * u) / x)) = 1 + 2 * u.
+Proof.
+move=> Fx [Hx1 Hx2].
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu4 : u <= /4 by have := u_le_1024; lra.
+have F1 : format 1 by apply: format_1.
+have F12u : format (1 + 2 * u) by apply: format_1p2u.
+have [Hxe1 | Hxn1] := Req_dec x 1.
+  rewrite Hxe1 Rmult_1_l.
+  have -> : (1 + 2 * u) / 1 = 1 + 2 * u by field.
+  by rewrite !round_generic.
+have Hx12u : 1 + 2 * u <= x by rewrite -succ_1; apply: succ_le_lt => //; lra.
+have [Hxe2 | Hxn2] := Req_dec x (1 + 2 * u).
+  have -> : (1 + 2 * u) / x = 1 by rewrite Hxe2; field; lra.
+  by rewrite [RND 1]round_generic // Rmult_1_r Hxe2 round_generic.
+have Hx14u : 1 + 4 * u <= x by rewrite -succ_1p2u; apply: succ_le_lt => //; lra.
+set v := (1 + 2 * u) / x.
+have Hxn0 : x <> 0 by lra.
+have Hv1 : /2 <= v.
+  rewrite /v; apply: (Rmult_le_reg_r x) => //; first by lra.
+  by rewrite /Rdiv Rmult_assoc Rinv_l //; lra.
+have Hv2 : v < 1.
+  rewrite /v; apply: (Rmult_lt_reg_r x); first by lra.
+  by rewrite /Rdiv Rmult_assoc Rinv_l //; nra.
+have Hvn0 : v <> 0 by lra.
+have Hmagv : (mag beta v = 0%Z :> Z).
+  apply: (mag_unique_pos beta v 0); split.
+    have E0 : pow (0 - 1) = /2 by rewrite /= /Z.pow_pos /=; lra.
+    by rewrite E0.
+  have E1 : pow 0 = 1 by [].
+  by rewrite E1.
+have Hulpv : ulp v = u.
+  by rewrite ulp_neq_0 // /cexp /fexp Hmagv (u_pow p); congr (pow _); lia.
+have Herr : Rabs (RND v - v) <= /2 * ulp v by apply: error_le_half_ulp.
+rewrite Hulpv in Herr.
+apply: RN_eq_1p2u.
+have -> : x * RND v - (1 + 2 * u) = x * (RND v - v) by rewrite /v; field.
+rewrite Rabs_mult (Rabs_pos_eq x); last by lra.
+have := Rabs_pos (RND v - v).
+nra.
+Qed.
+
+(* The general case, by scaling to [[1, 2)] and by sign symmetry.             *)
+Lemma round_div_1p2u x :
+  format x -> x <> 0 -> RND (x * RND ((1 + 2 * u) / x)) = 1 + 2 * u.
+Proof.
+move=> Fx Hxn0.
+wlog Hxpos : x Fx Hxn0 / 0 < x => [Hw|].
+  have [Hpos|Hneg] := Rlt_le_dec 0 x; first by apply: Hw.
+  have Hn : - x <> 0 by lra.
+  have Fn : format (- x) by apply: generic_format_opp.
+  have H := Hw (- x) Fn Hn ltac:(lra).
+  have Hopp2 : (1 + 2 * u) / x = - ((1 + 2 * u) / - x) by field.
+  rewrite Hopp2 RN_sym; last by exact: choice_sym.
+  have -> : x * - RND ((1 + 2 * u) / - x) = - x * RND ((1 + 2 * u) / - x)
+    by ring.
+  exact: H.
+(* Scale [x] into [[1, 2)]: both the division and the product commute with a  *)
+(* power of two ([round_bpow_FLX]), so the normalised case suffices.          *)
+set e := (mag beta x - 1)%Z.
+have Hep : pow e <= x.
+  have := bpow_mag_le beta x Hxn0; rewrite (Rabs_pos_eq x); last by lra.
+  by rewrite /e.
+have Hes : x < pow (e + 1).
+  have -> : (e + 1 = mag beta x)%Z by rewrite /e; lia.
+  by have := bpow_mag_gt beta x; rewrite (Rabs_pos_eq x); last by lra.
+set y := x * pow (- e).
+have Hpe0 : 0 < pow e by apply: bpow_gt_0.
+have Hy1 : 1 <= y.
+  rewrite /y bpow_opp; apply: (Rmult_le_reg_r (pow e)) => //.
+  by rewrite Rmult_1_l Rmult_assoc Rinv_l; lra.
+have Hy2 : y < 2.
+  rewrite /y bpow_opp; apply: (Rmult_lt_reg_r (pow e)) => //.
+  rewrite Rmult_assoc Rinv_l ?Rmult_1_r; last by lra.
+  by move: Hes; rewrite bpow_plus; have -> : pow 1 = 2 by []; lra.
+have Fy : format y by rewrite /y; apply/format_scale.
+have Hxy : x = y * pow e.
+  rewrite /y Rmult_assoc -bpow_plus.
+  have -> : (- e + e = 0)%Z by lia.
+  by have -> : pow 0 = 1 by []; rewrite Rmult_1_r.
+have Hyn0 : y <> 0 by lra.
+have -> : (1 + 2 * u) / x = ((1 + 2 * u) / y) * pow (- e).
+  by rewrite {1}Hxy bpow_opp; field; split; lra.
+rewrite round_bpow_FLX.
+have -> : x * (RND ((1 + 2 * u) / y) * pow (- e)) = y * RND ((1 + 2 * u) / y).
+  by rewrite {1}Hxy bpow_opp; field; lra.
+by apply: round_div_1p2u_norm.
+Qed.
+
+(* ===========================================================================*)
 (*  Correctness, part 1: the result is a triple-word number.                  *)
 (*                                                                            *)
 (*  Both products are calls to Algorithm 11 (resp. 12), whose result is a TW  *)

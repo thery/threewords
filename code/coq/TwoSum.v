@@ -514,6 +514,45 @@ rewrite -[Znearest _]/rnd -/s in Hh.
 lra.
 Qed.
 
+(* Algorithm 1 is error-free as soon as the operands are ORDERED, [|b| <= |a|]*)
+(* (the test [TwoSum] performs and [Fast2Sum] does not).  In FLX no exponent  *)
+(* condition is needed on top of it: [s = RN(a+b) - a] is exact               *)
+(* ([sma_exact_abs_or0]) and the remaining [(a+b) - RN(a+b)] is a float       *)
+(* ([Plus_error.plus_error], no underflow), so both roundings are the         *)
+(* identity.                                                                  *)
+Lemma Fast2Sum_correct a b :
+  format a -> format b -> (a <> 0 -> Rabs b <= Rabs a) ->
+  let: DWR s e := Fast2Sum a b in s + e = a + b.
+Proof.
+move=> Fa Fb Hab.
+rewrite /Fast2Sum /=.
+rewrite [RND (RND (a + b) - a)]round_generic;
+    last by apply: sma_exact_abs_or0.
+have -> : b - (RND (a + b) - a) = - (RND (a + b) - (a + b)) by ring.
+rewrite [RND (- _)]round_generic; first by ring.
+by apply/generic_format_opp/Plus_error.plus_error.
+Qed.
+
+(* Magnitude analogue for Algorithm 1, as [magnitude_TwoSum] for Algorithm 2: *)
+(* the low word is at most half an ulp of the high word.  This is what feeds  *)
+(* the double-word predicate [2|e| <= ulp s].                                  *)
+Lemma magnitude_Fast2Sum a b :
+  format a -> format b -> (a <> 0 -> Rabs b <= Rabs a) ->
+  magnitudeDWR (Fast2Sum a b).
+Proof.
+move=> Fa Fb Hab.
+have Hc := Fast2Sum_correct Fa Fb Hab.
+move: Hc; rewrite /magnitudeDWR /Fast2Sum /=.
+set s := RND (a + b).
+set e := RND (b - _).
+move=> Hc.
+have He : e = a + b - s by lra.
+rewrite He Rabs_minus_sym.
+have /(_ p_gt_0) Hh := error_le_half_ulp_RN (a + b).
+rewrite -[Znearest _]/rnd -/s in Hh.
+lra.
+Qed.
+
 (* The low word (error) of a 2Sum is a multiple of the coarser input grid     *)
 (* [bpow (min (cexp a) (cexp b))]: [a], [b], and [RN(a+b)] all live on it, so *)
 (* so does [a + b - RN(a+b)].                                                 *)

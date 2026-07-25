@@ -1,10 +1,10 @@
 # Algorithm 12 — 3Prodᶠᵃˢᵗ₂,₃ (fast product of a double word by a triple word)
 
-> **STATUS (2026-07-25).** `ThreeProdDWFast_isTW` is **PROVED**;
-> `ThreeProdDWFast_error` (`18u³ + 75u⁴`) is still `Admitted`.
-> `code/coq/ThreeProdDWFast.v` defines `ThreeProdDWFast` (Algorithm 12
-> transcribed verbatim); part 1 is `ThreeProdDWFast_eq` + `isDW_isTW` +
-> `ThreeProdFast_isTW`.
+> **STATUS (2026-07-25).** **COMPLETE — zero admits.** `ThreeProdDWFast_isTW`
+> and `ThreeProdDWFast_error` (`18u³ + 75u⁴`) are both `Qed` in
+> `code/coq/ThreeProdDWFast.v`. Part 1 is two lemmas (`ThreeProdDWFast_eq` +
+> `ThreeProdFast_isTW`); part 2 follows §7.5 of the old paper below.
+> `Print Assumptions` = classic reals + funext.
 > `doc/paper3.pdf` §7.2, p. 8 (the *faster version*). As for Theorem 8 the
 > published paper gives no proof; the details come from
 > `doc/old-triplewors.pdf` §7.5 (Algorithm 15), reproduced below.
@@ -85,15 +85,20 @@ error `≈ (18 − 2.4·10⁻⁶)u³`.
 |---|---|
 | Algorithm 12 | `ThreeProdDWFast` |
 | result is TW | `ThreeProdDWFast_isTW` (**proved**), via `ThreeProdDWFast_eq` |
-| error `18u³+75u⁴` | `ThreeProdDWFast_error` (**admitted**) |
+| error `18u³+75u⁴` | `ThreeProdDWFast_error` (**proved**) |
 
 Reuse plan:
 
 - **part 1**: `ThreeProdDWFast_eq` (Algorithm 12 = Algorithm 10 at `x₂ = 0`,
   since `RN(z₀₁⁻ + 0·y₀) = z₀₁⁻`) + `isDW_isTW` + `ThreeProdFast_isTW`.
-- **part 2**: Algorithm 10's `innerF_Fnonoverlap`, `ThreeProdFast_norm_eq`,
-  `sumR_eF_decomp`, `epsp4_bound`-style caps and `eps5_bound`; Theorem 8's
-  `dw_norm` machinery, §7.2 term bounds, `eps1_big_prod_dw`/`eps4_big_prod_dw`,
-  `err_small_of_round`, `eps0_small_of_z01p`/`_z10p` and the two assembly
-  lemmas. New: `epsp4_bound_dw` (`≤ 8u³`), the four-limb error identity at
-  `x₂ = 0`, the `ε₅ ≠ 0` disjunction on `s₃`, and the three-case assembly.
+- **part 2 is done**, and almost everything is reused: Algorithm 10's
+  `ThreeProdFast_norm_eq`, `innerF_Fnonoverlap` and `sumR_eF_decomp` (at
+  `x₂ = 0`), `eps5_bound`, and Theorem 8's whole DW machinery — `dw_norm`,
+  the §7.2 term bounds, `eps1_big_prod_dw`/`eps4_big_prod_dw`,
+  `err_small_of_round`, `eps0_small_of_z01p`/`_z10p`, `assembly_dw_eps5`,
+  `assembly_dw_zero`. New for Algorithm 12: the WLOG wrappers (through
+  `ThreeProdDWFast_eq` and Algorithm 10's scale/sign lemmas), `epsp4_bound_dw`
+  (`|(c+z₃) − s₃| ≤ 8u³`), `eps5nz_dwF` (the `2u³`-grid disjunction on the
+  four-limb list, with `|r₀| < 2` from the product being `< 2 − 5u`), and the
+  three-case assembly with `(K,A)` = `(22u³−2u⁴, 1.5−7u)`, `(18u³−2u⁴, 1−4u)`,
+  `(16u³+2u⁴, 1−4u)`.

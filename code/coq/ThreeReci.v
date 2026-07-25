@@ -133,16 +133,30 @@ Proof. by case: x => x0 x1 x2; rewrite /TWval /=; ring. Qed.
 (*  [h = (h0, h1) = (1 - 2u, h1)] is a double word approximating              *)
 (*  [2 - a (x0 + x1)].                                                        *)
 (* ===========================================================================*)
+(* The six head lines, named one by one so that the bounds of Section 8.2 can *)
+(* be stated and reused without unfolding the algorithm.                      *)
+Definition reciA (x0 : R) : R := RND ((1 + 2 * u) / x0).
+
+Definition reciH11 (x0 : R) : R := RND (reciA x0 * x0 - (1 + 2 * u)).
+
+Definition reciH1 (x0 x1 : R) : R := RND (- reciH11 x0 - reciA x0 * x1).
+
+Definition reciB01 (x0 : R) : R := (TwoProd (reciA x0) (1 - 2 * u)).1.
+
+Definition reciB11 (x0 : R) : R := (TwoProd (reciA x0) (1 - 2 * u)).2.
+
+Definition reciB12 (x0 x1 : R) : R :=
+  RND (reciB11 x0 + reciA x0 * reciH1 x0 x1).
+
+Definition reciB (x0 x1 : R) : dwR := Fast2Sum (reciB01 x0) (reciB12 x0 x1).
+
+(* The Newton double word [b], packaged as a [twR] with a zero third limb --  *)
+(* the shape Algorithms 11 and 12 take as their first argument.               *)
+Definition reciBW (x0 x1 : R) : twR :=
+  TWR (dwh (reciB x0 x1)) (dwl (reciB x0 x1)) 0.
+
 Definition ThreeReciAux (mul : twR -> twR -> twR) (x : twR) : twR :=
-  let x0  := tw0 x in
-  let x1  := tw1 x in
-  let a   := RND ((1 + 2 * u) / x0) in
-  let h11 := RND (a * x0 - (1 + 2 * u)) in
-  let h1  := RND (- h11 - a * x1) in
-  let: (b01, b11) := TwoProd a (1 - 2 * u) in
-  let b12 := RND (b11 + a * h1) in
-  let b   := Fast2Sum b01 b12 in
-  let bw  := TWR (dwh b) (dwl b) 0 in
+  let bw := reciBW (tw0 x) (tw1 x) in
   mul bw (sub2TW (mul bw x)).
 
 (* The accurate variant: [3Prod_{2,3}] is Algorithm 11.                       *)
@@ -308,6 +322,230 @@ rewrite round_bpow_FLX.
 have -> : x * (RND ((1 + 2 * u) / y) * pow (- e)) = y * RND ((1 + 2 * u) / y).
   by rewrite {1}Hxy bpow_opp; field; lra.
 by apply: round_div_1p2u_norm.
+Qed.
+
+(* ===========================================================================*)
+(*  Section 8.2, first bounds: the head lines of Algorithm 13                 *)
+(*                                                                            *)
+(*  Everything follows from [round_div_1p2u]: [RN(x0 a) = 1 + 2u] pins the    *)
+(*  product [a x0] to within half an ulp of [1 + 2u], which is [u].           *)
+(* ===========================================================================*)
+
+(* [1 - 2u], the virtual [h0], is a float: it is [(2^p - 2) * 2^-p].          *)
+Lemma format_1m2u : format (1 - 2 * u).
+Proof.
+have Hp2p : pow p = IZR (2 ^ p) by rewrite -IZR_Zpower; [congr IZR|lia].
+have Hpp : 0 < pow p by apply: bpow_gt_0.
+have -> : 1 - 2 * u = IZR (2 ^ p - 2) * pow (- p).
+  by rewrite minus_IZR -Hp2p (u_pow p) bpow_opp; field; lra.
+apply: (@format_mult_pow p Hp2 (2 ^ p - 2) (- p)).
+have H2 : (2 <= 2 ^ p)%Z by apply: (Z.pow_le_mono_r 2 1 p); lia.
+by rewrite Z.abs_eq; lia.
+Qed.
+
+(* [a x0] is within [u] of [1 + 2u] -- the whole point of dividing [1 + 2u]   *)
+(* rather than [1] by [x0].                                                   *)
+Lemma reciA_x0_err x0 :
+  format x0 -> x0 <> 0 -> Rabs (reciA x0 * x0 - (1 + 2 * u)) <= u.
+Proof.
+move=> Fx0 Hx0.
+have Hr : RND (x0 * reciA x0) = 1 + 2 * u by apply: round_div_1p2u.
+have Herr : Rabs (RND (x0 * reciA x0) - x0 * reciA x0)
+              <= /2 * ulp (RND (x0 * reciA x0)).
+  by apply: error_le_half_ulp_round.
+rewrite Hr ulp_1p2u in Herr.
+have -> : reciA x0 * x0 - (1 + 2 * u) = - ((1 + 2 * u) - x0 * reciA x0)
+  by ring.
+by rewrite Rabs_Ropp; lra.
+Qed.
+
+Lemma reciA_x0_bound x0 :
+  format x0 -> x0 <> 0 -> 1 + u <= reciA x0 * x0 <= 1 + 3 * u.
+Proof.
+move=> Fx0 Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have H := reciA_x0_err Fx0 Hx0.
+by split_Rabs; lra.
+Qed.
+
+Lemma reciA_neq_0 x0 : format x0 -> x0 <> 0 -> reciA x0 <> 0.
+Proof.
+move=> Fx0 Hx0 Ha.
+have Hu0 : 0 < u by apply: u_gt_0.
+by have := reciA_x0_bound Fx0 Hx0; rewrite Ha Rmult_0_l; lra.
+Qed.
+
+(* [h11] is EXACT: it is the error of the product [a x0] taken with respect   *)
+(* to [1 + 2u = RN(a x0)], and a product error is a float in FLX.             *)
+Lemma reciH11_exact x0 :
+  format x0 -> x0 <> 0 -> reciH11 x0 = reciA x0 * x0 - (1 + 2 * u).
+Proof.
+move=> Fx0 Hx0.
+have Fa : format (reciA x0) by apply: generic_format_round.
+have Hr : RND (x0 * reciA x0) = 1 + 2 * u by apply: round_div_1p2u.
+rewrite /reciH11 round_generic //.
+have -> : reciA x0 * x0 - (1 + 2 * u)
+        = - (RND (x0 * reciA x0) - x0 * reciA x0) by rewrite Hr; ring.
+by apply/generic_format_opp/format_err_mul.
+Qed.
+
+Lemma reciH11_bound x0 : format x0 -> x0 <> 0 -> Rabs (reciH11 x0) <= u.
+Proof.
+by move=> Fx0 Hx0; rewrite reciH11_exact //; apply: reciA_x0_err.
+Qed.
+
+(* [|h1| <= 3u + 10u^2] (paper Section 8.2): [|h11| <= u] and                 *)
+(* [|a x1| <= 2u|a x0| <= 2u(1 + 3u)], and one more rounding.                 *)
+Lemma reciH1_bound x0 x1 :
+  format x0 -> x0 <> 0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
+  Rabs (reciH1 x0 x1) <= 3 * u + 10 * (u * u).
+Proof.
+move=> Fx0 Hx0 Hx1.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := u_le_1024.
+have Hh11 := reciH11_bound Fx0 Hx0.
+have Hax0 := reciA_x0_bound Fx0 Hx0.
+have Hx1u : Rabs x1 <= 2 * u * Rabs x0.
+  case: Hx1 => [->|Hx1]; first by rewrite Rabs_R0; have := Rabs_pos x0; nra.
+  by have H := @ulp_2u p beta Hp2 x0; lra.
+have Hax1 : Rabs (reciA x0 * x1) <= 2 * u * (1 + 3 * u).
+  have -> : reciA x0 * x1 = (reciA x0 * x0) * (x1 / x0) by field.
+  rewrite Rabs_mult.
+  have Hx0p : 0 < Rabs x0 by apply: Rabs_pos_lt.
+  have Hd : Rabs (x1 / x0) <= 2 * u.
+    rewrite /Rdiv Rabs_mult Rabs_inv.
+    apply: (Rmult_le_reg_r (Rabs x0)) => //.
+    rewrite Rmult_assoc Rinv_l; last by lra.
+    by rewrite Rmult_1_r; lra.
+  have Hp : Rabs (reciA x0 * x0) <= 1 + 3 * u.
+    by rewrite Rabs_pos_eq; lra.
+  have := Rabs_pos (x1 / x0); have := Rabs_pos (reciA x0 * x0).
+  by nra.
+have Ht : Rabs (- reciH11 x0 - reciA x0 * x1) <= 3 * u + 6 * (u * u).
+  have Hsum := Rabs_triang (- reciH11 x0) (- (reciA x0 * x1)).
+  rewrite !Rabs_Ropp in Hsum.
+  have -> : - reciH11 x0 - reciA x0 * x1
+          = - reciH11 x0 + - (reciA x0 * x1) by ring.
+  by nra.
+have Hrel :=
+  @relative_error_le p beta Hp2 choice (- reciH11 x0 - reciA x0 * x1).
+have Hpos := Rabs_pos (- reciH11 x0 - reciA x0 * x1).
+rewrite /reciH1.
+have Habs : Rabs (RND (- reciH11 x0 - reciA x0 * x1))
+              <= (1 + u) * Rabs (- reciH11 x0 - reciA x0 * x1).
+  by move: Hrel; split_Rabs; nra.
+by nra.
+Qed.
+
+(* ===========================================================================*)
+(*  Section 8.2: the Newton double word [b] is a DW                           *)
+(*                                                                            *)
+(*  [b01 = RN(a(1 - 2u))] keeps the size of [a] while [b12] is [O(u|a|)], so  *)
+(*  the Fast2Sum operands are ordered and [magnitude_Fast2Sum] applies.       *)
+(* ===========================================================================*)
+Lemma reciB01_bound x0 :
+  format x0 -> x0 <> 0 ->
+  (1 - 3 * u) * Rabs (reciA x0) <= Rabs (reciB01 x0).
+Proof.
+move=> Fx0 Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := u_le_1024.
+have Hpos := Rabs_pos (reciA x0).
+have Hrel := @relative_error_le p beta Hp2 choice (reciA x0 * (1 - 2 * u)).
+have Hb : reciB01 x0 = RND (reciA x0 * (1 - 2 * u)) by [].
+have Hm : Rabs (reciA x0 * (1 - 2 * u)) = (1 - 2 * u) * Rabs (reciA x0).
+  by rewrite Rabs_mult (Rabs_pos_eq (1 - 2 * u)); lra.
+rewrite Hb.
+move: Hrel; rewrite Hm; split_Rabs; nra.
+Qed.
+
+Lemma reciB11_bound x0 :
+  format x0 -> x0 <> 0 -> Rabs (reciB11 x0) <= u * Rabs (reciA x0).
+Proof.
+move=> Fx0 Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := u_le_1024.
+have Hpos := Rabs_pos (reciA x0).
+have Hb : reciB11 x0
+        = RND (reciA x0 * (1 - 2 * u) - RND (reciA x0 * (1 - 2 * u))) by [].
+have Fe : format (reciA x0 * (1 - 2 * u) - RND (reciA x0 * (1 - 2 * u))).
+  have -> : reciA x0 * (1 - 2 * u) - RND (reciA x0 * (1 - 2 * u))
+          = - (RND (reciA x0 * (1 - 2 * u)) - reciA x0 * (1 - 2 * u)) by ring.
+  apply: generic_format_opp.
+  by apply: format_err_mul; [apply: generic_format_round | apply: format_1m2u].
+rewrite Hb round_generic //.
+have Hrel := @relative_error_le p beta Hp2 choice (reciA x0 * (1 - 2 * u)).
+have Hm : Rabs (reciA x0 * (1 - 2 * u)) = (1 - 2 * u) * Rabs (reciA x0).
+  by rewrite Rabs_mult (Rabs_pos_eq (1 - 2 * u)); lra.
+have -> : reciA x0 * (1 - 2 * u) - RND (reciA x0 * (1 - 2 * u))
+        = - (RND (reciA x0 * (1 - 2 * u)) - reciA x0 * (1 - 2 * u)) by ring.
+rewrite Rabs_Ropp.
+by move: Hrel; rewrite Hm; nra.
+Qed.
+
+Lemma reciB12_bound x0 x1 :
+  format x0 -> x0 <> 0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
+  Rabs (reciB12 x0 x1) <= 5 * u * Rabs (reciA x0).
+Proof.
+move=> Fx0 Hx0 Hx1.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := u_le_1024.
+have Hpos := Rabs_pos (reciA x0).
+have Hb11 := reciB11_bound Fx0 Hx0.
+have Hh1 := reciH1_bound Fx0 Hx0 Hx1.
+have Hah1 : Rabs (reciA x0 * reciH1 x0 x1)
+              <= (3 * u + 10 * (u * u)) * Rabs (reciA x0).
+  rewrite Rabs_mult; have := Rabs_pos (reciH1 x0 x1); nra.
+have Ht : Rabs (reciB11 x0 + reciA x0 * reciH1 x0 x1)
+            <= (4 * u + 10 * (u * u)) * Rabs (reciA x0).
+  by have := Rabs_triang (reciB11 x0) (reciA x0 * reciH1 x0 x1); nra.
+have Hrel :=
+  @relative_error_le p beta Hp2 choice
+    (reciB11 x0 + reciA x0 * reciH1 x0 x1).
+have Hpos2 := Rabs_pos (reciB11 x0 + reciA x0 * reciH1 x0 x1).
+rewrite /reciB12.
+have Habs : Rabs (RND (reciB11 x0 + reciA x0 * reciH1 x0 x1))
+              <= (1 + u) * Rabs (reciB11 x0 + reciA x0 * reciH1 x0 x1).
+  by move: Hrel; split_Rabs; nra.
+have Hu2 : u * u <= /1024 * u by nra.
+have Hu3 : u * u * u <= /1024 * (u * u) by nra.
+by clear -Hu0 Hu1024 Hu2 Hu3 Hpos Ht Habs Hpos2; nra.
+Qed.
+
+(* The Fast2Sum ordering hypothesis.                                          *)
+Lemma reciB12_le_B01 x0 x1 :
+  format x0 -> x0 <> 0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
+  Rabs (reciB12 x0 x1) <= Rabs (reciB01 x0).
+Proof.
+move=> Fx0 Hx0 Hx1.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := u_le_1024.
+have Hpos := Rabs_pos (reciA x0).
+have H1 := reciB12_bound Fx0 Hx0 Hx1.
+have H2 := reciB01_bound Fx0 Hx0.
+by nra.
+Qed.
+
+(* [b] is a double word: its two words are floats (both are roundings) and    *)
+(* the low one is at most half an ulp of the high one, because the Fast2Sum   *)
+(* operands are ordered.                                                      *)
+Lemma reciB_isDW x0 x1 :
+  format x0 -> x0 <> 0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
+  isDW (reciBW x0 x1).
+Proof.
+move=> Fx0 Hx0 Hx1.
+have F01 : format (reciB01 x0) by apply: generic_format_round.
+have F12 : format (reciB12 x0 x1) by apply: generic_format_round.
+have Hord := reciB12_le_B01 Fx0 Hx0 Hx1.
+have Hmag := @magnitude_Fast2Sum p Hp2 choice _ _ F01 F12 (fun _ => Hord).
+have Hfor := @format_Fast2Sum p Hp2 choice (reciB01 x0) (reciB12 x0 x1).
+rewrite /reciBW /reciB.
+case E : (Fast2Sum (reciB01 x0) (reciB12 x0 x1)) => [s e].
+rewrite E in Hmag Hfor.
+rewrite /magnitudeDWR in Hmag.
+case: Hfor => Fs Fe.
+split => //.
+by right; rewrite dwhE dwlE; lra.
 Qed.
 
 (* ===========================================================================*)

@@ -1,11 +1,11 @@
 # Theorem 8 — 3Prodᵃᶜᶜ₂,₃ (product of a double word by a triple word)
 
-> **STATUS (2026-07-25).** `ThreeProdDW_isTW` is **PROVED**;
-> `ThreeProdDW_error` (`10.5u³ + 39u⁴`) is still `Admitted`.
-> `code/coq/ThreeProdDW.v` defines `isDW` and `ThreeProdDW` (Algorithm 11
-> transcribed verbatim). Part 1 is three short lemmas — `isDW_isTW`,
-> `ThreeProdDW_eq` (Algorithm 11 = Algorithm 9 at `x₂ = 0`) and
-> `ThreeProd_isTW`.
+> **STATUS (2026-07-25).** **COMPLETE — zero admits.** `ThreeProdDW_isTW` and
+> `ThreeProdDW_error` (`10.5u³ + 39u⁴`) are both `Qed` in
+> `code/coq/ThreeProdDW.v`, which defines `isDW` and `ThreeProdDW`
+> (Algorithm 11 transcribed verbatim). Part 1 is three short lemmas
+> (`isDW_isTW`, `ThreeProdDW_eq`, `ThreeProd_isTW`); part 2 follows §7.4 of the
+> old paper below. `Print Assumptions` = classic reals + funext.
 > `doc/paper3.pdf` §7, p. 7–8. The published paper omits the proof of
 > Theorem 8 entirely ("the proof is omitted"); it is recovered from
 > `doc/old-triplewors.pdf` §7 (Algorithm 14 / Theorem 11), reproduced below.
@@ -129,7 +129,7 @@ in binary64, `(x₀,x₁) = (1+3·2²⁷u, u−2²⁷u²)` and
 | DW number | `isDW` (a `twR` with `x₂ = 0` and `2\|x₁\| ≤ ulp x₀`) |
 | Algorithm 11 | `ThreeProdDW` |
 | result is TW | `ThreeProdDW_isTW` (**proved**), via `isDW_isTW` + `ThreeProdDW_eq` |
-| Theorem 8 (`10.5u³+39u⁴`) | `ThreeProdDW_error` (**admitted**) |
+| Theorem 8 (`10.5u³+39u⁴`) | `ThreeProdDW_error` (**proved**) |
 
 Reuse plan (as for Algorithm 10 — see `doc/alg10.md`):
 
@@ -137,10 +137,22 @@ Reuse plan (as for Algorithm 10 — see `doc/alg10.md`):
   (`ThreeProdDW x̄ ȳ = ThreeProd (x₀,x₁,0) ȳ`, since `RN(z₀₁⁻ + 0·y₀) = z₀₁⁻`
   — `z₀₁⁻` is a rounded value, hence a float, so `round_generic` applies) plus
   `isDW_isTW` and `ThreeProd_isTW`.
-- **part 2** re-instantiates the Algorithm-9 error skeleton with `x₂ = 0`: the
-  WLOG scale/sign reduction, `error_decomp`/`sumR_e_decomp`, `eps5_bound`
-  (generic), `eps5_zero_all_big`-style divisibility, `vecSum_imul_forward`,
-  `vseb_imul_forward`. New work: a `dw_norm` normalisation carrying `|x₁| ≤ u`,
-  the tighter §7.2 term bounds, the two refinements above (which need the
-  P-nonoverlap lower bound on `r̄` from `sumR_ufp_lower`), and the five-case
-  assembly.
+- **part 2 is done** and re-instantiates the Algorithm-9 error skeleton at
+  `x₂ = 0`: `ThreeProd_norm_eq` (the star identity), `inner_Fnonoverlap`,
+  `sumR_e_decomp` (whose `ε₀` loses its `x₂` terms and whose `ε₂` vanishes),
+  `eps5_bound`, `vecSum_imul_forward`/`vseb_imul_forward`, `sumR_ufp_lower`,
+  `nth_step_zero`/`small_head_zero`. New for Algorithm 11: `dw_norm`
+  (normalisation carrying `|x₁| ≤ u`) and the WLOG wrappers — all routed
+  through `ThreeProdDW_eq` and Algorithm 9's own scale/sign lemmas, so no
+  induction is redone — the §7.2 term bounds (`x1y1_bound_dw`, `z10p_bound_dw`,
+  `z10m_bound_dw`, `c_bound_dw`, `z31_bound_dw`, `z3_bound_dw`, `eps*_bound_dw`),
+  the two refinements (`eps1_big_prod_dw`, `eps4_big_prod_dw`), the `ε₅ ≠ 0`
+  disjunction (`eps5nz_dw`, the `2u³` grid argument capped by `|r₀| < 2`), the
+  small caps (`err_small_of_round`, `eps0_small_of_z01p`, `eps0_small_of_z10p`)
+  and the two assembly lemmas (`assembly_dw_eps5`, `assembly_dw_zero`).
+
+  One deviation from the paper: its case analysis leaves a gap between
+  `x̄ȳ ≥ 1.5−5u` and `x̄ȳ < 1.5−6u`. We close it by using the single threshold
+  `1.5 − 7u`, which both refinements deliver (`eps4_big_prod_dw` gives
+  `x₀y₀ ≥ 1.5 − u`, hence `x̄ȳ ≥ 1.5 − 7u`) and which the assembly still
+  absorbs.

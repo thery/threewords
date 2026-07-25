@@ -50,7 +50,7 @@ witness). See `doc/thm6.md`.
 | 9  | 3Prod^acc_{3,3}(x,y) (46, 2 tests) — TW × TW | **Thm 7** (err `28u³+107u⁴`, `p≥6`) | ✓ `ThreeProd`; `ThreeProd_isTW` + `ThreeProd_error` (`doc/thm7.md`, `doc/thm7-eps5.md`) |
 | 10 | 3Prod^fast_{3,3}(x,y) (38, 1 test) | err `44u³+176u⁴` | ✓ `ThreeProdFast`; `ThreeProdFast_isTW` + `ThreeProdFast_error` (`doc/alg10.md`) |
 | 11 | 3Prod^acc_{2,3}(x,y) (45, 2 tests) — DW × TW | **Thm 8** (err `10.5u³+39u⁴`, `p≥6`) | ✓ `ThreeProdDW`; `ThreeProdDW_isTW` + `ThreeProdDW_error` (`doc/thm8.md`) |
-| 12 | 3Prod^fast_{2,3}(x,y) (37, 1 test) | err `18u³+75u⁴` | 🚧 `ThreeProdDWFast`; `ThreeProdDWFast_isTW`/`ThreeProdDWFast_error` skeleton (`doc/alg12.md`) |
+| 12 | 3Prod^fast_{2,3}(x,y) (37, 1 test) | err `18u³+75u⁴` | 🚧 `ThreeProdDWFast`; `ThreeProdDWFast_isTW` ✓ proved, `ThreeProdDWFast_error` admitted (`doc/alg12.md`) |
 | 13 | 3Reci(x) (73, 2 tests) — reciprocal (Newton) | **Thm 9** (`p≥10`) | — |
 | 14 | 3Div(z,x) (119, 4 tests) — quotient | **Thm 10** (err `24u³+1509u⁴`, `p≥10`) | — |
 | 15 | 3SqRt(x) (127, 4 tests) — square root (Newton) | **Thm 11** (err `24u³+10260u⁴`, `p≥11`) | — |
@@ -85,8 +85,8 @@ sharper error bound is not, and the published paper omits its proof entirely —
 recovered from `doc/old-triplewors.pdf` §7.4.
 
 **In progress:** 3Prod^fast DW×TW (Alg 12) — `ThreeProdDWFast` defined,
-`ThreeProdDWFast_isTW` / `ThreeProdDWFast_error` (`18u³+75u⁴`) stated (skeleton,
-proofs to follow; `doc/alg12.md`). It is Algorithm 10 with `x₂ = 0`, so
+`ThreeProdDWFast_isTW` **proved**, `ThreeProdDWFast_error` (`18u³+75u⁴`) stated
+and admitted (`doc/alg12.md`). It is Algorithm 10 with `x₂ = 0`, so
 correctness is again inherited; the paper omits the error proof (recovered from
 `doc/old-triplewors.pdf` §7.5).
 

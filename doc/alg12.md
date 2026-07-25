@@ -1,9 +1,10 @@
 # Algorithm 12 — 3Prodᶠᵃˢᵗ₂,₃ (fast product of a double word by a triple word)
 
-> **STATUS (2026-07-25).** SKELETON. `code/coq/ThreeProdDWFast.v` defines
-> `ThreeProdDWFast` (Algorithm 12 transcribed verbatim) and states its two
-> correctness results, `ThreeProdDWFast_isTW` and `ThreeProdDWFast_error`
-> (`18u³ + 75u⁴`); both are `Admitted`.
+> **STATUS (2026-07-25).** `ThreeProdDWFast_isTW` is **PROVED**;
+> `ThreeProdDWFast_error` (`18u³ + 75u⁴`) is still `Admitted`.
+> `code/coq/ThreeProdDWFast.v` defines `ThreeProdDWFast` (Algorithm 12
+> transcribed verbatim); part 1 is `ThreeProdDWFast_eq` + `isDW_isTW` +
+> `ThreeProdFast_isTW`.
 > `doc/paper3.pdf` §7.2, p. 8 (the *faster version*). As for Theorem 8 the
 > published paper gives no proof; the details come from
 > `doc/old-triplewors.pdf` §7.5 (Algorithm 15), reproduced below.
@@ -83,7 +84,7 @@ error `≈ (18 − 2.4·10⁻⁶)u³`.
 | paper object | Rocq |
 |---|---|
 | Algorithm 12 | `ThreeProdDWFast` |
-| result is TW | `ThreeProdDWFast_isTW` (**admitted**) |
+| result is TW | `ThreeProdDWFast_isTW` (**proved**), via `ThreeProdDWFast_eq` |
 | error `18u³+75u⁴` | `ThreeProdDWFast_error` (**admitted**) |
 
 Reuse plan:

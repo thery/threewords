@@ -1,11 +1,11 @@
 # Theorem 10 — Algorithm 14 (3Div): the quotient of two triple words
 
-> **STATUS (2026-07-27). Everything PROVED except `δ₃`.**
-> `ThreeDiv_isTW`, `ThreeDivFast_isTW`, `ThreeProdOneTW_isTW`, and now the whole
-> error chain — `div_error_assembly`, `div_error_core`, `ThreeDivAux_error`,
-> `ThreeDiv_error`, `ThreeDivFast_error` — are `Qed`.  The single remaining
-> `Admitted` in the project is **`ThreeProdOneTW_error`** (Algorithm 20's `δ₃`),
-> on which the two theorems' constants depend.
+> **STATUS (2026-07-27). PROVED, zero admits.**
+> `ThreeDiv_isTW`, `ThreeDivFast_isTW`, `ThreeProdOneTW_isTW`, the whole error
+> chain (`div_error_assembly`, `div_error_core`, `ThreeDivAux_error`,
+> `ThreeDiv_error`, `ThreeDivFast_error`) and `ThreeProdOneTW_error` are all
+> `Qed`.  **Both of Theorem 10's constants had to move** — see the last two
+> sections.
 > Files: `code/coq/ThreeDiv.v` (the algorithm) and `code/coq/ThreeProdOne.v`
 > (Algorithm 20, its final product).
 > Setting FLX, `u = 2^{-p}`, `RN` = round-to-nearest (ties-to-even); `p ≥ 10`.
@@ -88,28 +88,40 @@ triple words: it takes the six bare reals `B, X, Z, P, A, Y` with the three
 products' relative errors and returns Theorem 10's bound. `ThreeDivAux_error`
 is then five lines of glue, and the two theorems are one instantiation each.
 
-## The `u⁴` constants are off by one at `p = 10`
+## The proved constants, and why they differ from the paper
 
-Exactly as in Theorem 9, the published `u⁴` constants do not survive an honest
-accounting — but only barely, and only at the smallest precision the theorem
-allows. Expanding `δ₁(1+71u²) + (δ₂+δ₃)(1+107u²) + 1165u⁴` at `u = 2^{-10}`:
-
-| variant | paper | honest |
+| variant | paper | proved |
 |---|---|---|
-| accurate | `24u³ + 1509u⁴` | `24u³ + 1509.18u⁴` ⟹ **`1510u⁴`** |
-| fast | `39u³ + 1582u⁴` | `39u³ + 1582.49u⁴` ⟹ **`1583u⁴`** |
+| accurate | `24u³ + 1509u⁴` | **`29u³ + 2576u⁴`** |
+| fast | `39u³ + 1582u⁴` | **`44u³ + 2650u⁴`** |
 
-The excess is the `u⁵` tail (`2190u⁵` resp. `3525u⁵`) that the paper drops, so
-the published constants do hold for every `p ≥ 11`. The `u³` terms are exactly
-the paper's. Both figures are conditional on `δ₃ = 3u³ + 264u⁴`.
+**The `u³` term is the paper's own arithmetic, not a slack in ours.**
+`24 = 10.5 + 10.5 + 3` and `39 = 18 + 18 + 3` charge Algorithm 20 with `3u³`.
+Its honest cost on a *triple* word is `8u³` (`ThreeProdOneTW_error`), whence
+`29 = 10.5 + 10.5 + 8` and `44 = 18 + 18 + 8`.
 
-## Expected discrepancy in `δ₃` (to be settled by its proof)
+Where the `8u³` comes from — the two roundings at the bottom of the chain:
 
-The old paper says Algorithm 20 is "Algorithm 18 with an additional `2u³`",
-giving `δ₃ = 3u³ + 264u⁴`. But Algorithm 18's `u³` came from `u·|b′₁ + z₃|`
-with `|b′₁| ≤ u²|x₀|`, and here a triple-word first argument doubles `b′₁`
-(`|a₁| ≤ 2u|a₀|`) while `|a₂| ≤ 4u²|a₀|` adds to `s₃` — so the honest
-coefficient looks nearer `6u³`, which would make Theorem 10's leading term
-`27u³` rather than `24u³`. If it moves, only the two constants in
-`ThreeDiv.v`'s final statements need re-tuning: the whole chain above is
-generic in `δ₁, δ₂, δ₃`.
+| term | Alg 18 (DW first argument) | Alg 20 (TW first argument) |
+|---|---|---|
+| `η₃ = RN(b′₁+z₃) − (b′₁+z₃)`, from `\|b′₁\| ≤ u·\|b′₀\|` | `u·(u² + …) = 1u³` | `u·(2u² + …) = **2u³**` |
+| `η₄ = RN(s₃′+x₂) − (s₃′+x₂)`, from `\|x₂\| ≤ 4u²\|x₀\|` | — (no `x₂`) | `u·(2u² + 4u² + …) = **6u³**` |
+
+A triple word only guarantees `|x₁| < ulp(x₀) ≤ 2u|x₀|` and
+`|x₂| < ulp(x₁) ≤ 4u²|x₀|` — *twice* a double word's separation at each level.
+The paper's `3u³ = 1u³ (η₃) + 2u³ (η₄)` is what one gets from the double-word
+separations `|x₁| ≤ u|x₀|`, `|x₂| ≤ u²|x₀|`, which a P-nonoverlapping triple
+word does not satisfy.
+
+**A possible tightening, not taken here.** In Algorithm 14 the first argument
+of Algorithm 20 is `ā = 3Prod(b̄, z̄)`, whose last two limbs come out of a
+`Fast2SumS` and therefore form a *double* word: `|a₂| ≤ u|a₁| ≤ 2u²|a₀|`, half
+of what a general triple word allows. Strengthening the multipliers'
+postcondition to record that would bring `η₄` to `4u³` and `δ₃` to `6u³`,
+hence Theorem 10 to `27u³` / `42u³`. It would still not reach the published
+`24u³` / `39u³`.
+
+The `u⁴` figures are `29u³ + 2575.81u⁴` and `44u³ + 2649.11u⁴` exactly, at
+`u = 2^{-10}`. `δ₃ = 8u³ + 1330u⁴` itself is stated for `p ≥ 6` (`u ≤ 1/64`),
+where the honest chain gives `8u³ + 1211u⁴` against `|x₀|` and the division by
+`|x̄ȳ| ≥ (1−4u)|x₀|` accounts for the rest.

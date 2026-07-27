@@ -105,6 +105,22 @@ Proof. by move=> Fa Fb; split; try apply: generic_format_round. Qed.
 Lemma format_Fast2Sum a b : formatDWR (Fast2Sum a b).
 Proof. by split; apply: generic_format_round. Qed.
 
+(* A Fast2Sum that SORTS its arguments first (one test, no extra operation).  *)
+(* It is error-free unconditionally, which a bare Fast2Sum is not: whenever   *)
+(* the caller cannot prove the ordering, this is the cheap fix -- cheaper     *)
+(* than a 2Sum, which costs three operations more.  (Algorithm 18 of          *)
+(* doc/old-triplewors.pdf needs exactly this twice; see ThreeProdOne.v.)      *)
+Definition Fast2SumS (a b : R) : dwR :=
+  if Rle_dec (Rabs b) (Rabs a) then Fast2Sum a b else Fast2Sum b a.
+
+Lemma Fast2SumS_hi a b : dwh (Fast2SumS a b) = RND (a + b).
+Proof.
+by rewrite /Fast2SumS; case: Rle_dec => _ //=; rewrite Rplus_comm.
+Qed.
+
+Lemma format_Fast2SumS a b : formatDWR (Fast2SumS a b).
+Proof. by rewrite /Fast2SumS; case: Rle_dec => Hab; apply: format_Fast2Sum. Qed.
+
 (* The magnitude counterpart of [formatDWR]: in a 2Sum result [DWR s e]       *)
 (* the error word [e] is at most half an ulp of the high word [s].            *)
 Definition magnitudeDWR (a : dwR) := let: DWR s e := a in Rabs e <= ulp s / 2.
@@ -551,6 +567,28 @@ rewrite He Rabs_minus_sym.
 have /(_ p_gt_0) Hh := error_le_half_ulp_RN (a + b).
 rewrite -[Znearest _]/rnd -/s in Hh.
 lra.
+Qed.
+
+(* The sorted Fast2Sum is error-free with NO hypothesis beyond the formats.   *)
+Lemma Fast2SumS_correct a b :
+  format a -> format b ->
+  let: DWR s e := Fast2SumS a b in s + e = a + b.
+Proof.
+move=> Fa Fb; rewrite /Fast2SumS; case: Rle_dec => Hab;
+  first by apply: Fast2Sum_correct.
+have Hba : Rabs a <= Rabs b by lra.
+have H := Fast2Sum_correct Fb Fa (fun _ => Hba).
+by move: H => H /=; lra.
+Qed.
+
+(* ... and its low word is at most half an ulp of its high word.              *)
+Lemma magnitude_Fast2SumS a b :
+  format a -> format b -> magnitudeDWR (Fast2SumS a b).
+Proof.
+move=> Fa Fb; rewrite /Fast2SumS; case: Rle_dec => Hab;
+  first by apply: magnitude_Fast2Sum.
+have Hba : Rabs a <= Rabs b by lra.
+by apply: (magnitude_Fast2Sum Fb Fa (fun _ => Hba)).
 Qed.
 
 (* The low word (error) of a 2Sum is a multiple of the coarser input grid     *)

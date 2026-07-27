@@ -1831,6 +1831,25 @@ Qed.
 (* A rounded product's error is [<= 2 ulp] of a factor when the OTHER factor  *)
 (* is [<= 2] in magnitude (the normalised leading limbs [x0, y0 < 2]). Via    *)
 (* [Rabs(RN t - t) <= u|t|] and [u|a*b| = u|a||b| <= 2 u|a| <= 2 ulp a].      *)
+(* [ulp 1 = 2u]: the gap just above [1].  Used wherever a triple word has     *)
+(* head [1] (Algorithm 13's [i], Algorithm 18's second argument).             *)
+Lemma ulp_one : ulp 1 = 2 * u.
+Proof.
+have -> : (1 = pow 0)%R by [].
+by rewrite ulp_bpow /FLX_exp u_pow bpow_plus; have -> : pow 1 = 2 by []; ring.
+Qed.
+
+(* [|RN t| <= (1 + u)|t|]: the relative-error bound, in the form the term     *)
+(* bounds use it.                                                             *)
+Lemma abs_round_le_rel t : Rabs (RND t) <= (1 + u) * Rabs t.
+Proof.
+have H := @relative_error_le p beta Hp2 choice t.
+have T := Rabs_triang (RND t - t) t.
+have E : RND t - t + t = RND t by ring.
+rewrite E in T.
+by have := Rabs_pos t; lra.
+Qed.
+
 Lemma err_mul_le_ulp a b :
   Rabs b <= 2 -> Rabs (a * b - RND (a * b)) <= 2 * ulp a.
 Proof.

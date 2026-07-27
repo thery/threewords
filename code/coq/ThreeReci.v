@@ -51,6 +51,7 @@ Require Import ThreeProd.
 Require Import ThreeProdFast.
 Require Import ThreeProdDW.
 Require Import ThreeProdDWFast.
+Require Import ThreeProdOne.
 Delimit Scope R_scope with R.
 Delimit Scope Z_scope with Z.
 
@@ -103,6 +104,10 @@ Local Notation tw_norm := (tw_norm p).
 (* The two DW x TW products of Sections 7.1 and 7.2 (Algorithms 11 and 12).   *)
 Local Notation ThreeProdDW := (ThreeProdDW p choice).
 Local Notation ThreeProdDWFast := (ThreeProdDWFast p choice).
+
+(* The specialised SECOND product of Section 8.4 (Algorithm 18), shared by    *)
+(* both variants: its second argument always has head [1].                    *)
+Local Notation ThreeProdOne := (ThreeProdOne p choice).
 
 (* ===========================================================================*)
 (*  [2 - x] on triple words                                                   *)
@@ -163,15 +168,21 @@ Definition reciB (x0 x1 : R) : dwR := Fast2Sum (reciB01 x0) (reciB12 x0 x1).
 Definition reciBW (x0 x1 : R) : twR :=
   TWR (dwh (reciB x0 x1)) (dwl (reciB x0 x1)) 0.
 
-Definition ThreeReciAux (mul : twR -> twR -> twR) (x : twR) : twR :=
+(* The two products are kept SEPARATE: [mul1] computes [i = 2 - b x] and     *)
+(* [mul2] computes [y = b i].  The paper uses a SPECIALISED [mul2] (old       *)
+(* paper Algorithm 18), because [i] has head [1] and [O(u^2)] tail -- which   *)
+(* is what its [11.5u^3] and its 73-operation count are for.                  *)
+Definition ThreeReciAux (mul1 mul2 : twR -> twR -> twR) (x : twR) : twR :=
   let bw := reciBW (tw0 x) (tw1 x) in
-  mul bw (sub2TW (mul bw x)).
+  mul2 bw (sub2TW (mul1 bw x)).
 
-(* The accurate variant: [3Prod_{2,3}] is Algorithm 11.                       *)
-Definition ThreeReci (x : twR) : twR := ThreeReciAux ThreeProdDW x.
+(* The accurate variant: the first [3Prod_{2,3}] is Algorithm 11.             *)
+Definition ThreeReci (x : twR) : twR :=
+  ThreeReciAux ThreeProdDW ThreeProdOne x.
 
-(* The fast variant: [3Prod_{2,3}] is Algorithm 12.                           *)
-Definition ThreeReciFast (x : twR) : twR := ThreeReciAux ThreeProdDWFast x.
+(* The fast variant: the first [3Prod_{2,3}] is Algorithm 12.                 *)
+Definition ThreeReciFast (x : twR) : twR :=
+  ThreeReciAux ThreeProdDWFast ThreeProdOne x.
 
 (* ===========================================================================*)
 (*  The starting point [a = RN((1 + 2u)/x0)] (paper Section 8)                *)
@@ -1041,14 +1052,16 @@ Definition head_one (mul : twR -> twR -> twR) : Prop :=
   forall b y, isDW b -> isTW y ->
     Rabs (TWval b * TWval y - 1) <= 35 * (u * u) -> tw0 (mul b y) = 1.
 
-(* The generic assembly: given a [3Prod_{2,3}] that returns a triple word and *)
-(* satisfies [head_one], Algorithm 13 returns a triple word.                  *)
-Lemma ThreeReciAux_isTW mul :
-  (forall b y, isDW b -> isTW y -> isTW (mul b y)) ->
-  head_one mul ->
-  forall x, isTW x -> tw0 x <> 0 -> isTW (ThreeReciAux mul x).
+(* The generic assembly: [mul1] must return a triple word and satisfy         *)
+(* [head_one] (so that [2 - mul1 b x] is again a triple word); [mul2] need    *)
+(* only return a triple word.                                                 *)
+Lemma ThreeReciAux_isTW mul1 mul2 :
+  (forall b y, isDW b -> isTW y -> isTW (mul1 b y)) ->
+  (forall b y, isDW b -> isTW y -> tw0 y = 1 -> isTW (mul2 b y)) ->
+  head_one mul1 ->
+  forall x, isTW x -> tw0 x <> 0 -> isTW (ThreeReciAux mul1 mul2 x).
 Proof.
-move=> Hmul Hhead x Hx Hx0.
+move=> Hmul Hmul2 Hhead x Hx Hx0.
 have Hu0 : 0 < u by apply: u_gt_0.
 have Hu1024 := u_le_1024.
 have Fx0 : format (tw0 x) by case: x Hx {Hx0} => x0 x1 x2 [].
@@ -1063,7 +1076,8 @@ have Herr35 : Rabs (TWval (reciBW (tw0 x) (tw1 x)) * TWval x - 1)
 have Hprod := Hmul _ _ HDW Hx.
 have Hhead1 := Hhead _ _ HDW Hx Herr35.
 rewrite /ThreeReciAux.
-by apply: Hmul => //; apply: sub2TW_isTW.
+apply: Hmul2 => //; first by apply: sub2TW_isTW.
+by case: (mul1 _ _) Hhead1 => t0 t1 t2 /= ->; ring.
 Qed.
 
 (* ===========================================================================*)
@@ -1126,10 +1140,7 @@ have He0pos : 0 < e0.
 have Hrange : Rabs (e0 - 1) <= 2 * u by clear -Hd Hae Hu0 Hu1024; nra.
 have Hlo : 1 - 2 * u <= e0 by clear -Hrange; split_Rabs; lra.
 have Hhi : e0 <= 1 + 2 * u by clear -Hrange; split_Rabs; lra.
-have Hu1 : ulp 1 = 2 * u.
-  have -> : (1 = pow 0)%R by [].
-  by rewrite ulp_bpow /FLX_exp u_pow bpow_plus;
-     have -> : pow 1 = 2 by []; ring.
+have Hu1 := @ulp_one p.
 have E1 : (1 = pow 0)%R by [].
 case: (Rtotal_order e0 1) => [Hlt|[//|Hgt]].
 (* [e0 < 1]: then [e0 <= pred 1 = 1 - u], and [e0] lies in [[1/2, 1)] so its  *)
@@ -1389,8 +1400,10 @@ Lemma ThreeReci_isTW x :
   isTW x -> tw0 x <> 0 -> isTW (ThreeReci x).
 Proof.
 move=> Hc Hx Hx0.
-apply: (ThreeReciAux_isTW (mul := ThreeProdDW)) => //.
-  by move=> b y Hb Hy; apply: (@ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym).
+apply: (@ThreeReciAux_isTW ThreeProdDW ThreeProdOne) => //.
+- by move=> b y Hb Hy; apply: (@ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym).
+- by move=> b y Hb Hy Hy0;
+     apply: (@ThreeProdOne_isTW p Hp2 Hp6 choice choice_sym).
 exact: ThreeProdDW_head_one.
 Qed.
 
@@ -1399,9 +1412,11 @@ Lemma ThreeReciFast_isTW x :
   isTW x -> tw0 x <> 0 -> isTW (ThreeReciFast x).
 Proof.
 move=> Hc Hx Hx0.
-apply: (ThreeReciAux_isTW (mul := ThreeProdDWFast)) => //.
-  by move=> b y Hb Hy;
+apply: (@ThreeReciAux_isTW ThreeProdDWFast ThreeProdOne) => //.
+- by move=> b y Hb Hy;
      apply: (@ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym).
+- by move=> b y Hb Hy Hy0;
+     apply: (@ThreeProdOne_isTW p Hp2 Hp6 choice choice_sym).
 exact: ThreeProdDWFast_head_one.
 Qed.
 
@@ -1412,12 +1427,12 @@ Qed.
 (*  (on general arguments -- Theorem 8, resp. Algorithm 12, as a black box)   *)
 (*  and [d2] that of the SECOND one, whose second argument [i] has head [1]:  *)
 (*                                                                            *)
-(*    |y - 1/x| <= (d1 (1 + 71u^2) + d2 (1 + 80u^2) + 1172u^4) |1/x|          *)
+(*    |y - 1/x| <= (d1 (1 + 71u^2) + d2 (1 + 80u^2) + 1165u^4) |1/x|          *)
 (*                                                                            *)
 (*  The three terms are, in order: the error of [i = 2 - 3Prod(b, x)] carried *)
 (*  through the multiplication by [b]; the error of [y = 3Prod(b, i)]; and    *)
 (*  the QUADRATIC Newton residue [|x| (b - 1/x)^2], which [reciBW_x_err]      *)
-(*  ([|b x - 1| <= 34u^2 + 123u^3]) makes [<= 1172u^4 |1/x|].  Everything     *)
+(*  ([|b x - 1| <= 34u^2 + 123u^3]) makes [<= 1165u^4 |1/x|].  Everything     *)
 (*  here is generic in the multiplier: the two algorithms differ only in the  *)
 (*  two numbers [d1] and [d2].  Whence [11.5 = 10.5 + 1] and [19 = 18 + 1].   *)
 (* ===========================================================================*)
@@ -1434,12 +1449,14 @@ Definition sharp_error (mul : twR -> twR -> twR) (d2 : R) : Prop :=
     Rabs (TWval (mul b i) - TWval b * TWval i)
       <= d2 * Rabs (TWval b * TWval i).
 
-(* The Newton residue is QUADRATIC: [(b x - 1)^2 <= 1172u^4] from             *)
-(* [reciBW_x_err].  (The squaring leaves [8364u^5 + 15129u^6], which the      *)
-(* step from [1156] to [1172] absorbs.)                                       *)
+(* The Newton residue is QUADRATIC: [(b x - 1)^2 <= 1165u^4] from             *)
+(* [reciBW_x_err].  The squaring leaves [1156u^4 + 8364u^5 + 15129u^6], and   *)
+(* at [u <= 1/1024] that is [<= 1164.2u^4]: the [1156 -> 1165] step is all    *)
+(* the room there is.  It is also all the room Theorem 9 has, since its       *)
+(* [1465u^4] is [1165 (residue) + 39 (d1) + 260 (d2)] and nothing else.       *)
 Lemma newton_sq_le t :
   Rabs t <= 34 * (u * u) + 123 * (u * u * u) ->
-  t ^ 2 <= 1172 * (u * u * u * u).
+  t ^ 2 <= 1165 * (u * u * u * u).
 Proof.
 move=> Ht.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -1461,10 +1478,10 @@ Lemma reci_error_assembly a c R0 e1 e2 e3 dd1 dd2 :
   0 <= R0 -> 0 <= dd1 -> 0 <= dd2 ->
   e1 <= dd2 * (a * R0 * c) ->
   e2 <= a * R0 * (dd1 * a) ->
-  e3 <= 1172 * (u * u * u * u) * R0 ->
+  e3 <= 1165 * (u * u * u * u) * R0 ->
   e1 + e2 + e3
     <= (dd1 * (1 + 71 * (u * u)) + dd2 * (1 + 80 * (u * u))
-        + 1172 * (u * u * u * u)) * R0.
+        + 1165 * (u * u * u * u)) * R0.
 Proof.
 move=> Ha0 Ha1 Hc0 Hc1 HR0 Hd10 Hd20 H1 H2 H3.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -1490,19 +1507,19 @@ Qed.
 (* THE ASSEMBLY, generic in the multiplier.  [d1] is the multiplier's own     *)
 (* relative error, [d2] its sharp one; both are asked to be [<= u], which is  *)
 (* far more than true ([O(u^3)]) and keeps the final arithmetic honest.       *)
-Lemma ThreeReciAux_error mul d1 d2 :
+Lemma ThreeReciAux_error mul1 mul2 d1 d2 :
   ties_to_even choice ->
-  (forall b y, isDW b -> isTW y -> isTW (mul b y)) ->
-  head_one mul ->
+  (forall b y, isDW b -> isTW y -> isTW (mul1 b y)) ->
+  head_one mul1 ->
   (forall b y, isDW b -> isTW y ->
-     Rabs (TWval (mul b y) - TWval b * TWval y)
+     Rabs (TWval (mul1 b y) - TWval b * TWval y)
        <= d1 * Rabs (TWval b * TWval y)) ->
-  sharp_error mul d2 ->
+  sharp_error mul2 d2 ->
   0 <= d1 -> d1 <= u * u -> 0 <= d2 -> d2 <= u * u ->
   forall x, isTW x -> tw0 x <> 0 ->
-    Rabs (TWval (ThreeReciAux mul x) - / TWval x)
+    Rabs (TWval (ThreeReciAux mul1 mul2 x) - / TWval x)
       <= (d1 * (1 + 71 * (u * u)) + d2 * (1 + 80 * (u * u))
-          + 1172 * (u * u * u * u)) * Rabs (/ TWval x).
+          + 1165 * (u * u * u * u)) * Rabs (/ TWval x).
 Proof.
 move=> Hc Hmul Hhead Herr Hsharp Hd10 Hd1u Hd20 Hd2u x Hx Hx0.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -1523,13 +1540,13 @@ have HX0 : X <> 0.
   move=> HX; move: HBX35; rewrite HX Rmult_0_r.
   have -> : (0 - 1) = -1 by ring.
   by rewrite Rabs_Ropp Rabs_R1; clear -Hu0 Hu1024; nra.
-have Hprod1 : isTW (mul b x) by apply: Hmul.
-have Hhead1 : tw0 (mul b x) = 1 by apply: Hhead.
-set P := TWval (mul b x) in Hhead1 *.
+have Hprod1 : isTW (mul1 b x) by apply: Hmul.
+have Hhead1 : tw0 (mul1 b x) = 1 by apply: Hhead.
+set P := TWval (mul1 b x) in Hhead1 *.
 have HP : Rabs (P - B * X) <= d1 * Rabs (B * X) by apply: Herr.
-set i := sub2TW (mul b x).
+set i := sub2TW (mul1 b x).
 have Hi : isTW i by apply: sub2TW_isTW.
-have Hi0 : tw0 i = 1 by rewrite /i; case: (mul b x) Hhead1 => t0 t1 t2 /= ->;
+have Hi0 : tw0 i = 1 by rewrite /i; case: (mul1 b x) Hhead1 => t0 t1 t2 /= ->;
   ring.
 have HIval : TWval i = 2 - P by rewrite /i TWval_sub2TW.
 have HBXub : Rabs (B * X) <= 1 + 35 * (u * u).
@@ -1545,7 +1562,7 @@ have HI1 : Rabs (TWval i - 1) <= 40 * (u * u).
   have Hbb := Rabs_pos (B * X).
   by rewrite HE; nra.
 have Hy := Hsharp _ _ HDW Hi Hi0 HI1.
-set Y := TWval (mul b i) in Hy *.
+set Y := TWval (mul2 b i) in Hy *.
 set I := TWval i in Hy HI1 HIval *.
 rewrite -/B in Hy.
 have HIub : Rabs I <= 1 + 40 * (u * u).
@@ -1583,7 +1600,7 @@ have Step2 : Rabs (B * (X * B - P))
   rewrite E2; apply: Rmult_le_compat_l; last by exact: HP.
   by apply: Rmult_le_pos.
 have Step3 : Rabs (B * (2 - X * B) - / X)
-    <= 1172 * (u * u * u * u) * Rabs (/ X).
+    <= 1165 * (u * u * u * u) * Rabs (/ X).
   by rewrite E3; apply: Rmult_le_compat_r.
 rewrite Hdecomp.
 apply: Rle_trans T1 _.
@@ -1594,17 +1611,20 @@ apply: Rle_trans T3 _.
 by apply: (@reci_error_assembly (Rabs (B * X)) (Rabs I) (Rabs (/ X))).
 Qed.
 
-(* The sharp bound for Algorithm 11 (old paper Section 8.4).                  *)
-Lemma ThreeProdDW_sharp :
-  ties_to_even choice -> sharp_error ThreeProdDW (u * u * u).
+(* The sharp bound is Algorithm 18's, and it serves BOTH variants -- they     *)
+(* differ only in their first product.  [ThreeProdOne_error] gives            *)
+(* [u^3 + 260u^4], which is EXACTLY what Theorem 9's [1465u^4] leaves for it. *)
+Lemma ThreeProdOne_sharp :
+  ties_to_even choice ->
+  sharp_error ThreeProdOne (u * u * u + 260 * (u * u * u * u)).
 Proof.
-Admitted.
-
-(* ... and for Algorithm 12.                                                  *)
-Lemma ThreeProdDWFast_sharp :
-  ties_to_even choice -> sharp_error ThreeProdDWFast (u * u * u).
-Proof.
-Admitted.
+move=> Hc b i Hb Hi Hi0 Hi1.
+apply: Rle_trans
+  (@ThreeProdOne_error p Hp2 Hp6 choice choice_sym b i Hc Hb Hi Hi0 Hi1) _.
+apply: Rmult_le_compat_r; first by apply: Rabs_pos.
+have Hu0 : 0 < u by apply: u_gt_0.
+by nra.
+Qed.
 
 (* Theorem 9, accurate variant: [11.5u^3 + 1465u^4].                          *)
 Lemma ThreeReci_error x :
@@ -1621,16 +1641,17 @@ have Hu2 : u * u <= /1024 * u by nra.
 have Hu3 : u * u * u <= /1024 * (u * u) by nra.
 have Hu4 : u * u * u * u <= /1024 * (u * u * u) by nra.
 have Hu5 : u * u * u * u * u <= /1024 * (u * u * u * u) by nra.
-have Hgen := @ThreeReciAux_error ThreeProdDW
-  (105 / 10 * (u * u * u) + 39 * (u * u * u * u)) (u * u * u) Hc
+have Hgen := @ThreeReciAux_error ThreeProdDW ThreeProdOne
+  (105 / 10 * (u * u * u) + 39 * (u * u * u * u))
+  (u * u * u + 260 * (u * u * u * u)) Hc
   (fun b y Hb Hy => @ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
   (ThreeProdDW_head_one Hc)
   (fun b y Hb Hy => @ThreeProdDW_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
-  (ThreeProdDW_sharp Hc)
+  (ThreeProdOne_sharp Hc)
   (ltac:(nra) : 0 <= 105 / 10 * (u * u * u) + 39 * (u * u * u * u))
   (ltac:(nra) : 105 / 10 * (u * u * u) + 39 * (u * u * u * u) <= u * u)
-  (ltac:(nra) : 0 <= u * u * u)
-  (ltac:(nra) : u * u * u <= u * u)
+  (ltac:(nra) : 0 <= u * u * u + 260 * (u * u * u * u))
+  (ltac:(nra) : u * u * u + 260 * (u * u * u * u) <= u * u)
   x Hx Hx0.
 rewrite /ThreeReci.
 apply: Rle_trans Hgen _.
@@ -1653,18 +1674,19 @@ have Hu2 : u * u <= /1024 * u by nra.
 have Hu3 : u * u * u <= /1024 * (u * u) by nra.
 have Hu4 : u * u * u * u <= /1024 * (u * u * u) by nra.
 have Hu5 : u * u * u * u * u <= /1024 * (u * u * u * u) by nra.
-have Hgen := @ThreeReciAux_error ThreeProdDWFast
-  (18 * (u * u * u) + 75 * (u * u * u * u)) (u * u * u) Hc
+have Hgen := @ThreeReciAux_error ThreeProdDWFast ThreeProdOne
+  (18 * (u * u * u) + 75 * (u * u * u * u))
+  (u * u * u + 260 * (u * u * u * u)) Hc
   (fun b y Hb Hy =>
      @ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
   (ThreeProdDWFast_head_one Hc)
   (fun b y Hb Hy =>
      @ThreeProdDWFast_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
-  (ThreeProdDWFast_sharp Hc)
+  (ThreeProdOne_sharp Hc)
   (ltac:(nra) : 0 <= 18 * (u * u * u) + 75 * (u * u * u * u))
   (ltac:(nra) : 18 * (u * u * u) + 75 * (u * u * u * u) <= u * u)
-  (ltac:(nra) : 0 <= u * u * u)
-  (ltac:(nra) : u * u * u <= u * u)
+  (ltac:(nra) : 0 <= u * u * u + 260 * (u * u * u * u))
+  (ltac:(nra) : u * u * u + 260 * (u * u * u * u) <= u * u)
   x Hx Hx0.
 rewrite /ThreeReciFast.
 apply: Rle_trans Hgen _.

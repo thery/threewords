@@ -1,9 +1,11 @@
 # Theorem 10 — Algorithm 14 (3Div): the quotient of two triple words
 
-> **STATUS (2026-07-27). Skeleton + all `isTW` results PROVED.**
-> `ThreeDiv_isTW`, `ThreeDivFast_isTW` and `ThreeProdOneTW_isTW` are `Qed`;
-> the three error bounds (`ThreeDivAux_error`, `ThreeDiv_error`,
-> `ThreeDivFast_error`) and `ThreeProdOneTW_error` are stated and `Admitted`.
+> **STATUS (2026-07-27). Everything PROVED except `δ₃`.**
+> `ThreeDiv_isTW`, `ThreeDivFast_isTW`, `ThreeProdOneTW_isTW`, and now the whole
+> error chain — `div_error_assembly`, `div_error_core`, `ThreeDivAux_error`,
+> `ThreeDiv_error`, `ThreeDivFast_error` — are `Qed`.  The single remaining
+> `Admitted` in the project is **`ThreeProdOneTW_error`** (Algorithm 20's `δ₃`),
+> on which the two theorems' constants depend.
 > Files: `code/coq/ThreeDiv.v` (the algorithm) and `code/coq/ThreeProdOne.v`
 > (Algorithm 20, its final product).
 > Setting FLX, `u = 2^{-p}`, `RN` = round-to-nearest (ties-to-even); `p ≥ 10`.
@@ -62,8 +64,8 @@ half-ulp between the two leading limbs of the inner VecSum, `Fast2SumS` makes
 the pair below it a double word; only the constants change (`|x₁| ≤ 2u|x₀|`
 and `|x₂| ≤ 4u²|x₀|` push `|S| ≤ 8u|x₀|` and the head window to `½ + 10u`).
 
-**The error (open).** With `δ₁` the relative error of `ī` (relative to `x̄b̄`),
-`δ₂` that of `ā` and `δ₃` that of the final product:
+**The error (proved, top down).** With `δ₁` the relative error of `ī`
+(relative to `x̄b̄`), `δ₂` that of `ā` and `δ₃` that of the final product:
 
 ```
 |ȳ − z̄/x̄| ≤ ( δ₁(1 + 71u²) + (δ₂ + δ₃)(1 + 107u²) + 1165u⁴ )·|z̄/x̄|
@@ -75,20 +77,39 @@ proved — and `δ₃` = Algorithm 20's bound. Whence `24 = 10.5+10.5+3` and
 
 | step | needs | state |
 |---|---|---|
-| 1 | `b` is a DW, `\|b x − 1\| ≤ 34u²+123u³` | `reciB_isDW`, `reciBW_x_err` — **proved** |
-| 2 | `i` has head 1 and `\|i − 1\| ≤ 40u²` | `head_one` + `sub2TW_isTW`; the `\|i−1\|` bound sits inside `ThreeReciAux_error` and must be **factored out** |
-| 3 | `y − z/x = (y − a i) + (a − b z) i + z(b(2−xb) − 1/x) + (b z)(i − (2−xb))` | `newton_id`, `newton_sq_le` (`1165u⁴`) — **proved** |
-| 4 | the final arithmetic on three error terms | `reci_error_assembly` generalised |
-| 5 | `δ₃` | `ThreeProdOneTW_error` — **the only genuinely new bound** |
+| 1 | `b` is a DW, `\|b x − 1\| ≤ 34u²+123u³` | `reciB_isDW`, `reciBW_x_err` — **proved** (Alg 13) |
+| 2 | `i` has head 1 and `\|i − 1\| ≤ 40u²` | `head_one` + `sub2TW_isTW`; the `\|i−1\|` bound was factored out of `ThreeReciAux_error` as **`sub2_near_one`** (ThreeReci.v) and both theorems now call it — **proved** |
+| 3 | `y − z/x = (y − a i) + (a − b z) i + (b z)(x b − p) + z(b(2−xb) − 1/x)` | `newton_id`, `newton_sq_le` (`1165u⁴`) — **proved** |
+| 4 | the final arithmetic on four error terms | **`div_error_assembly`** — `reci_error_assembly` with the extra product; **proved** |
+| 5 | `δ₃` | `ThreeProdOneTW_error` — **the only thing still admitted** |
 
-## Expected discrepancies (to be settled by the proof)
+Steps 2–4 are packaged as **`div_error_core`**, which knows nothing about
+triple words: it takes the six bare reals `B, X, Z, P, A, Y` with the three
+products' relative errors and returns Theorem 10's bound. `ThreeDivAux_error`
+is then five lines of glue, and the two theorems are one instantiation each.
 
-Theorem 9 taught us that this paper's `u⁴` constants do not survive an honest
-accounting (its `1465u⁴` became `1830u⁴`). Here the **`u³` term is also at
-risk**: the old paper says Algorithm 20 is "Algorithm 18 with an additional
-`2u³`", giving `δ₃ = 3u³ + 264u⁴`. But Algorithm 18's `u³` came from
-`u·|b′₁ + z₃|` with `|b′₁| ≤ u²|x₀|`, and here a triple-word first argument
-doubles `b′₁` (`|a₁| ≤ 2u|a₀|`) while `|a₂| ≤ 4u²|a₀|` adds to `s₃` — so the
-honest coefficient looks nearer `6u³`, which would make Theorem 10's leading
-term `27u³` rather than `24u³`. Same discipline as before: prove the honest
-constant, state it, and record the discrepancy here and in the file header.
+## The `u⁴` constants are off by one at `p = 10`
+
+Exactly as in Theorem 9, the published `u⁴` constants do not survive an honest
+accounting — but only barely, and only at the smallest precision the theorem
+allows. Expanding `δ₁(1+71u²) + (δ₂+δ₃)(1+107u²) + 1165u⁴` at `u = 2^{-10}`:
+
+| variant | paper | honest |
+|---|---|---|
+| accurate | `24u³ + 1509u⁴` | `24u³ + 1509.18u⁴` ⟹ **`1510u⁴`** |
+| fast | `39u³ + 1582u⁴` | `39u³ + 1582.49u⁴` ⟹ **`1583u⁴`** |
+
+The excess is the `u⁵` tail (`2190u⁵` resp. `3525u⁵`) that the paper drops, so
+the published constants do hold for every `p ≥ 11`. The `u³` terms are exactly
+the paper's. Both figures are conditional on `δ₃ = 3u³ + 264u⁴`.
+
+## Expected discrepancy in `δ₃` (to be settled by its proof)
+
+The old paper says Algorithm 20 is "Algorithm 18 with an additional `2u³`",
+giving `δ₃ = 3u³ + 264u⁴`. But Algorithm 18's `u³` came from `u·|b′₁ + z₃|`
+with `|b′₁| ≤ u²|x₀|`, and here a triple-word first argument doubles `b′₁`
+(`|a₁| ≤ 2u|a₀|`) while `|a₂| ≤ 4u²|a₀|` adds to `s₃` — so the honest
+coefficient looks nearer `6u³`, which would make Theorem 10's leading term
+`27u³` rather than `24u³`. If it moves, only the two constants in
+`ThreeDiv.v`'s final statements need re-tuning: the whole chain above is
+generic in `δ₁, δ₂, δ₃`.

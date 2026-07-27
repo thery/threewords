@@ -43,7 +43,7 @@ output is *not* F-nonoverlapping — machine-checked counterexample
 repairs it. Theorem 6 is false for 7 inputs (paper's own `[1-u,-1+2u,…]`
 witness). See `doc/thm6.md`.
 
-## §6–10 Multiplication, division, square root — Alg 9–12 done, Alg 13 started
+## §6–10 Multiplication, division, square root — Alg 9–13 done
 
 | Alg | Name (ops) | Theorem | Formalised |
 |-----|------------|---------|-----------|
@@ -51,10 +51,12 @@ witness). See `doc/thm6.md`.
 | 10 | 3Prod^fast_{3,3}(x,y) (38, 1 test) | err `44u³+176u⁴` | ✓ `ThreeProdFast`; `ThreeProdFast_isTW` + `ThreeProdFast_error` (`doc/alg10.md`) |
 | 11 | 3Prod^acc_{2,3}(x,y) (45, 2 tests) — DW × TW | **Thm 8** (err `10.5u³+39u⁴`, `p≥6`) | ✓ `ThreeProdDW`; `ThreeProdDW_isTW` + `ThreeProdDW_error` (`doc/thm8.md`) |
 | 12 | 3Prod^fast_{2,3}(x,y) (37, 1 test) | err `18u³+75u⁴` | ✓ `ThreeProdDWFast`; `ThreeProdDWFast_isTW` + `ThreeProdDWFast_error` (`doc/alg12.md`) |
-| 13 | 3Reci(x) (73, 2 tests) — reciprocal (Newton) | **Thm 9** (err `11.5u³+1465u⁴` with Alg 11, `19u³+1502u⁴` with Alg 12, `p≥10`) | 🚧 `ThreeReciAux`, `ThreeReci`, `ThreeReciFast`; `ThreeReci_isTW` + `ThreeReci_error` + `ThreeReciFast_*` stated, admitted (`doc/thm9.md`) |
+| 13 | 3Reci(x) (73, 2 tests) — reciprocal (Newton) | **Thm 9** (err `11.5u³+1465u⁴` with Alg 11, `19u³+1502u⁴` with Alg 12, `p≥10`) | ✓ `ThreeReci`/`ThreeReciFast`; `_isTW` + `_error`, with `11.5u³+1830u⁴` / `19u³+1870u⁴` — the `u³` are the paper's, the `u⁴` are ours (`doc/thm9.md`, findings 3–5) |
+| 18 | the specialised 2nd product Thm 9 really uses (20, +2 tests) | `δ₂ = u³+620u⁴` (paper: `260u⁴`) | ✓ `ThreeProdOne.v` — old paper §8.4; needs the sorted `Fast2SumS` (`TwoSum.v`) |
 | 14 | 3Div(z,x) (119, 4 tests) — quotient | **Thm 10** (err `24u³+1509u⁴`, `p≥10`) | — |
 | 15 | 3SqRt(x) (127, 4 tests) — square root (Newton) | **Thm 11** (err `24u³+10260u⁴`, `p≥11`) | — |
-| 16–18 | appendix: sign-folded product variants | (support Thms 9–11) | — |
+| 16–17 | appendix: sign-folded product variants | (support Thms 9–11) | — |
+| 20 | appendix: `3Prod^fast_{3,3}(a,(1),i₁,i₂)` (21) — the `3,3` twin of Alg 18 | (supports Thm 10) | — (re-instantiate `ThreeProdOne.v`) |
 
 Supporting: **Lemma 1** (`½ulp(x) ∣ RN(x+y)`) — used in the Thm 7 proof — is
 `ThreeProd.half_ulp_div_RN_add` (it needs `format y` and `x <> 0`, both left

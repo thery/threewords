@@ -1,8 +1,8 @@
 (* ---------------------------------------------------------------------------*)
 (* Algorithm 14 (3Div): the QUOTIENT of two triple words, and its two         *)
 (* correctness results -- the result is a triple word ([ThreeDiv_isTW]) and   *)
-(* the relative error bounds [24u^3 + 1510u^4] (accurate variant,             *)
-(* [ThreeDiv_error]) and [39u^3 + 1583u^4] (fast variant,                     *)
+(* the relative error bounds [29u^3 + 2576u^4] (accurate variant,             *)
+(* [ThreeDiv_error]) and [44u^3 + 2650u^4] (fast variant,                     *)
 (* [ThreeDivFast_error]) -- paper doc/paper3.pdf, Section 10 and Theorem 10   *)
 (* (see doc/thm10.md).  Generic over the precision [p] (FLX, no [emin]);      *)
 (* needs [p >= 10].                                                           *)
@@ -32,7 +32,9 @@
 (* DW x TW (Algorithm 11 accurate, or Algorithm 12 fast) and [mul3] is the    *)
 (* TW x TW product with a head-[1] second argument -- Algorithm 20 of the old *)
 (* paper, [ThreeProdOneTW] in ThreeProdOne.v.  Whence the paper's constants   *)
-(* [24 = 10.5 + 10.5 + 3] and [39 = 18 + 18 + 3].                             *)
+(* [24 = 10.5 + 10.5 + 3] and [39 = 18 + 18 + 3] -- which the proof turns     *)
+(* into [29 = 10.5 + 10.5 + 8] and [44 = 18 + 18 + 8], Algorithm 20 costing   *)
+(* [8u^3] rather than the announced [3u^3] on a triple word.                  *)
 (*                                                                            *)
 (* STATUS: everything in this file is PROVED.  The two error bounds rest on   *)
 (* one admitted lemma, [ThreeProdOneTW_error] (Algorithm 20's [delta3]) in    *)
@@ -433,18 +435,17 @@ by apply: (@div_error_core (TWval b) (TWval x) (TWval z) (TWval (mul1 b x))
              (TWval (mul2 b z)) (TWval (mul3 (mul2 b z) i)) d1 d2 d3).
 Qed.
 
-(* Theorem 10, accurate variant.  The paper states [24u^3 + 1509u^4]; at      *)
-(* [p = 10] the honest constant is [1510u^4].  The excess is the [u^5] tail   *)
-(* the paper drops: [24u^3 + 1509.18u^4] exactly, from                        *)
-(* [10.5(1 + 71u^2) + 13.5(1 + 107u^2) + 1165] -- so [1509] holds for every   *)
-(* [p >= 11] and misses by [0.18u^4] at the smallest precision the theorem    *)
-(* allows.  (This is conditional on [delta3 = 3u^3 + 264u^4]; see             *)
-(* [ThreeProdOneTW_error], whose [u^3] is itself under suspicion.)            *)
+(* Theorem 10, accurate variant.  The paper states [24u^3 + 1509u^4]; the     *)
+(* honest bound is [29u^3 + 2576u^4].  BOTH terms move, and the [u^3] one is  *)
+(* the paper's, not ours: [24 = 10.5 + 10.5 + 3] assumes Algorithm 20 costs   *)
+(* [3u^3], whereas its honest cost on a TRIPLE word is [8u^3] -- see          *)
+(* [ThreeProdOneTW_error].  With [delta3 = 8u^3 + 1330u^4] the assembly gives *)
+(* [29u^3 + 2575.81u^4] at [p = 10], whence [2576].                           *)
 Lemma ThreeDiv_error z x :
   ties_to_even choice ->
   isTW z -> isTW x -> tw0 x <> 0 ->
   Rabs (TWval (ThreeDiv z x) - TWval z / TWval x) <=
-     (24 * (u * u * u) + 1510 * (u * u * u * u)) *
+     (29 * (u * u * u) + 2576 * (u * u * u * u)) *
        Rabs (TWval z / TWval x).
 Proof.
 move=> Hc Hz Hx Hx0.
@@ -458,12 +459,12 @@ have Hu5 : u * u * u * u * u <= / 1024 * (u * u * u * u) by nra.
 (* 20's; both are far below the [u] the assembly asks for.                    *)
 have Hd0 : 0 <= 105 / 10 * (u * u * u) + 39 * (u * u * u * u) by nra.
 have Hdu : 105 / 10 * (u * u * u) + 39 * (u * u * u * u) <= u * u by nra.
-have He0 : 0 <= 3 * (u * u * u) + 264 * (u * u * u * u) by nra.
-have Heu : 3 * (u * u * u) + 264 * (u * u * u * u) <= u * u by nra.
+have He0 : 0 <= 8 * (u * u * u) + 1330 * (u * u * u * u) by nra.
+have Heu : 8 * (u * u * u) + 1330 * (u * u * u * u) <= u * u by nra.
 have Hgen := @ThreeDivAux_error ThreeProdDW ThreeProdDW ThreeProdOneTW
   (105 / 10 * (u * u * u) + 39 * (u * u * u * u))
   (105 / 10 * (u * u * u) + 39 * (u * u * u * u))
-  (3 * (u * u * u) + 264 * (u * u * u * u)) Hc
+  (8 * (u * u * u) + 1330 * (u * u * u * u)) Hc
   (fun b y Hb Hy => @ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
   (fun b y Hb Hy => @ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
   (@ThreeProdDW_head_one p Hp2 Hp10 choice choice_sym Hc)
@@ -479,12 +480,13 @@ by nra.
 Qed.
 
 (* Theorem 10, fast variant.  The paper states [39u^3 + 1582u^4]; honestly    *)
-(* [39u^3 + 1582.49u^4] at [p = 10], whence [1583].  Same cause as above.     *)
+(* [44u^3 + 2649.11u^4] at [p = 10], whence [2650].  Same cause: [44 =        *)
+(* 18 + 18 + 8], not [39 = 18 + 18 + 3].                                      *)
 Lemma ThreeDivFast_error z x :
   ties_to_even choice ->
   isTW z -> isTW x -> tw0 x <> 0 ->
   Rabs (TWval (ThreeDivFast z x) - TWval z / TWval x) <=
-     (39 * (u * u * u) + 1583 * (u * u * u * u)) *
+     (44 * (u * u * u) + 2650 * (u * u * u * u)) *
        Rabs (TWval z / TWval x).
 Proof.
 move=> Hc Hz Hx Hx0.
@@ -496,12 +498,12 @@ have Hu4 : u * u * u * u <= / 1024 * (u * u * u) by nra.
 have Hu5 : u * u * u * u * u <= / 1024 * (u * u * u * u) by nra.
 have Hd0 : 0 <= 18 * (u * u * u) + 75 * (u * u * u * u) by nra.
 have Hdu : 18 * (u * u * u) + 75 * (u * u * u * u) <= u * u by nra.
-have He0 : 0 <= 3 * (u * u * u) + 264 * (u * u * u * u) by nra.
-have Heu : 3 * (u * u * u) + 264 * (u * u * u * u) <= u * u by nra.
+have He0 : 0 <= 8 * (u * u * u) + 1330 * (u * u * u * u) by nra.
+have Heu : 8 * (u * u * u) + 1330 * (u * u * u * u) <= u * u by nra.
 have Hgen := @ThreeDivAux_error ThreeProdDWFast ThreeProdDWFast ThreeProdOneTW
   (18 * (u * u * u) + 75 * (u * u * u * u))
   (18 * (u * u * u) + 75 * (u * u * u * u))
-  (3 * (u * u * u) + 264 * (u * u * u * u)) Hc
+  (8 * (u * u * u) + 1330 * (u * u * u * u)) Hc
   (fun b y Hb Hy =>
      @ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
   (fun b y Hb Hy =>

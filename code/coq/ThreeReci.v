@@ -1670,6 +1670,10 @@ have Hu2 : u * u <= /1024 * u by nra.
 have Hu3 : u * u * u <= /1024 * (u * u) by nra.
 have Hu4 : u * u * u * u <= /1024 * (u * u * u) by nra.
 have Hu5 : u * u * u * u * u <= /1024 * (u * u * u * u) by nra.
+have Hd0 : 0 <= 105 / 10 * (u * u * u) + 39 * (u * u * u * u) by nra.
+have Hdu : 105 / 10 * (u * u * u) + 39 * (u * u * u * u) <= u * u by nra.
+have He0 : 0 <= u * u * u + 620 * (u * u * u * u) by nra.
+have Heu : u * u * u + 620 * (u * u * u * u) <= u * u by nra.
 have Hgen := @ThreeReciAux_error ThreeProdDW ThreeProdOne
   (105 / 10 * (u * u * u) + 39 * (u * u * u * u))
   (u * u * u + 620 * (u * u * u * u)) Hc
@@ -1677,11 +1681,7 @@ have Hgen := @ThreeReciAux_error ThreeProdDW ThreeProdOne
   (ThreeProdDW_head_one Hc)
   (fun b y Hb Hy => @ThreeProdDW_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
   (ThreeProdOne_sharp Hc)
-  (ltac:(nra) : 0 <= 105 / 10 * (u * u * u) + 39 * (u * u * u * u))
-  (ltac:(nra) : 105 / 10 * (u * u * u) + 39 * (u * u * u * u) <= u * u)
-  (ltac:(nra) : 0 <= u * u * u + 620 * (u * u * u * u))
-  (ltac:(nra) : u * u * u + 620 * (u * u * u * u) <= u * u)
-  x Hx Hx0.
+  Hd0 Hdu He0 Heu x Hx Hx0.
 rewrite /ThreeReci.
 apply: Rle_trans Hgen _.
 apply: Rmult_le_compat_r; first by apply: Rabs_pos.
@@ -1703,6 +1703,10 @@ have Hu2 : u * u <= /1024 * u by nra.
 have Hu3 : u * u * u <= /1024 * (u * u) by nra.
 have Hu4 : u * u * u * u <= /1024 * (u * u * u) by nra.
 have Hu5 : u * u * u * u * u <= /1024 * (u * u * u * u) by nra.
+have Hd0 : 0 <= 18 * (u * u * u) + 75 * (u * u * u * u) by nra.
+have Hdu : 18 * (u * u * u) + 75 * (u * u * u * u) <= u * u by nra.
+have He0 : 0 <= u * u * u + 620 * (u * u * u * u) by nra.
+have Heu : u * u * u + 620 * (u * u * u * u) <= u * u by nra.
 have Hgen := @ThreeReciAux_error ThreeProdDWFast ThreeProdOne
   (18 * (u * u * u) + 75 * (u * u * u * u))
   (u * u * u + 620 * (u * u * u * u)) Hc
@@ -1712,11 +1716,7 @@ have Hgen := @ThreeReciAux_error ThreeProdDWFast ThreeProdOne
   (fun b y Hb Hy =>
      @ThreeProdDWFast_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
   (ThreeProdOne_sharp Hc)
-  (ltac:(nra) : 0 <= 18 * (u * u * u) + 75 * (u * u * u * u))
-  (ltac:(nra) : 18 * (u * u * u) + 75 * (u * u * u * u) <= u * u)
-  (ltac:(nra) : 0 <= u * u * u + 620 * (u * u * u * u))
-  (ltac:(nra) : u * u * u + 620 * (u * u * u * u) <= u * u)
-  x Hx Hx0.
+  Hd0 Hdu He0 Heu x Hx Hx0.
 rewrite /ThreeReciFast.
 apply: Rle_trans Hgen _.
 apply: Rmult_le_compat_r; first by apply: Rabs_pos.

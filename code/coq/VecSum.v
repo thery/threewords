@@ -426,6 +426,230 @@ have -> : drop i.+2 [:: a, b & m] = drop i.+1 (b :: m) by [].
 by rewrite -(IH i) // E.
 Qed.
 
+(* The two LEADING limbs of a VecSum output are the two words of ONE 2Sum --  *)
+(* the last one performed, [TwoSum x_0 s_1] -- so they are separated by a     *)
+(* genuine HALF ulp, [2|e_1| <= ulp e_0].  This is strictly better than the   *)
+(* P-nonoverlap [|e_1| < ulp e_0] of Theorem 1, and the factor 2 is exactly   *)
+(* what a head argument needs: [(1 + 2u, -2u + 2u^2, ...)] is a legal         *)
+(* P-nonoverlapping triple summing to [1 + O(u^2)], so no property of the     *)
+(* OUTPUT alone can ever pin the leading limb (Algorithm 13, Section 8.3).    *)
+Lemma vecSum_head_sep l :
+  {in l, forall z, format z} -> (1 < size l)%N ->
+  2 * Rabs (nth 0 (vecSum l) 1) <= ulp (nth 0 (vecSum l) 0).
+Proof.
+case: l => [|a [|b m]] // Hfmt _.
+rewrite /vecSum vecSumAux_cons.
+case E : (vecSumAux (b :: m)) => [es s].
+have Fa : format a by apply: Hfmt; rewrite inE eqxx.
+have Fs : format s.
+  have Hf : format (vecSumAux (b :: m)).2.
+    by apply: format_vecSumAux2 => z zI; apply: Hfmt; rewrite inE zI orbT.
+  by move: Hf; rewrite E.
+have Hm := magnitude_TwoSum Fa Fs.
+move: Hm; rewrite /magnitudeDWR.
+by case: (TwoSum a s) => h low /=; lra.
+Qed.
+
+(* Two crude, hypothesis-free size bounds on a VecSum, for callers that have  *)
+(* absolute bounds on the inputs rather than the [Thm1_hyp] exponent          *)
+(* representation.  They are what a head argument needs on the LOW part of a  *)
+(* VecSum (Algorithm 13, Section 8.3): there the entries below the leading    *)
+(* one are all [O(u)], so their accumulated rounding error is [O(u^2)] and    *)
+(* becomes negligible against the half-ulp of the head.                       *)
+
+(* The running sum never exceeds the total mass, up to one rounding per step. *)
+Lemma vecSumAux_run_le l : {in l, forall z, format z} ->
+  Rabs (vecSumAux l).2 <= (1 + u) ^ (size l) * sumRabs l.
+Proof.
+elim: l => [|x [|b l] IH] Hf.
+- by rewrite /= Rabs_R0; lra.
+- have -> : (vecSumAux [:: x]).2 = x by [].
+  have Hu0 := u_gt_0; have := Rabs_pos x.
+  by rewrite /=; nra.
+rewrite vecSumAux_cons.
+case E : (vecSumAux (b :: l)) => [es s].
+have E2 : (let: DWR si ei1 := TwoSum x s in (ei1 :: es, si)).2 = RND (x + s).
+  by rewrite -TwoSum_hi; case: (TwoSum x s).
+rewrite E2.
+have Hs : Rabs s <= (1 + u) ^ size (b :: l) * sumRabs (b :: l).
+  have H : {in b :: l, forall z : R, format z}
+    by move=> z zI; apply: Hf; rewrite inE zI orbT.
+  by have := IH H; rewrite E.
+have Hrel := @relative_error_le p beta Hp2 choice (x + s).
+have Ht := Rabs_triang x s.
+have Hu0 := u_gt_0.
+have Hsr := sumRabs_ge0 (b :: l).
+have Hx := Rabs_pos x.
+have Hpow1 : 1 + u <= (1 + u) ^ size [:: x, b & l].
+  have H1 : (1 + u) ^ 1 <= (1 + u) ^ size [:: x, b & l]
+    by apply: Rle_pow; [lra | apply/leP; rewrite /=].
+  by move: H1; rewrite /= Rmult_1_r.
+have Hps : (1 + u) ^ size [:: x, b & l] = (1 + u) * (1 + u) ^ size (b :: l)
+  by rewrite /=; ring.
+have Hsum : sumRabs [:: x, b & l] = Rabs x + sumRabs (b :: l)
+  by rewrite /=; ring.
+have Hab := Rabs_pos (RND (x + s)).
+have Hxs := Rabs_pos (x + s).
+rewrite Hsum Hps.
+have H4 : Rabs (RND (x + s)) <= (1 + u) * Rabs (x + s) by split_Rabs; lra.
+by nra.
+Qed.
+
+(* VecSum is exact as a SUM ([vecSum_sum]); what the head alone loses is the  *)
+(* accumulated rounding error, at most one [u] per step, against the total    *)
+(* mass.  Since [sumR (vecSum l) = sumR l], this is also the total mass of    *)
+(* the limbs BELOW the head.                                                  *)
+Lemma vecSumAux_err_le l : {in l, forall z, format z} ->
+  Rabs (sumR l - (vecSumAux l).2) <=
+    INR (size l) * u * ((1 + u) ^ (size l) * sumRabs l).
+Proof.
+elim: l => [|x [|b l] IH] Hf.
+- by rewrite /= Rminus_0_r Rabs_R0; lra.
+- have -> : (vecSumAux [:: x]).2 = x by [].
+  have -> : sumR [:: x] - x = 0 by rewrite /=; ring.
+  rewrite Rabs_R0.
+  have Hu0 := u_gt_0; have := Rabs_pos x.
+  have Hp1 : 0 <= INR (size [:: x]) by apply: pos_INR.
+  by rewrite /=; nra.
+have Fx : format x by apply: Hf; rewrite inE eqxx.
+have Fs0 : format (vecSumAux (b :: l)).2.
+  by apply: format_vecSumAux2 => z zI; apply: Hf; rewrite inE zI orbT.
+have Hhead : (vecSumAux [:: x, b & l]).2 = RND (x + (vecSumAux (b :: l)).2).
+  rewrite vecSumAux_cons; case E : (vecSumAux (b :: l)) => [es s].
+  by rewrite [(es, s).2]/= -TwoSum_hi; case: (TwoSum x s).
+set s := (vecSumAux (b :: l)).2.
+(* The head is one 2Sum away from [x + s]: its error is the low word.         *)
+have Hc : dwh (TwoSum x s) + dwl (TwoSum x s) = x + s
+  by exact: TwoSum_correct_loc Fx Fs0.
+have Hm : Rabs (dwl (TwoSum x s)) <= ulp (dwh (TwoSum x s)) / 2.
+  by have := magnitude_TwoSum Fx Fs0; rewrite /magnitudeDWR;
+     case: (TwoSum x s).
+rewrite TwoSum_hi in Hc Hm.
+have Herr : Rabs (x + s - RND (x + s)) <= u * Rabs (RND (x + s)).
+  have -> : x + s - RND (x + s) = dwl (TwoSum x s) by lra.
+  by have := @ulp_2u p beta Hp2 (RND (x + s)); lra.
+have Hrun : Rabs (RND (x + s)) <=
+    (1 + u) ^ size [:: x, b & l] * sumRabs [:: x, b & l].
+  by have := vecSumAux_run_le Hf; rewrite Hhead -/s.
+have HIH : Rabs (sumR (b :: l) - s) <=
+    INR (size (b :: l)) * u * ((1 + u) ^ size (b :: l) * sumRabs (b :: l)).
+  have H : {in b :: l, forall z : R, format z}
+    by move=> z zI; apply: Hf; rewrite inE zI orbT.
+  by exact: IH H.
+have Hsplit : Rabs (sumR [:: x, b & l] - RND (x + s))
+    <= Rabs (x + s - RND (x + s)) + Rabs (sumR (b :: l) - s).
+  have -> : sumR [:: x, b & l] - RND (x + s)
+      = (x + s - RND (x + s)) + (sumR (b :: l) - s) by rewrite /=; ring.
+  by apply: Rabs_triang.
+rewrite Hhead -/s.
+have Hu0 := u_gt_0.
+have Hsr := sumRabs_ge0 (b :: l).
+have Hx := Rabs_pos x.
+have Hn0 : 0 <= INR (size (b :: l)) by apply: pos_INR.
+have Hpow0 : 0 < (1 + u) ^ size (b :: l) by apply: pow_lt; lra.
+have Hpn : INR (size [:: x, b & l]) = INR (size (b :: l)) + 1
+  by rewrite -S_INR.
+have Hps : (1 + u) ^ size [:: x, b & l] = (1 + u) * (1 + u) ^ size (b :: l)
+  by [].
+have Hsum : sumRabs [:: x, b & l] = Rabs x + sumRabs (b :: l) by [].
+move: Hrun; rewrite Hps Hsum => Hrun.
+rewrite Hpn.
+have HA : Rabs (x + s - RND (x + s)) <=
+    u * ((1 + u) * (1 + u) ^ size (b :: l) * (Rabs x + sumRabs (b :: l))).
+  by apply: Rle_trans Herr _; apply: Rmult_le_compat_l; [lra | exact: Hrun].
+have HB : Rabs (sumR (b :: l) - s) <= INR (size (b :: l)) * u *
+    ((1 + u) * (1 + u) ^ size (b :: l) * (Rabs x + sumRabs (b :: l))).
+  apply: Rle_trans HIH _; apply: Rmult_le_compat_l; first by nra.
+  have Hid : (1 + u) * (1 + u) ^ size (b :: l) * (Rabs x + sumRabs (b :: l))
+      - (1 + u) ^ size (b :: l) * sumRabs (b :: l)
+      = (1 + u) ^ size (b :: l)
+        * (Rabs x + u * Rabs x + u * sumRabs (b :: l)) by ring.
+  have Hnn : 0 <= (1 + u) ^ size (b :: l)
+      * (Rabs x + u * Rabs x + u * sumRabs (b :: l))
+    by apply: Rmult_le_pos; nra.
+  lra.
+have Hexp : (INR (size (b :: l)) + 1) * u *
+      ((1 + u) * (1 + u) ^ size (b :: l) * (Rabs x + sumRabs (b :: l)))
+    = INR (size (b :: l)) * u *
+      ((1 + u) * (1 + u) ^ size (b :: l) * (Rabs x + sumRabs (b :: l)))
+    + u * ((1 + u) * (1 + u) ^ size (b :: l) * (Rabs x + sumRabs (b :: l)))
+  by ring.
+by lra.
+Qed.
+
+(* What a head argument needs about a VecSum, in one statement: the leading   *)
+(* limb approximates the WHOLE sum to within half an ulp of itself, plus the  *)
+(* accumulated rounding error of the limbs below.  The half-ulp is exact      *)
+(* ([vecSum_head_sep]); the second term is negligible whenever the entries    *)
+(* below the leading one are small, which is the situation of Algorithm 13,   *)
+(* Section 8.3 (there they are [O(u)] against a leading [O(1)]).              *)
+Lemma vecSum_head_tail_le l : {in l, forall z, format z} -> (1 < size l)%N ->
+  Rabs (sumR l - nth 0 (vecSum l) 0) <=
+    / 2 * ulp (nth 0 (vecSum l) 0)
+    + INR (size l).-1 * u * ((1 + u) ^ (size l).-1 * sumRabs (behead l)).
+Proof.
+case: l => [|x L] // Hf _.
+have Fx : format x by apply: Hf; rewrite inE eqxx.
+have HL : {in L, forall z : R, format z}
+  by move=> z zI; apply: Hf; rewrite inE zI orbT.
+have Fs0 : format (vecSumAux L).2 by apply: format_vecSumAux2.
+have Hhead : nth 0 (vecSum (x :: L)) 0 = RND (x + (vecSumAux L).2).
+  rewrite vecSum_nth0; case: L Hf HL Fs0 => [|b l] Hf HL Fs0.
+    by rewrite [(vecSumAux [::]).2]/= Rplus_0_r round_generic.
+  rewrite vecSumAux_cons; case E : (vecSumAux (b :: l)) => [es s].
+  by rewrite [(es, s).2]/= -TwoSum_hi; case: (TwoSum x s).
+set s := (vecSumAux L).2.
+have Hc : dwh (TwoSum x s) + dwl (TwoSum x s) = x + s
+  by exact: TwoSum_correct_loc Fx Fs0.
+have Hm : Rabs (dwl (TwoSum x s)) <= ulp (dwh (TwoSum x s)) / 2.
+  by have := magnitude_TwoSum Fx Fs0; rewrite /magnitudeDWR;
+     case: (TwoSum x s).
+rewrite TwoSum_hi in Hc Hm.
+have Herr : Rabs (x + s - RND (x + s)) <= / 2 * ulp (RND (x + s)).
+  have -> : x + s - RND (x + s) = dwl (TwoSum x s) by lra.
+  by lra.
+have HIH := vecSumAux_err_le HL.
+have Hsplit : Rabs (sumR (x :: L) - RND (x + s))
+    <= Rabs (x + s - RND (x + s)) + Rabs (sumR L - s).
+  have -> : sumR (x :: L) - RND (x + s)
+      = (x + s - RND (x + s)) + (sumR L - s) by rewrite /=; ring.
+  by apply: Rabs_triang.
+rewrite Hhead.
+have -> : (size (x :: L)).-1 = size L by [].
+have -> : behead (x :: L) = L by [].
+move: HIH; rewrite -/s => HIH.
+by lra.
+Qed.
+
+(* The engine of a head argument, in the form its callers meet it: a value    *)
+(* [v] known to within [D] of the exact sum of the VecSum inputs is known to  *)
+(* within half an ulp (plus small change) of the LEADING LIMB.  Callers       *)
+(* supply [D] (their own error decomposition) and [B] (the mass of the        *)
+(* entries below the leading one); everything else is generic.                *)
+Lemma vecSum_head_gap l v D B :
+  {in l, forall z, format z} -> (1 < size l)%N ->
+  Rabs (v - sumR l) <= D -> sumRabs (behead l) <= B ->
+  Rabs (v - nth 0 (vecSum l) 0) <=
+    / 2 * ulp (nth 0 (vecSum l) 0)
+    + (D + INR (size l).-1 * u * ((1 + u) ^ (size l).-1 * B)).
+Proof.
+move=> Hf Hsz HD HB.
+have Hgap := vecSum_head_tail_le Hf Hsz.
+have Ht : Rabs (v - nth 0 (vecSum l) 0)
+    <= Rabs (v - sumR l) + Rabs (sumR l - nth 0 (vecSum l) 0).
+  have -> : v - nth 0 (vecSum l) 0
+      = (v - sumR l) + (sumR l - nth 0 (vecSum l) 0) by ring.
+  by apply: Rabs_triang.
+have Hu0 := u_gt_0.
+have Hn0 : 0 <= INR (size l).-1 by apply: pos_INR.
+have Hpow0 : 0 < (1 + u) ^ (size l).-1 by apply: pow_lt; lra.
+have Hmono : INR (size l).-1 * u * ((1 + u) ^ (size l).-1 * sumRabs (behead l))
+          <= INR (size l).-1 * u * ((1 + u) ^ (size l).-1 * B).
+  apply: Rmult_le_compat_l; first by nra.
+  by apply: Rmult_le_compat_l; [lra | exact: HB].
+by lra.
+Qed.
+
 (* The low word of a 2Sum [TwoSum x s] is small: its magnitude is at most     *)
 (* [2 u 2^e0], provided [|x| < 2^(e0+1)] and [|s| <= (2-2u) 2^e0] (so the     *)
 (* exact sum has magnitude below [2^(e0+2)]).  This is the tight per-step     *)

@@ -1084,18 +1084,82 @@ Qed.
 (* output of the algorithm alone can pin its head to [1].                     *)
 
 (* The head argument itself, as pure floating-point arithmetic: a float [e0]  *)
-(* whose tail is at most [15/16] of an ulp and whose total is within [36u^2]  *)
-(* of [1] MUST be [1].  The [15/16] is the paper's [1 - 2^-4]: it is the      *)
-(* geometric sum [1/2 + 1/4 + 1/8 + 1/16] of the four tail limbs against the  *)
-(* half-ulp first one.  The margins are [0.125u] above [1] and [0.0625u]      *)
-(* below, so [36u^2] must stay below [0.0625u] -- i.e. [u < 1/576], which is  *)
-(* [p >= 10] and NOT [p >= 9] (the old paper's claim; at [p = 9] the lower    *)
-(* margin fails).                                                             *)
-Lemma head_eq_1 e0 t :
-  format e0 -> Rabs t <= 15 / 16 * ulp e0 ->
-  Rabs (e0 + t - 1) <= 36 * (u * u) -> e0 = 1.
+(* whose tail is at most HALF an ulp plus [O(u^2)], and whose total is within *)
+(* [36u^2] of [1], MUST be [1].  The half-ulp is what the leading VecSum      *)
+(* limbs really satisfy ([vecSum_head_sep]: [e0] and [e1] are the two words   *)
+(* of ONE 2Sum); the [200u^2] slack absorbs the remaining limbs, which are    *)
+(* the rounding errors of a VecSum whose entries are all [O(u)].              *)
+(*                                                                            *)
+(* The old paper states the tail bound as [(1 - 2^-4) uls(e0)] instead.  That *)
+(* form is NOT enough: [[16; -8; -4; -2; -1]] is F-nonoverlapping and sums to *)
+(* [1] with head [16], so a [uls]-only tail bound cannot pin the head -- the  *)
+(* argument really needs the [ulp]-scale separation of the two leading limbs. *)
+(*                                                                            *)
+(* Margins: [u - 200u^2] above [1] (where [ulp e0 = 2u]) and [u/2 - 200u^2]   *)
+(* below (where [ulp e0 = u]), both of which must beat [36u^2].  The binding  *)
+(* one is [u/2 > 236u^2], i.e. [u < 1/472]; [p >= 10] gives [u <= 1/1024].    *)
+Lemma head_eq_1 e0 v :
+  format e0 -> Rabs (v - e0) <= / 2 * ulp e0 + 200 * (u * u) ->
+  Rabs (v - 1) <= 36 * (u * u) -> e0 = 1.
 Proof.
-Admitted.
+move=> Fe0 Ht Habs.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := u_le_1024.
+have Hulp := @ulp_2u p beta Hp2 e0.
+have Hulp0 : 0 <= ulp e0 by apply: ulp_ge_0.
+(* [e0] is within [2u] of [1]: the tail is at most [u|e0| + 200u^2] (using    *)
+(* [ulp e0 <= 2u|e0|]), so [|e0 - 1| <= 236u^2 + u |e0|].                     *)
+have Hd : Rabs (e0 - 1) <= 36 * (u * u) + (u * Rabs e0 + 200 * (u * u)).
+  have H1 : Rabs (e0 - 1) <= Rabs (v - 1) + Rabs (v - e0).
+    have -> : e0 - 1 = (v - 1) + - (v - e0) by ring.
+    by have := Rabs_triang (v - 1) (- (v - e0)); rewrite Rabs_Ropp; lra.
+  by clear -H1 Ht Habs Hulp Hulp0 Hu0; nra.
+have Hinv := Rabs_triang_inv e0 1.
+have Hae : Rabs e0 <= 101 / 100.
+  by rewrite Rabs_R1 in Hinv; clear -Hinv Hd Hu0 Hu1024; nra.
+have He0pos : 0 < e0.
+  have Hle := Rle_abs e0.
+  have Hle2 := Rabs_le_inv e0 (Rabs e0) (Rle_refl _).
+  by clear -Hd Hae Hu0 Hu1024 Hle Hle2; split_Rabs; nra.
+have Hrange : Rabs (e0 - 1) <= 2 * u by clear -Hd Hae Hu0 Hu1024; nra.
+have Hlo : 1 - 2 * u <= e0 by clear -Hrange; split_Rabs; lra.
+have Hhi : e0 <= 1 + 2 * u by clear -Hrange; split_Rabs; lra.
+have Hu1 : ulp 1 = 2 * u.
+  have -> : (1 = pow 0)%R by [].
+  by rewrite ulp_bpow /FLX_exp u_pow bpow_plus;
+     have -> : pow 1 = 2 by []; ring.
+have E1 : (1 = pow 0)%R by [].
+case: (Rtotal_order e0 1) => [Hlt|[//|Hgt]].
+(* [e0 < 1]: then [e0 <= pred 1 = 1 - u], and [e0] lies in [[1/2, 1)] so its  *)
+(* [ulp] is [u] -- the tail is at most [15/16 u] and cannot bridge the gap.   *)
+- have Hpred : e0 <= 1 - u.
+    have H := @pred_ge_gt beta fexp _ e0 1 Fe0 format_1 Hlt.
+    have H2 := H (FLX_exp_valid p).
+    move: H2; rewrite {1}E1 pred_bpow /FLX_exp -E1.
+    have -> : (0 - p = - p)%Z by lia.
+    by move=> /(_ p_gt_0) H3; rewrite u_pow.
+  have Hulpe : ulp e0 = u.
+    rewrite ulp_neq_0; last by clear -Hlo Hu0 Hu1024; lra.
+    rewrite /Generic_fmt.cexp /FLX_exp u_pow.
+    have Hm : (mag beta e0 = 0 :> Z)%Z.
+      apply: (mag_unique_pos beta e0 0); split; last by rewrite -E1.
+      have -> : (0 - 1 = -1)%Z by lia.
+      have E2 : pow (-1) = /2 by [].
+      by rewrite E2; clear -Hlo Hu0 Hu1024; lra.
+    by rewrite Hm; congr bpow; lia.
+  exfalso; rewrite Hulpe in Ht.
+  have Hu2 : u * u <= /1024 * u by nra.
+  by clear -Ht Habs Hpred Hu0 Hu1024 Hu2; split_Rabs; nra.
+(* [e0 > 1]: then [e0 >= succ 1 = 1 + 2u], which the [2u] window above (in    *)
+(* fact [1.93u], once [|e0| <= 1.01] is used) already excludes.               *)
+have H := @succ_le_lt beta fexp _ 1 e0 format_1 Fe0 Hgt.
+have H2 := H (FLX_exp_valid p).
+move: H2; rewrite succ_eq_pos ?Hu1; last by lra.
+move=> Hsucc; exfalso.
+have {}Hsucc := Hsucc p_gt_0.
+have Hu2 : u * u <= /1024 * u by nra.
+by clear -Hd Hae Hsucc Hu0 Hu1024 Hu2 Hgt; split_Rabs; nra.
+Qed.
 
 (* ===========================================================================*)
 (*  Section 8.3 -- the head limb of [3Prod_{2,3}(b, x)] is [1]                *)

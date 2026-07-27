@@ -19,14 +19,16 @@
 (* [3Prod_{2,3}] it calls: [ThreeReci] uses Algorithm 11 (accurate) and       *)
 (* [ThreeReciFast] uses Algorithm 12 (fast).                                  *)
 (*                                                                            *)
-(* STATUS: correctness (part 1) is PROVED modulo ONE property.                *)
+(* STATUS: correctness (part 1) is COMPLETE and unconditional.                *)
 (* [ThreeReci_isTW] and [ThreeReciFast_isTW] are [Qed], on top of the whole   *)
 (* Section 8.2 chain -- [reciB_isDW] ([b] is a double word) and               *)
 (* [reciBW_x_err] ([|b x - 1| <= 34u^2 + 123u^3]) -- and of [head_one], the   *)
-(* Section 8.3 property that the head limb of [3Prod_{2,3}(b, x)] is [1].     *)
-(* [head_one] is ADMITTED for both multipliers ([ThreeProdDW_head_one],       *)
-(* [ThreeProdDWFast_head_one]) and moves to ThreeProdDW.v / ThreeProdDWFast.v *)
-(* once proved.  The two error bounds (Theorem 9) are still [Admitted].       *)
+(* Section 8.3 property that the head limb of [3Prod_{2,3}(b, x)] is [1],     *)
+(* now PROVED for both multipliers ([ThreeProdDW_head_one],                   *)
+(* [ThreeProdDWFast_head_one]).  Its two steps are generic in the multiplier  *)
+(* ([head_gap_gen], [head_one_gen]) and rest on the normalised head gap of    *)
+(* ThreeProdDW.v / ThreeProdDWFast.v ([_head_gap_norm]) and on [head_eq_1].   *)
+(* The two error bounds (Theorem 9) are still [Admitted].                     *)
 (* doc/paper3.pdf gives no proof of Theorem 9 (it is in the supplementary     *)
 (* material, which we do not have); the plan is recovered from                *)
 (* doc/old-triplewors.pdf Section 8 -- see doc/thm9.md for the full chain.    *)
@@ -1173,15 +1175,214 @@ Qed.
 (*  product's limbs, sharper than the [ulp] one [isTW] provides), and moves   *)
 (*  to those files once proved.                                               *)
 (* ===========================================================================*)
+(* THE INTERFACE, normalised (proved in ThreeProdDW.v as                      *)
+(* [ThreeProdDW_head_gap_norm]): the leading limb of [3Prod_{2,3}(x, y)] is   *)
+(* within HALF AN ULP (of itself) plus [O(u^2)] of the exact product.  The    *)
+(* half-ulp is [vecSum_head_gap] on the algorithm's inner VecSum -- its two   *)
+(* leading limbs are the two words of one 2Sum -- and the [O(u^2)] is the     *)
+(* accumulated rounding error of the FOUR remaining entries, which are all    *)
+(* [O(u)] there.  It is exactly [head_eq_1]'s hypothesis.                     *)
+
+(* The scale/sign transfer of a head gap.  The product, the head limb and     *)
+(* the [ulp] all scale by the same power of two, so the ABSOLUTE [60u^2] of   *)
+(* the normalised statement becomes a RELATIVE [70u^2]; the normalised        *)
+(* product bound [xy_ge] ([>= 1 - 4u]) is what converts one into the other.   *)
+Lemma head_gap_scale V E c :
+  1 - 4 * u <= Rabs V * pow c ->
+  Rabs (V * pow c - E * pow c) <= / 2 * ulp (E * pow c) + 60 * (u * u) ->
+  Rabs (V - E) <= / 2 * ulp E + 70 * (u * u) * Rabs V.
+Proof.
+move=> Hlo Hgap.
+have Hpc : 0 < pow c by apply: bpow_gt_0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := u_le_1024.
+have HV := Rabs_pos V.
+move: Hgap; rewrite ulp_FLX_exact_shift.
+have -> : V * pow c - E * pow c = (V - E) * pow c by ring.
+rewrite Rabs_mult (Rabs_pos_eq (pow c)); last by lra.
+move=> Hgap.
+have Hkey : 60 * (u * u) <= 70 * (u * u) * Rabs V * pow c by nra.
+by apply: (Rmult_le_reg_r (pow c)) => //; nra.
+Qed.
+
+(* The interface in the general (unnormalised, signed) case, GENERIC in the   *)
+(* multiplier: all a variant has to supply is the three algebraic laws its    *)
+(* scale/sign WLOG already needs and its own normalised head gap.  The four   *)
+(* sign combinations then reduce to the same algebra -- the product, the head *)
+(* limb and the [ulp] each pick up the same power of two and at most a sign.  *)
+Lemma head_gap_gen (mul : twR -> twR -> twR) :
+  (forall a b X Y, mul (scaleTW a X) (scaleTW b Y) = scaleTW (a + b) (mul X Y))
+  -> (forall X Y, mul (negTW X) Y = negTW (mul X Y))
+  -> (forall X Y, mul X (negTW Y) = negTW (mul X Y))
+  -> (forall X Y, dw_normP p X -> tw_normP p Y ->
+        Rabs (TWval X * TWval Y - tw0 (mul X Y))
+          <= / 2 * ulp (tw0 (mul X Y)) + 60 * (u * u))
+  -> forall x y, isDW x -> isTW y -> tw0 x <> 0 -> tw0 y <> 0 ->
+       Rabs (TWval x * TWval y - tw0 (mul x y))
+         <= / 2 * ulp (tw0 (mul x y))
+            + 70 * (u * u) * Rabs (TWval x * TWval y).
+Proof.
+move=> Hscale Hopp Hopp_r Hnormgap x y Hx Hy Hx0 Hy0.
+have [cx _ [Hxp Hxn]] := @isDW_normalize p Hp2 choice x Hx Hx0.
+have [cy _ [Hyp Hyn]] := @isTW_normalize p Hp2 choice y Hy Hy0.
+have Hxsg : 0 < tw0 x \/ tw0 x < 0 by lra.
+have Hysg : 0 < tw0 y \/ tw0 y < 0 by lra.
+apply: (head_gap_scale (c := (cx + cy)%Z)).
+  (* the normalised product is [>= 1 - 4u], whatever the signs ([xy_ge]).     *)
+  have Hnorm : forall X Y, dw_normP p X -> tw_normP p Y ->
+      1 - 4 * u <= Rabs (TWval X * TWval Y).
+    move=> X Y; case: X => x0 x1 x2 [Nxd ->]; case: Y => y0 y1 y2 NY.
+    have Nx' : tw_norm x0 x1 0 by exact: dw_norm_tw_norm Nxd.
+    have Ny' : tw_norm y0 y1 y2 by exact: NY.
+    by have := @xy_ge p Hp2 Hp6 x0 x1 0 y0 y1 y2 Nx' Ny'; rewrite /TWval.
+  have Habs2 : forall a b : R,
+      Rabs (a * pow cx * (b * pow cy)) = Rabs (a * b) * pow (cx + cy).
+    move=> a b; rewrite bpow_plus.
+    have -> : a * pow cx * (b * pow cy) = (a * b) * (pow cx * pow cy) by ring.
+    rewrite Rabs_mult [Rabs (pow cx * pow cy)]Rabs_pos_eq //.
+    by apply: Rmult_le_pos; apply: bpow_ge_0.
+  case: Hxsg => Hxs; case: Hysg => Hys.
+  - by have := Hnorm _ _ (Hxp Hxs) (Hyp Hys); rewrite !TWval_scale Habs2.
+  - have := Hnorm _ _ (Hxp Hxs) (Hyn Hys);
+      rewrite !TWval_scale !TWval_opp Habs2.
+    have -> : TWval x * - TWval y = -(TWval x * TWval y) by ring.
+    by rewrite Rabs_Ropp.
+  - have := Hnorm _ _ (Hxn Hxs) (Hyp Hys);
+      rewrite !TWval_scale !TWval_opp Habs2.
+    have -> : - TWval x * TWval y = -(TWval x * TWval y) by ring.
+    by rewrite Rabs_Ropp.
+  have := Hnorm _ _ (Hxn Hxs) (Hyn Hys); rewrite !TWval_scale !TWval_opp Habs2.
+  by have -> : - TWval x * - TWval y = TWval x * TWval y by ring.
+have Hprod : forall a b : R, a * pow cx * (b * pow cy) = a * b * pow (cx + cy).
+  by move=> a b; rewrite bpow_plus; ring.
+case: Hxsg => Hxs; case: Hysg => Hys.
+- have Hn := Hnormgap _ _ (Hxp Hxs) (Hyp Hys).
+  by rewrite Hscale !TWval_scale tw0_scale Hprod in Hn.
+- have Hn := Hnormgap _ _ (Hxp Hxs) (Hyn Hys).
+  rewrite Hscale Hopp_r !TWval_scale !TWval_opp tw0_scale tw0_opp Hprod in Hn.
+  move: Hn.
+  have -> : - tw0 (mul x y) * pow (cx + cy)
+          = -(tw0 (mul x y) * pow (cx + cy)) by ring.
+  rewrite ulp_opp.
+  have -> : TWval x * - TWval y * pow (cx + cy)
+          - - (tw0 (mul x y) * pow (cx + cy))
+          = -(TWval x * TWval y * pow (cx + cy)
+              - tw0 (mul x y) * pow (cx + cy)) by ring.
+  by rewrite Rabs_Ropp.
+- have Hn := Hnormgap _ _ (Hxn Hxs) (Hyp Hys).
+  rewrite Hscale Hopp !TWval_scale !TWval_opp tw0_scale tw0_opp Hprod in Hn.
+  move: Hn.
+  have -> : - tw0 (mul x y) * pow (cx + cy)
+          = -(tw0 (mul x y) * pow (cx + cy)) by ring.
+  rewrite ulp_opp.
+  have -> : - TWval x * TWval y * pow (cx + cy)
+          - - (tw0 (mul x y) * pow (cx + cy))
+          = -(TWval x * TWval y * pow (cx + cy)
+              - tw0 (mul x y) * pow (cx + cy)) by ring.
+  by rewrite Rabs_Ropp.
+have Hn := Hnormgap _ _ (Hxn Hxs) (Hyn Hys).
+have Hxy : mul (negTW x) (negTW y) = mul x y
+  by rewrite Hopp Hopp_r negTW_id.
+rewrite Hscale Hxy !TWval_scale !TWval_opp tw0_scale Hprod in Hn.
+move: Hn.
+by have -> : - TWval x * - TWval y = TWval x * TWval y by ring.
+Qed.
+
+(* The last step, also generic: a multiplier that returns a triple word and   *)
+(* has the head gap above satisfies [head_one].  The relative [70u^2] turns   *)
+(* absolute here, because the product is within [35u^2] of [1].               *)
+Lemma head_one_gen (mul : twR -> twR -> twR) :
+  (forall x y, isDW x -> isTW y -> isTW (mul x y)) ->
+  (forall x y, isDW x -> isTW y -> tw0 x <> 0 -> tw0 y <> 0 ->
+     Rabs (TWval x * TWval y - tw0 (mul x y))
+       <= / 2 * ulp (tw0 (mul x y)) + 70 * (u * u) * Rabs (TWval x * TWval y))
+  -> head_one mul.
+Proof.
+move=> HisTW Hgapgen b y Hb Hy Hprod.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := u_le_1024.
+(* A zero leading limb makes the whole factor zero, and [|0 - 1| = 1].        *)
+have Hb0 : tw0 b <> 0.
+  move=> H0.
+  have Hz := @isTW_zero_lead p Hp2 b (isDW_isTW Hb) H0.
+  move: Hprod; rewrite Hz.
+  have -> : TWval (TWR 0 0 0) = 0 by rewrite /TWval; ring.
+  rewrite Rmult_0_l.
+  have -> : (0 - 1) = -1 by ring.
+  rewrite Rabs_Ropp Rabs_R1.
+  by clear -Hu0 Hu1024; nra.
+have Hy0 : tw0 y <> 0.
+  move=> H0.
+  have Hz := @isTW_zero_lead p Hp2 y Hy H0.
+  move: Hprod; rewrite Hz.
+  have -> : TWval (TWR 0 0 0) = 0 by rewrite /TWval; ring.
+  rewrite Rmult_0_r.
+  have -> : (0 - 1) = -1 by ring.
+  rewrite Rabs_Ropp Rabs_R1.
+  by clear -Hu0 Hu1024; nra.
+have Hgap := Hgapgen _ _ Hb Hy Hb0 Hy0.
+have Fe0 : format (tw0 (mul b y)).
+  have HTW := HisTW _ _ Hb Hy.
+  by case: (mul b y) HTW => e0 e1 e2 [].
+apply: (@head_eq_1 (tw0 (mul b y)) (TWval b * TWval y)) => //.
+  (* the relative [70u^2] becomes absolute: the product is within [35u^2]    *)
+  (* of [1], so its magnitude is at most [1 + 35u^2].                        *)
+  have Hv : Rabs (TWval b * TWval y) <= 1 + 35 * (u * u).
+    have := Rabs_triang_inv (TWval b * TWval y) 1.
+    by rewrite Rabs_R1; clear -Hprod; lra.
+  have Hu2 : u * u <= /1024 * u by nra.
+  have Hup := Rabs_pos (TWval b * TWval y).
+  by clear -Hgap Hv Hu0 Hu1024 Hu2 Hup; nra.
+by clear -Hprod Hu0; nra.
+Qed.
+
+
+(* Algorithm 11: the two generic steps, instantiated.                         *)
+Lemma ThreeProdDW_head_gap x y :
+  ties_to_even choice -> isDW x -> isTW y -> tw0 x <> 0 -> tw0 y <> 0 ->
+  Rabs (TWval x * TWval y - tw0 (ThreeProdDW x y))
+    <= / 2 * ulp (tw0 (ThreeProdDW x y))
+       + 70 * (u * u) * Rabs (TWval x * TWval y).
+Proof.
+move=> Hc; apply: head_gap_gen.
+- exact: (@ThreeProdDW_scale p Hp2 choice).
+- exact: (@ThreeProdDW_opp p Hp2 choice choice_sym).
+- exact: (@ThreeProdDW_opp_r p Hp2 choice choice_sym).
+by move=> X Y NX NY;
+   apply: (@ThreeProdDW_head_gap_norm p Hp2 Hp6 choice choice_sym).
+Qed.
+
 Lemma ThreeProdDW_head_one :
   ties_to_even choice -> head_one ThreeProdDW.
 Proof.
-Admitted.
+move=> Hc; apply: head_one_gen.
+  by move=> X Y HX HY; apply: (@ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym).
+by move=> X Y HX HY HX0 HY0; apply: ThreeProdDW_head_gap.
+Qed.
+
+(* Algorithm 12: the same two steps, at its own multiplier.                   *)
+Lemma ThreeProdDWFast_head_gap x y :
+  ties_to_even choice -> isDW x -> isTW y -> tw0 x <> 0 -> tw0 y <> 0 ->
+  Rabs (TWval x * TWval y - tw0 (ThreeProdDWFast x y))
+    <= / 2 * ulp (tw0 (ThreeProdDWFast x y))
+       + 70 * (u * u) * Rabs (TWval x * TWval y).
+Proof.
+move=> Hc; apply: head_gap_gen.
+- exact: (@ThreeProdDWFast_scale p Hp2 choice).
+- exact: (@ThreeProdDWFast_opp p Hp2 choice choice_sym).
+- exact: (@ThreeProdDWFast_opp_r p Hp2 choice choice_sym).
+by move=> X Y NX NY;
+   apply: (@ThreeProdDWFast_head_gap_norm p Hp2 Hp6 choice choice_sym).
+Qed.
 
 Lemma ThreeProdDWFast_head_one :
   ties_to_even choice -> head_one ThreeProdDWFast.
 Proof.
-Admitted.
+move=> Hc; apply: head_one_gen.
+  by move=> X Y HX HY;
+     apply: (@ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym).
+by move=> X Y HX HY HX0 HY0; apply: ThreeProdDWFast_head_gap.
+Qed.
 
 Lemma ThreeReci_isTW x :
   ties_to_even choice ->

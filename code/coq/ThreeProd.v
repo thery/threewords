@@ -409,6 +409,10 @@ Definition scaleTW (c : Z) (t : twR) : twR :=
 Lemma TWval_scale c t : TWval (scaleTW c t) = TWval t * pow c.
 Proof. by case: t => t0 t1 t2 /=; ring. Qed.
 
+(* ... and the head limb alone scales.                                        *)
+Lemma tw0_scale c t : tw0 (scaleTW c t) = tw0 t * pow c.
+Proof. by case: t. Qed.
+
 (* [isTW] is scale-invariant (formats, and the strict [ulp] gaps, both        *)
 (* scale).                                                                    *)
 Lemma isTW_scale c t : isTW (scaleTW c t) <-> isTW t.
@@ -614,6 +618,10 @@ Definition negTW (t : twR) : twR :=
 Lemma TWval_opp t : TWval (negTW t) = - TWval t.
 Proof. by case: t => t0 t1 t2 /=; ring. Qed.
 
+(* ... and the head limb alone changes sign.                                  *)
+Lemma tw0_opp t : tw0 (negTW t) = - tw0 t.
+Proof. by case: t. Qed.
+
 Lemma isTW_opp t : isTW (negTW t) <-> isTW t.
 Proof.
 have Fo : forall z, format (- z) <-> format z.
@@ -791,9 +799,6 @@ set m := mag beta (tw0 t).
 have Hmag : pow (m - 1) <= Rabs (tw0 t) by apply: bpow_mag_le.
 have Hmag2 : Rabs (tw0 t) < pow m by apply: bpow_mag_gt.
 have Hp1m : 0 < pow (1 - m) by apply: bpow_gt_0.
-have tw0_scale : forall c s, tw0 (scaleTW c s) = tw0 s * pow c by move=> c [s0
-  s1 s2].
-have tw0_opp : forall s, tw0 (negTW s) = - tw0 s by move=> [s0 s1 s2].
 have Hlo : pow (m - 1) * pow (1 - m) = 1.
   by rewrite -bpow_plus (_ : (m - 1 + (1 - m) = 0)%Z) ?pow0E //; lia.
 have Hhi : pow m * pow (1 - m) = 2.

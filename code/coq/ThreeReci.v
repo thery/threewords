@@ -19,7 +19,7 @@
 (* [3Prod_{2,3}] it calls: [ThreeReci] uses Algorithm 11 (accurate) and       *)
 (* [ThreeReciFast] uses Algorithm 12 (fast).                                  *)
 (*                                                                            *)
-(* STATUS: correctness (part 1) is COMPLETE and unconditional.                *)
+(* STATUS: COMPLETE -- Algorithm 13 is fully proved, zero admits.             *)
 (* [ThreeReci_isTW] and [ThreeReciFast_isTW] are [Qed], on top of the whole   *)
 (* Section 8.2 chain -- [reciB_isDW] ([b] is a double word) and               *)
 (* [reciBW_x_err] ([|b x - 1| <= 34u^2 + 123u^3]) -- and of [head_one], the   *)
@@ -28,7 +28,12 @@
 (* [ThreeProdDWFast_head_one]).  Its two steps are generic in the multiplier  *)
 (* ([head_gap_gen], [head_one_gen]) and rest on the normalised head gap of    *)
 (* ThreeProdDW.v / ThreeProdDWFast.v ([_head_gap_norm]) and on [head_eq_1].   *)
-(* The two error bounds (Theorem 9) are still [Admitted].                     *)
+(* The two error bounds (Theorem 9) are PROVED too, through the assembly      *)
+(* [ThreeReciAux_error] (generic in BOTH multipliers) and the specialised     *)
+(* second product of ThreeProdOne.v.  Their [u^3] terms are the paper's       *)
+(* ([11.5] and [19]); their [u^4] terms are ours ([1830]/[1870] instead of    *)
+(* [1465]/[1502]), because the paper's [delta2 = u^3 + 260u^4] for Algorithm  *)
+(* 18 does not survive an honest accounting -- see ThreeProdOne.v.            *)
 (* doc/paper3.pdf gives no proof of Theorem 9 (it is in the supplementary     *)
 (* material, which we do not have); the plan is recovered from                *)
 (* doc/old-triplewors.pdf Section 8 -- see doc/thm9.md for the full chain.    *)
@@ -1613,10 +1618,11 @@ Qed.
 
 (* The sharp bound is Algorithm 18's, and it serves BOTH variants -- they     *)
 (* differ only in their first product.  [ThreeProdOne_error] gives            *)
-(* [u^3 + 260u^4], which is EXACTLY what Theorem 9's [1465u^4] leaves for it. *)
+(* [u^3 + 620u^4].  The paper claims [260u^4] here; see ThreeProdOne.v for    *)
+(* why the honest constant is bigger, and why only the [u^4] term moves.      *)
 Lemma ThreeProdOne_sharp :
   ties_to_even choice ->
-  sharp_error ThreeProdOne (u * u * u + 260 * (u * u * u * u)).
+  sharp_error ThreeProdOne (u * u * u + 620 * (u * u * u * u)).
 Proof.
 move=> Hc b i Hb Hi Hi0 Hi1.
 apply: Rle_trans
@@ -1626,12 +1632,13 @@ have Hu0 : 0 < u by apply: u_gt_0.
 by nra.
 Qed.
 
-(* Theorem 9, accurate variant: [11.5u^3 + 1465u^4].                          *)
+(* Theorem 9, accurate variant.  The paper states [11.5u^3 + 1465u^4]; the    *)
+(* [u^3] is exactly its, the [u^4] is ours (see [ThreeProdOne_sharp]).        *)
 Lemma ThreeReci_error x :
   ties_to_even choice ->
   isTW x -> tw0 x <> 0 ->
   Rabs (TWval (ThreeReci x) - / TWval x) <=
-     (115 / 10 * (u * u * u) + 1465 * (u * u * u * u)) *
+     (115 / 10 * (u * u * u) + 1830 * (u * u * u * u)) *
        Rabs (/ TWval x).
 Proof.
 move=> Hc Hx Hx0.
@@ -1643,15 +1650,15 @@ have Hu4 : u * u * u * u <= /1024 * (u * u * u) by nra.
 have Hu5 : u * u * u * u * u <= /1024 * (u * u * u * u) by nra.
 have Hgen := @ThreeReciAux_error ThreeProdDW ThreeProdOne
   (105 / 10 * (u * u * u) + 39 * (u * u * u * u))
-  (u * u * u + 260 * (u * u * u * u)) Hc
+  (u * u * u + 620 * (u * u * u * u)) Hc
   (fun b y Hb Hy => @ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
   (ThreeProdDW_head_one Hc)
   (fun b y Hb Hy => @ThreeProdDW_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
   (ThreeProdOne_sharp Hc)
   (ltac:(nra) : 0 <= 105 / 10 * (u * u * u) + 39 * (u * u * u * u))
   (ltac:(nra) : 105 / 10 * (u * u * u) + 39 * (u * u * u * u) <= u * u)
-  (ltac:(nra) : 0 <= u * u * u + 260 * (u * u * u * u))
-  (ltac:(nra) : u * u * u + 260 * (u * u * u * u) <= u * u)
+  (ltac:(nra) : 0 <= u * u * u + 620 * (u * u * u * u))
+  (ltac:(nra) : u * u * u + 620 * (u * u * u * u) <= u * u)
   x Hx Hx0.
 rewrite /ThreeReci.
 apply: Rle_trans Hgen _.
@@ -1659,12 +1666,12 @@ apply: Rmult_le_compat_r; first by apply: Rabs_pos.
 by nra.
 Qed.
 
-(* Theorem 9, fast variant: [19u^3 + 1502u^4].                                *)
+(* Theorem 9, fast variant.  The paper states [19u^3 + 1502u^4].              *)
 Lemma ThreeReciFast_error x :
   ties_to_even choice ->
   isTW x -> tw0 x <> 0 ->
   Rabs (TWval (ThreeReciFast x) - / TWval x) <=
-     (19 * (u * u * u) + 1502 * (u * u * u * u)) *
+     (19 * (u * u * u) + 1870 * (u * u * u * u)) *
        Rabs (/ TWval x).
 Proof.
 move=> Hc Hx Hx0.
@@ -1676,7 +1683,7 @@ have Hu4 : u * u * u * u <= /1024 * (u * u * u) by nra.
 have Hu5 : u * u * u * u * u <= /1024 * (u * u * u * u) by nra.
 have Hgen := @ThreeReciAux_error ThreeProdDWFast ThreeProdOne
   (18 * (u * u * u) + 75 * (u * u * u * u))
-  (u * u * u + 260 * (u * u * u * u)) Hc
+  (u * u * u + 620 * (u * u * u * u)) Hc
   (fun b y Hb Hy =>
      @ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
   (ThreeProdDWFast_head_one Hc)
@@ -1685,8 +1692,8 @@ have Hgen := @ThreeReciAux_error ThreeProdDWFast ThreeProdOne
   (ThreeProdOne_sharp Hc)
   (ltac:(nra) : 0 <= 18 * (u * u * u) + 75 * (u * u * u * u))
   (ltac:(nra) : 18 * (u * u * u) + 75 * (u * u * u * u) <= u * u)
-  (ltac:(nra) : 0 <= u * u * u + 260 * (u * u * u * u))
-  (ltac:(nra) : u * u * u + 260 * (u * u * u * u) <= u * u)
+  (ltac:(nra) : 0 <= u * u * u + 620 * (u * u * u * u))
+  (ltac:(nra) : u * u * u + 620 * (u * u * u * u) <= u * u)
   x Hx Hx0.
 rewrite /ThreeReciFast.
 apply: Rle_trans Hgen _.

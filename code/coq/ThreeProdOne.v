@@ -31,7 +31,7 @@
 (* error-free unconditionally.  Algorithm 18 keeps its 20 operations and      *)
 (* gains 2 tests -- and the paper's [delta2] then holds.                      *)
 (*                                                                            *)
-(* STATUS: skeleton -- both results are [Admitted].                           *)
+(* STATUS: COMPLETE -- both results are PROVED, zero admits.                  *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -420,15 +420,264 @@ have Hulpp : 0 < ulp r1 by rewrite ulp_neq_0 //; apply: bpow_gt_0.
 lra.
 Qed.
 
-(* Correctness, part 2: the relative error is [u^3 + 260u^4] (old paper       *)
-(* Section 8.4) as soon as the second argument is within [40u^2] of [1] --    *)
-(* which is what Algorithm 13's [i = 2 - 3Prod_{2,3}(b, x)] satisfies.        *)
+(* Correctness, part 2: the relative error, for a second argument within      *)
+(* [40u^2] of [1] -- which is what Algorithm 13's [i = 2 - 3Prod_{2,3}(b, x)] *)
+(* satisfies.  Every block being exact, the error is just FOUR terms,         *)
+(*                                                                            *)
+(*   error = - x1 y2 + eta1 + eta2 + eta3                                     *)
+(*                                                                            *)
+(* (the neglected product and the three roundings of [z3,1], [z3], [s3]), of  *)
+(* which only [eta3] -- the rounding of [s3 = RN(b'1 + z3)], both [O(u^2)] -- *)
+(* reaches [u^3].  That is the paper's remark that all errors are negligible  *)
+(* except the one committed when computing [s3].                              *)
+(*                                                                            *)
+(* THE [u^4] TERM IS BIGGER THAN THE PAPER'S.  Section 8.4 claims             *)
+(* [delta2 = u^3 + 260u^4]; the honest accounting gives [620u^4], because     *)
+(* [|y2| <= 2u|y1| <= 82u^3] feeds [z3] and hence [eta3] (and [eta2]).  Only  *)
+(* the [u^4] term is affected -- the published [u^3] is exact -- but Theorem  *)
+(* 9's [1465u^4] leaves just [260u^4] here, so its [u^4] constant grows too.  *)
 Lemma ThreeProdOne_error x y :
   ties_to_even choice ->
   isDW x -> isTW y -> tw0 y = 1 -> Rabs (TWval y - 1) <= 40 * (u * u) ->
   Rabs (TWval (ThreeProdOne x y) - TWval x * TWval y)
-    <= (u * u * u + 260 * (u * u * u * u)) * Rabs (TWval x * TWval y).
+    <= (u * u * u + 620 * (u * u * u * u)) * Rabs (TWval x * TWval y).
 Proof.
-Admitted.
+move=> Hc Hx Hy Hy0 Hy1v.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := @u_le_64 p Hp6.
+case: x Hx => x0 x1 x2 [Fx0 Fx1 Hx2 Hsep].
+case: y Hy Hy0 Hy1v => y0 y1 y2 [Fy0 Fy1 Fy2 Hys1 Hys2] /= Hy0.
+rewrite Hy0 in Hys1 *.
+move=> Hy1v.
+rewrite Hx2.
+(* [|x1| <= u|x0|] (a double word); and since the head is [1] and the whole  *)
+(* is within [40u^2] of it, [|y1| <= 42u^2] and [|y2| <= 84u^3].             *)
+have Hx1 : Rabs x1 <= u * Rabs x0.
+  case: Hsep => [->|Hs]; first by rewrite Rabs_R0; have := Rabs_pos x0; nra.
+  by have := @ulp_2u p beta Hp2 x0; lra.
+have Hy2u : Rabs y2 <= 2 * u * Rabs y1.
+  case: Hys2 => [->|Hs]; first by rewrite Rabs_R0; have := Rabs_pos y1; nra.
+  by have := @ulp_2u p beta Hp2 y1; lra.
+have Hy1 : Rabs y1 <= 42 * (u * u).
+  have T := Rabs_triang_inv y1 (- y2).
+  have E : y1 - - y2 = y1 + y2 by ring.
+  rewrite E Rabs_Ropp in T.
+  have E2 : 1 + y1 + y2 - 1 = y1 + y2 by ring.
+  rewrite E2 in Hy1v.
+  nra.
+have Hy2 : Rabs y2 <= 84 * (u * u * u).
+  have Hp := Rabs_pos y1.
+  nra.
+have HX := Rabs_pos x0.
+have Fz : format (p18z01p x0 y1) by apply: generic_format_round.
+have Fb0 : format (dwh (p18b x0 x1 y1)).
+  by rewrite /p18b Fast2SumS_hi; apply: generic_format_round.
+have Fs3 : format (p18s3 x0 x1 y1 y2) by apply: generic_format_round.
+have Fin : {in [:: x0; dwh (p18b x0 x1 y1); p18s3 x0 x1 y1 y2],
+             forall z : R, format z}.
+  by move=> z; rewrite !inE => /or3P[] /eqP->.
+have Fe : forall i, format (nth 0 (p18e x0 x1 y1 y2) i).
+  move=> i; case: (ltnP i (size (p18e x0 x1 y1 y2))) => Hi;
+    last by rewrite nth_default //; exact: generic_format_0.
+  by apply: (@format_vecSum p Hp2 choice) Fin _ _; apply: mem_nth.
+(* EVERY block is exact -- 2Prod, the two sorted Fast2Sums, VecSum -- so the *)
+(* result is just [x0 + b'0 + s3].                                           *)
+have Hval : TWval (let: DWR r1 r2 := Fast2SumS (p18e1 x0 x1 y1 y2)
+      (p18e2 x0 x1 y1 y2) in TWR (p18e0 x0 x1 y1 y2) r1 r2)
+    = x0 + dwh (p18b x0 x1 y1) + p18s3 x0 x1 y1 y2.
+  have Hlast := @Fast2SumS_correct p Hp2 choice (p18e1 x0 x1 y1 y2)
+    (p18e2 x0 x1 y1 y2) (Fe 1%N) (Fe 2%N).
+  have Hsum := @vecSum_sum p Hp2 choice choice_sym _ Fin.
+  case E : (Fast2SumS (p18e1 x0 x1 y1 y2) (p18e2 x0 x1 y1 y2)) => [r1 r2].
+  rewrite E in Hlast.
+  rewrite /TWval.
+  move: Hsum; rewrite -/(p18e x0 x1 y1 y2) => Hsum.
+  have Hsz : size (p18e x0 x1 y1 y2) = 3%N by rewrite /p18e size_vecSum.
+  have HsE : sumR (p18e x0 x1 y1 y2)
+      = p18e0 x0 x1 y1 y2 + p18e1 x0 x1 y1 y2 + p18e2 x0 x1 y1 y2.
+    rewrite /p18e0 /p18e1 /p18e2.
+    by case E3 : (p18e x0 x1 y1 y2) Hsz => [|a [|b [|c [|d l]]]] //= _; ring.
+  by move: Hsum; rewrite HsE /=; lra.
+rewrite Hval.
+have Hb : dwh (p18b x0 x1 y1) + dwl (p18b x0 x1 y1) = x1 + p18z01p x0 y1.
+  have H := @Fast2SumS_correct p Hp2 choice x1 (p18z01p x0 y1) Fx1 Fz.
+  by move: H; rewrite /p18b; case: TwoSum.Fast2SumS => a b /=; lra.
+have Hprod : p18z01p x0 y1 + p18z01m x0 y1 = x0 * y1.
+  rewrite /p18z01m round_generic; first by ring.
+  rewrite (_ : x0 * y1 - p18z01p x0 y1 = -(p18z01p x0 y1 - x0 * y1));
+    last by ring.
+  by apply: generic_format_opp; rewrite /p18z01p; apply: format_err_mul.
+(* THE ERROR IS FOUR TERMS: the neglected [x1 y2] and the three roundings.   *)
+set eta1 := p18z31 x0 x1 y1 - (p18z01m x0 y1 + x1 * y1).
+set eta2 := p18z3 x0 x1 y1 y2 - (p18z31 x0 x1 y1 + x0 * y2).
+set eta3 := p18s3 x0 x1 y1 y2 - (dwl (p18b x0 x1 y1) + p18z3 x0 x1 y1 y2).
+have HE : (x0 + x1 + 0) * (1 + y1 + y2)
+    = x0 + x1 + x0 * y1 + x1 * y1 + x0 * y2 + x1 * y2 by ring.
+have Hid : x0 + dwh (p18b x0 x1 y1) + p18s3 x0 x1 y1 y2
+    - (x0 + x1 + 0) * (1 + y1 + y2) = - (x1 * y2) + eta1 + eta2 + eta3.
+  by rewrite HE /eta1 /eta2 /eta3; lra.
+rewrite Hid.
+(* Three shapes cover every bound below: a product, a rounding, and the      *)
+(* error of a rounding, all measured against [|x0|].                         *)
+have Hmono : forall c d : R, c <= d -> c * Rabs x0 <= d * Rabs x0
+  by move=> c d Hcd; apply: Rmult_le_compat_r.
+have Hmul : forall a b ca cb : R, Rabs a <= ca * Rabs x0 -> Rabs b <= cb ->
+    0 <= cb -> Rabs (a * b) <= (ca * cb) * Rabs x0.
+  move=> a b ca cb Ha Hb' Hcb; rewrite Rabs_mult.
+  have H1 : Rabs a * Rabs b <= (ca * Rabs x0) * cb.
+    by apply: Rmult_le_compat => //; apply: Rabs_pos.
+  by have -> : ca * cb * Rabs x0 = ca * Rabs x0 * cb by ring.
+have Hround : forall t c : R, Rabs t <= c * Rabs x0 -> 0 <= c ->
+    Rabs (RND t) <= ((1 + u) * c) * Rabs x0.
+  move=> t c Ht Hc0.
+  apply: Rle_trans (@abs_round_le_rel p Hp2 choice t) _.
+  have -> : (1 + u) * c * Rabs x0 = (1 + u) * (c * Rabs x0) by ring.
+  by apply: Rmult_le_compat_l => //; lra.
+have Herr : forall t c : R, Rabs t <= c * Rabs x0 -> 0 <= c ->
+    Rabs (RND t - t) <= (u * c) * Rabs x0.
+  move=> t c Ht Hc0.
+  apply: Rle_trans (@relative_error_le p beta Hp2 choice t) _.
+  have -> : u * c * Rabs x0 = u * (c * Rabs x0) by ring.
+  by apply: Rmult_le_compat_l => //; lra.
+have Hx0y1 : Rabs (x0 * y1) <= (42 * (u * u)) * Rabs x0.
+  have H := Hmul x0 y1 1 (42 * (u * u)) (ltac:(lra)) Hy1 (ltac:(nra)).
+  by move: H; rewrite Rmult_1_l.
+have Hx1y1 : Rabs (x1 * y1) <= (42 * (u * u * u)) * Rabs x0.
+  have H := Hmul x1 y1 u (42 * (u * u)) Hx1 Hy1 (ltac:(nra)).
+  by move: H; have -> : u * (42 * (u * u)) = 42 * (u * u * u) by ring.
+have Hx0y2 : Rabs (x0 * y2) <= (84 * (u * u * u)) * Rabs x0.
+  have H := Hmul x0 y2 1 (84 * (u * u * u)) (ltac:(lra)) Hy2 (ltac:(nra)).
+  by move: H; rewrite Rmult_1_l.
+have Hx1y2 : Rabs (x1 * y2) <= (84 * (u * u * u * u)) * Rabs x0.
+  have H := Hmul x1 y2 u (84 * (u * u * u)) Hx1 Hy2 (ltac:(nra)).
+  by move: H; have -> : u * (84 * (u * u * u)) = 84 * (u * u * u * u) by ring.
+have Hz01p : Rabs (p18z01p x0 y1) <= (43 * (u * u)) * Rabs x0.
+  apply: Rle_trans (Hround (x0 * y1) (42 * (u * u)) Hx0y1 (ltac:(nra))) _.
+  by apply: Hmono; nra.
+have Hz01m : Rabs (p18z01m x0 y1) <= (42 * (u * u * u)) * Rabs x0.
+  rewrite /p18z01m round_generic; last first.
+    rewrite (_ : x0 * y1 - p18z01p x0 y1 = -(p18z01p x0 y1 - x0 * y1));
+      last by ring.
+    by apply: generic_format_opp; rewrite /p18z01p; apply: format_err_mul.
+  have E : x0 * y1 - p18z01p x0 y1 = - (RND (x0 * y1) - x0 * y1)
+    by rewrite /p18z01p; ring.
+  rewrite E Rabs_Ropp.
+  apply: Rle_trans (Herr (x0 * y1) (42 * (u * u)) Hx0y1 (ltac:(nra))) _.
+  by apply: Hmono; nra.
+have Ht1 : Rabs (p18z01m x0 y1 + x1 * y1) <= (84 * (u * u * u)) * Rabs x0.
+  by have T := Rabs_triang (p18z01m x0 y1) (x1 * y1); lra.
+have Heta1 : Rabs eta1 <= (84 * (u * u * u * u)) * Rabs x0.
+  rewrite /eta1 /p18z31.
+  apply: Rle_trans (Herr _ (84 * (u * u * u)) Ht1 (ltac:(nra))) _.
+  by apply: Hmono; nra.
+have Hz31 : Rabs (p18z31 x0 x1 y1) <= (86 * (u * u * u)) * Rabs x0.
+  rewrite /p18z31.
+  apply: Rle_trans (Hround _ (84 * (u * u * u)) Ht1 (ltac:(nra))) _.
+  by apply: Hmono; nra.
+have Ht2 : Rabs (p18z31 x0 x1 y1 + x0 * y2) <= (170 * (u * u * u)) * Rabs x0.
+  by have T := Rabs_triang (p18z31 x0 x1 y1) (x0 * y2); lra.
+have Heta2 : Rabs eta2 <= (170 * (u * u * u * u)) * Rabs x0.
+  rewrite /eta2 /p18z3.
+  apply: Rle_trans (Herr _ (170 * (u * u * u)) Ht2 (ltac:(nra))) _.
+  by apply: Hmono; nra.
+have Hz3 : Rabs (p18z3 x0 x1 y1 y2) <= (173 * (u * u * u)) * Rabs x0.
+  rewrite /p18z3.
+  apply: Rle_trans (Hround _ (170 * (u * u * u)) Ht2 (ltac:(nra))) _.
+  by apply: Hmono; nra.
+have Hb0v : dwh (p18b x0 x1 y1) = RND (x1 + p18z01p x0 y1)
+  by rewrite /p18b Fast2SumS_hi.
+have Htb : Rabs (x1 + p18z01p x0 y1) <= (u + 43 * (u * u)) * Rabs x0.
+  by have T := Rabs_triang x1 (p18z01p x0 y1); lra.
+have Hb0 : Rabs (dwh (p18b x0 x1 y1)) <= (u + 45 * (u * u)) * Rabs x0.
+  rewrite Hb0v.
+  apply: Rle_trans (Hround _ (u + 43 * (u * u)) Htb (ltac:(nra))) _.
+  by apply: Hmono; nra.
+have Hb1 : Rabs (dwl (p18b x0 x1 y1)) <= (u * u + 45 * (u * u * u)) * Rabs x0.
+  have Hm : Rabs (dwl (p18b x0 x1 y1)) <= ulp (dwh (p18b x0 x1 y1)) / 2.
+    rewrite /p18b.
+    have := @magnitude_Fast2SumS p Hp2 choice x1 (p18z01p x0 y1) Fx1 Fz.
+    by rewrite /magnitudeDWR; case: TwoSum.Fast2SumS.
+  have Hulp := @ulp_2u p beta Hp2 (dwh (p18b x0 x1 y1)).
+  have Hstep : u * Rabs (dwh (p18b x0 x1 y1))
+      <= u * ((u + 45 * (u * u)) * Rabs x0) by apply: Rmult_le_compat_l; lra.
+  by nra.
+have Ht3 : Rabs (dwl (p18b x0 x1 y1) + p18z3 x0 x1 y1 y2)
+    <= (u * u + 218 * (u * u * u)) * Rabs x0.
+  by have T := Rabs_triang (dwl (p18b x0 x1 y1)) (p18z3 x0 x1 y1 y2); lra.
+(* ... and THIS is the only one that reaches [u^3].                          *)
+have Heta3 : Rabs eta3 <= (u * u * u + 218 * (u * u * u * u)) * Rabs x0.
+  rewrite /eta3 /p18s3.
+  apply: Rle_trans (Herr _ (u * u + 218 * (u * u * u)) Ht3 (ltac:(nra))) _.
+  by apply: Hmono; nra.
+have Hfin : Rabs (- (x1 * y2) + eta1 + eta2 + eta3)
+    <= (u * u * u + 556 * (u * u * u * u)) * Rabs x0.
+  have T1 := Rabs_triang (- (x1 * y2) + eta1 + eta2) eta3.
+  have T2 := Rabs_triang (- (x1 * y2) + eta1) eta2.
+  have T3 := Rabs_triang (- (x1 * y2)) eta1.
+  rewrite Rabs_Ropp in T3.
+  lra.
+(* Finally, the product itself is at least [(1 - 2u)|x0|].                   *)
+have Hxy : (1 - 2 * u) * Rabs x0 <= Rabs ((x0 + x1 + 0) * (1 + y1 + y2)).
+  have E : x0 + x1 + 0 = x0 + x1 by ring.
+  rewrite E Rabs_mult.
+  have H1 : (1 - u) * Rabs x0 <= Rabs (x0 + x1).
+    have T := Rabs_triang_inv x0 (- x1).
+    have E2 : x0 - - x1 = x0 + x1 by ring.
+    by rewrite E2 Rabs_Ropp in T; lra.
+  have H2 : 1 - 44 * (u * u) <= Rabs (1 + y1 + y2).
+    have T := Rabs_triang_inv (1 + y1) (- y2).
+    have E2 : 1 + y1 - - y2 = 1 + y1 + y2 by ring.
+    rewrite E2 Rabs_Ropp in T.
+    have T2 := Rabs_triang_inv 1 (- y1).
+    have E3 : 1 - - y1 = 1 + y1 by ring.
+    rewrite E3 Rabs_Ropp Rabs_R1 in T2.
+    have Hup : 0 <= u * u by apply: Rle_0_sqr.
+    have Hu3 : u * u * u <= /64 * (u * u).
+      have -> : /64 * (u * u) = (u * u) * /64 by ring.
+      by apply: Rmult_le_compat_l.
+    lra.
+  have Hxp := Rabs_pos (x0 + x1).
+  have Hyp := Rabs_pos (1 + y1 + y2).
+  have Hp1 : 0 <= u - 44 * (u * u) + 44 * (u * u * u).
+    have -> : u - 44 * (u * u) + 44 * (u * u * u)
+        = u * (1 - 44 * u + 44 * (u * u)) by ring.
+    have Hup : 0 <= u * u by apply: Rle_0_sqr.
+    by apply: Rmult_le_pos; lra.
+  have Hstep : (1 - u) * Rabs x0 * (1 - 44 * (u * u))
+      <= Rabs (x0 + x1) * Rabs (1 + y1 + y2).
+    apply: Rmult_le_compat => //; try lra.
+      by apply: Rmult_le_pos; lra.
+    have Hu2 : u * u <= u * /64 by apply: Rmult_le_compat_l; lra.
+    by lra.
+  have Hexp : (1 - u) * Rabs x0 * (1 - 44 * (u * u))
+      = (1 - u - 44 * (u * u) + 44 * (u * u * u)) * Rabs x0 by ring.
+  rewrite Hexp in Hstep.
+  apply: Rle_trans Hstep.
+  by apply: Hmono; lra.
+apply: Rle_trans Hfin _.
+have Hpos : 0 <= u * u * u + 620 * (u * u * u * u).
+  have Hup : 0 <= u * u by apply: Rle_0_sqr.
+  have H3 : 0 <= u * u * u by apply: Rmult_le_pos; lra.
+  have H4 : 0 <= u * u * u * u by apply: Rmult_le_pos; lra.
+  by lra.
+apply: Rle_trans (_ : (u * u * u + 620 * (u * u * u * u))
+    * ((1 - 2 * u) * Rabs x0) <= _); last first.
+  by apply: Rmult_le_compat_l.
+have Hexp2 : (u * u * u + 620 * (u * u * u * u)) * ((1 - 2 * u) * Rabs x0)
+    = ((u * u * u + 620 * (u * u * u * u)) * (1 - 2 * u)) * Rabs x0 by ring.
+rewrite Hexp2.
+apply: Hmono.
+have H5 : u * u * u * u * u <= u * u * u * u * / 64.
+  apply: Rmult_le_compat_l; last by lra.
+  have Hup : 0 <= u * u by apply: Rle_0_sqr.
+  have H3 : 0 <= u * u * u by apply: Rmult_le_pos; lra.
+  by apply: Rmult_le_pos; lra.
+have -> : (u * u * u + 620 * (u * u * u * u)) * (1 - 2 * u)
+    = u * u * u + 618 * (u * u * u * u) - 1240 * (u * u * u * u * u) by ring.
+have Hup : 0 <= u * u by apply: Rle_0_sqr.
+have H3 : 0 <= u * u * u by apply: Rmult_le_pos; lra.
+have H4 : 0 <= u * u * u * u by apply: Rmult_le_pos; lra.
+lra.
+Qed.
 
 End SecThreeProdOne.

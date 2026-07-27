@@ -409,6 +409,10 @@ Definition scaleTW (c : Z) (t : twR) : twR :=
 Lemma TWval_scale c t : TWval (scaleTW c t) = TWval t * pow c.
 Proof. by case: t => t0 t1 t2 /=; ring. Qed.
 
+(* ... and the head limb alone scales.                                        *)
+Lemma tw0_scale c t : tw0 (scaleTW c t) = tw0 t * pow c.
+Proof. by case: t. Qed.
+
 (* [isTW] is scale-invariant (formats, and the strict [ulp] gaps, both        *)
 (* scale).                                                                    *)
 Lemma isTW_scale c t : isTW (scaleTW c t) <-> isTW t.
@@ -614,6 +618,10 @@ Definition negTW (t : twR) : twR :=
 Lemma TWval_opp t : TWval (negTW t) = - TWval t.
 Proof. by case: t => t0 t1 t2 /=; ring. Qed.
 
+(* ... and the head limb alone changes sign.                                  *)
+Lemma tw0_opp t : tw0 (negTW t) = - tw0 t.
+Proof. by case: t. Qed.
+
 Lemma isTW_opp t : isTW (negTW t) <-> isTW t.
 Proof.
 have Fo : forall z, format (- z) <-> format z.
@@ -791,9 +799,6 @@ set m := mag beta (tw0 t).
 have Hmag : pow (m - 1) <= Rabs (tw0 t) by apply: bpow_mag_le.
 have Hmag2 : Rabs (tw0 t) < pow m by apply: bpow_mag_gt.
 have Hp1m : 0 < pow (1 - m) by apply: bpow_gt_0.
-have tw0_scale : forall c s, tw0 (scaleTW c s) = tw0 s * pow c by move=> c [s0
-  s1 s2].
-have tw0_opp : forall s, tw0 (negTW s) = - tw0 s by move=> [s0 s1 s2].
 have Hlo : pow (m - 1) * pow (1 - m) = 1.
   by rewrite -bpow_plus (_ : (m - 1 + (1 - m) = 0)%Z) ?pow0E //; lia.
 have Hhi : pow m * pow (1 - m) = 2.
@@ -1826,6 +1831,25 @@ Qed.
 (* A rounded product's error is [<= 2 ulp] of a factor when the OTHER factor  *)
 (* is [<= 2] in magnitude (the normalised leading limbs [x0, y0 < 2]). Via    *)
 (* [Rabs(RN t - t) <= u|t|] and [u|a*b| = u|a||b| <= 2 u|a| <= 2 ulp a].      *)
+(* [ulp 1 = 2u]: the gap just above [1].  Used wherever a triple word has     *)
+(* head [1] (Algorithm 13's [i], Algorithm 18's second argument).             *)
+Lemma ulp_one : ulp 1 = 2 * u.
+Proof.
+have -> : (1 = pow 0)%R by [].
+by rewrite ulp_bpow /FLX_exp u_pow bpow_plus; have -> : pow 1 = 2 by []; ring.
+Qed.
+
+(* [|RN t| <= (1 + u)|t|]: the relative-error bound, in the form the term     *)
+(* bounds use it.                                                             *)
+Lemma abs_round_le_rel t : Rabs (RND t) <= (1 + u) * Rabs t.
+Proof.
+have H := @relative_error_le p beta Hp2 choice t.
+have T := Rabs_triang (RND t - t) t.
+have E : RND t - t + t = RND t by ring.
+rewrite E in T.
+by have := Rabs_pos t; lra.
+Qed.
+
 Lemma err_mul_le_ulp a b :
   Rabs b <= 2 -> Rabs (a * b - RND (a * b)) <= 2 * ulp a.
 Proof.

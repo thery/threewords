@@ -1,27 +1,58 @@
 # Theorem 9 — Algorithm 13 (3Reci): the reciprocal of a triple word
 
-> **STATUS (2026-07-25).** **isTW PROVED** (PR #131), error still open.
-> `ThreeReci_isTW`/`ThreeReciFast_isTW` are `Qed` on top of the whole §8.2
-> chain — `reciB_isDW` (the Newton word is a DW) and `reciBW_x_err`
-> (`|b̄x̄ − 1| ≤ 34u² + 123u³`) — modulo `head_one` (§8.3). 4 admits in
-> `code/coq/ThreeReci.v`: `ThreeProdDW_head_one`, `ThreeProdDWFast_head_one`,
-> `ThreeReci_error`, `ThreeReciFast_error`. PR #130 (skeleton) is merged.
+> **STATUS (2026-07-27). ALGORITHM 13 IS COMPLETE — `isTW` AND BOTH ERROR
+> BOUNDS ARE PROVED, ZERO ADMITS in the whole development.**
 >
-> **§8.3 cannot be proved from the multiplier's OUTPUT.** `(1+2u, −2u+2u², …)`
-> is P-nonoverlapping and sums to `1 + O(u²)` with head `1+2u`, so `isTW`
-> alone never pins the head. The argument must run on the pre-VSEB VecSum
-> limbs, where `e₀`, `e₁` are the two words of ONE 2Sum, giving the genuine
-> half-ulp `2|e₁| ≤ ulp e₀`. Remaining plan: (1) `vecSum_head_sep` in
-> VecSum.v (= `magnitude_TwoSum` + `format_vecSumAux2`); (2) tail
-> `≤ 15/16·ulp e₀` from `Fnonoverlap_imm` + `uls_le_abs` (the paper's
-> `1 − 2⁻⁴` is `1/2+1/4+1/8+1/16` over the four tail limbs); (3) `head_eq_1`
-> (stated, admitted); (4) the bridge — `inner_Fnonoverlap` and
-> `sumR_e_decomp` are the hooks, but they assume BOTH arguments normalised
-> while `b̄ȳ ≈ 1` forces one into `(1/2, 1]`, so the head lemma must be stated
-> at `pow j` and the compensating scaling of `ThreeProdDW_scale` used.
+> | result | statement | in |
+> |---|---|---|
+> | `ThreeReci_isTW`, `ThreeReciFast_isTW` | the result is a triple word | `ThreeReci.v` |
+> | `ThreeReci_error` | `11.5u³ + 1830u⁴` | `ThreeReci.v` |
+> | `ThreeReciFast_error` | `19u³ + 1870u⁴` | `ThreeReci.v` |
 >
-> **`p ≥ 10` is genuinely needed**, not the old paper's `p ≥ 9`: `head_eq_1`'s
-> margins are `0.125u` above 1 and `0.0625u` below, so `36u² < 0.0625u`.
+> The `u³` terms are the paper's. The `u⁴` terms are **ours**: paper3 states
+> `1465u⁴`/`1502u⁴`, which its own route does not support (see finding 3
+> below). The whole chain is generic in the multiplier(s), so the two variants
+> differ only in the two constants `d₁` (Theorem 8 / Algorithm 12) and `d₂`.
+>
+> **Structure of the proof.**
+> `ThreeReciAux_error` is the assembly, generic in BOTH multipliers:
+> `y − 1/x = (y − b·i) + b(x·b − P) + (b(2 − xb) − 1/x)`, the last term being
+> `−(bx−1)²/x` (`newton_id`), bounded by `newton_sq_le` (`1165u⁴`) and
+> assembled by `reci_error_assembly`. Its two inputs are `d₁` — each
+> multiplier's own error, already proved — and `d₂` = `sharp_error`, the error
+> of the SECOND product, whose second argument `i = 2 − 3Prod(b,x)` has head
+> `1` (that is §8.3's `head_one`) and total within `40u²` of `1`.
+> §8.3 itself is proved from five generic VecSum lemmas
+> (`vecSum_head_sep`, `vecSumAux_run_le`, `vecSumAux_err_le`,
+> `vecSum_head_tail_le`, `vecSum_head_gap`), `head_eq_1`, and two ingredients
+> per multiplier; its WLOG is generic (`head_gap_gen`, `head_one_gen`).
+>
+> **FIVE CORRECTIONS TO THE PAPERS, all machine-checked.**
+> 1. §8.3's tail bound is stated with `uls`, which is NOT enough:
+>    `[16; −8; −4; −2; −1]` is F-nonoverlapping and sums to `1` with head `16`.
+>    The argument needs the **ulp**-scale separation of the two leading limbs,
+>    which only the 2Sum structure of the VecSum supplies.
+> 2. `p ≥ 10` is genuinely needed, not the old paper's `p ≥ 9`: `head_eq_1`'s
+>    margins are `u − 200u²` above `1` and `u/2 − 200u²` below.
+> 3. **Algorithm 18's Remark 10 is false.** It uses `Fast2Sum(b₁, z01⁺)`
+>    without establishing the ordering, arguing that when it fails `b₁` is
+>    negligible. The condition fails exactly when `|b₁| < |z01⁺|`, and the
+>    worst case `|b₁| ≈ ulp(z01⁺)` loses `~u|z01⁺| ≈ 41u³`, not `O(u⁴)`.
+>    `alg18_fast2sum_bug.py` exhibits legal binary64 inputs reaching **32u³**,
+>    32× the claimed `δ₂`. Its last line, `Fast2Sum(e₁, e₂)`, has the same hole
+>    (`|e₁| < |e₂|` is legal and costs `~3u³`). Both are repaired at NO
+>    operation cost by sorting the arguments — `Fast2SumS` in `TwoSum.v`, a
+>    Fast2Sum preceded by one test, error-free unconditionally.
+> 4. Even repaired, `δ₂ = u³ + 260u⁴` is optimistic: the honest accounting
+>    gives `u³ + 620u⁴`, driven by `|y₂| ≤ 2u|y₁| ≤ 84u³` feeding `z₃` and
+>    hence `η₃`. Since Theorem 9's `1465u⁴` is exactly `1165` (Newton residue,
+>    irreducible) `+ 39` (`d₁`) `+ 260` (`d₂`), its `u⁴` constant moves too:
+>    `1830u⁴` and `1870u⁴`.
+> 5. Theorem 9's constants are for the SPECIALISED second product (Algorithm
+>    18), not the generic `3Prod₂,₃` its pseudo-code shows: the generic one
+>    carries a VSEB truncation of `2u³` alone. paper3's own operation count
+>    confirms it: `73 = 11 − 2 + 44 (Alg 17) + 20 (Alg 18)`.
+>
 > `doc/paper3.pdf` §8, Theorem 9 — the published proof is in supplementary
 > material we do not have; the route below is recovered from
 > `doc/old-triplewors.pdf` §8.
@@ -208,9 +239,16 @@ values. Only the `u⁴` terms are at stake: both papers agree on `11.5u³` and
 | Algorithm 13, generic in `3Prod₂,₃` | `ThreeReciAux` |
 | Algorithm 13 with Algorithm 11 | `ThreeReci` |
 | Algorithm 13 with Algorithm 12 | `ThreeReciFast` |
-| result is a TW | `ThreeReci_isTW`, `ThreeReciFast_isTW` (*admitted*) |
-| **Theorem 9**, accurate `11.5u³+1465u⁴` | `ThreeReci_error` (*admitted*) |
-| **Theorem 9**, fast `19u³+1502u⁴` | `ThreeReciFast_error` (*admitted*) |
+| result is a TW | `ThreeReci_isTW`, `ThreeReciFast_isTW` |
+| §8.3, head is `1` | `ThreeProdDW_head_one`, `ThreeProdDWFast_head_one` |
+| §8.3, pure FP core | `head_eq_1` |
+| §8.3, generic steps | `head_gap_gen`, `head_one_gen`, `head_gap_scale` |
+| §8.3, per multiplier | `_head_gap_norm`, `inner_sum_err_dw(F)`, `inner_low_mass_dw(F)` |
+| §8.3, generic VecSum | `vecSum_head_sep`, `vecSumAux_run_le`, `vecSumAux_err_le`, `vecSum_head_tail_le`, `vecSum_head_gap` |
+| **Theorem 9**, accurate `11.5u³+1830u⁴` | `ThreeReci_error` |
+| **Theorem 9**, fast `19u³+1870u⁴` | `ThreeReciFast_error` |
+| Algorithm 18 (specialised 2nd product) | `ThreeProdOne.v`: `ThreeProdOne_isTW`, `ThreeProdOne_error` |
+| sorted Fast2Sum (the Remark 10 fix) | `TwoSum.v`: `Fast2SumS` + 4 lemmas |
 
 Black boxes already available: `ThreeProdDW_isTW`, `ThreeProdDW_error`
 (Theorem 8), `ThreeProdDWFast_isTW`, `ThreeProdDWFast_error`, the whole DW

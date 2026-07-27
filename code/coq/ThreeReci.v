@@ -1509,6 +1509,33 @@ have K2 : a * R0 * (dd1 * a) <= dd1 * (1 + 71 * (u * u)) * R0.
 by nra.
 Qed.
 
+(* [i = 2 - 3Prod(b, x)] is within [40u^2] of [1] -- which is exactly what     *)
+(* the sharp bound asks of its second argument.  Factored out of the assembly  *)
+(* below because Algorithm 14 needs the very same step ([doc/thm10.md], step   *)
+(* 2): it is pure arithmetic on [|b x - 1| <= 35u^2] and the multiplier's own  *)
+(* relative error.                                                            *)
+Lemma sub2_near_one B X P d1 :
+  Rabs (B * X - 1) <= 35 * (u * u) ->
+  Rabs (P - B * X) <= d1 * Rabs (B * X) ->
+  0 <= d1 -> d1 <= u * u ->
+  Rabs (2 - P - 1) <= 40 * (u * u).
+Proof.
+move=> H35 HP Hd10 Hd1u.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := u_le_1024.
+have Hu2 : u * u <= / 1024 * u by nra.
+have HBXub : Rabs (B * X) <= 1 + 35 * (u * u).
+  by have := Rabs_triang_inv (B * X) 1; rewrite Rabs_R1; lra.
+have Hpos := Rabs_pos (B * X).
+have Hd : d1 * Rabs (B * X) <= u * u * (1 + 35 * (u * u)).
+  by apply: Rmult_le_compat; lra.
+have T := Rabs_triang (1 - B * X) (B * X - P).
+have Hm : Rabs (1 - B * X) = Rabs (B * X - 1) by rewrite Rabs_minus_sym.
+have Hm2 : Rabs (B * X - P) = Rabs (P - B * X) by rewrite Rabs_minus_sym.
+have E : 2 - P - 1 = (1 - B * X) + (B * X - P) by ring.
+by rewrite E; nra.
+Qed.
+
 (* THE ASSEMBLY, generic in the multiplier.  [d1] is the multiplier's own     *)
 (* relative error, [d2] its sharp one; both are asked to be [<= u], which is  *)
 (* far more than true ([O(u^3)]) and keeps the final arithmetic honest.       *)
@@ -1559,13 +1586,8 @@ have HBXub : Rabs (B * X) <= 1 + 35 * (u * u).
   by rewrite Rabs_R1; clear -HBX35; lra.
 (* [i = 2 - 3Prod(b, x)] is within [40u^2] of [1], which is what the sharp    *)
 (* bound asks of its second argument.                                         *)
-have HI1 : Rabs (TWval i - 1) <= 40 * (u * u).
-  have HE : TWval i - 1 = (1 - B * X) + (B * X - P) by rewrite HIval; ring.
-  have T := Rabs_triang (1 - B * X) (B * X - P).
-  have Hm : Rabs (1 - B * X) = Rabs (B * X - 1) by rewrite Rabs_minus_sym.
-  have Hm2 : Rabs (B * X - P) = Rabs (P - B * X) by rewrite Rabs_minus_sym.
-  have Hbb := Rabs_pos (B * X).
-  by rewrite HE; nra.
+have HI1 : Rabs (TWval i - 1) <= 40 * (u * u)
+  by rewrite HIval; apply: (sub2_near_one HBX35 HP Hd10 Hd1u).
 have Hy := Hsharp _ _ HDW Hi Hi0 HI1.
 set Y := TWval (mul2 b i) in Hy *.
 set I := TWval i in Hy HI1 HIval *.

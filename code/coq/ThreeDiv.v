@@ -1,8 +1,8 @@
 (* ---------------------------------------------------------------------------*)
 (* Algorithm 14 (3Div): the QUOTIENT of two triple words, and its two         *)
 (* correctness results -- the result is a triple word ([ThreeDiv_isTW]) and   *)
-(* the relative error bounds [24u^3 + 1509u^4] (accurate variant,             *)
-(* [ThreeDiv_error]) and [39u^3 + 1582u^4] (fast variant,                     *)
+(* the relative error bounds [24u^3 + 1510u^4] (accurate variant,             *)
+(* [ThreeDiv_error]) and [39u^3 + 1583u^4] (fast variant,                     *)
 (* [ThreeDivFast_error]) -- paper doc/paper3.pdf, Section 10 and Theorem 10   *)
 (* (see doc/thm10.md).  Generic over the precision [p] (FLX, no [emin]);      *)
 (* needs [p >= 10].                                                           *)
@@ -34,10 +34,10 @@
 (* paper, [ThreeProdOneTW] in ThreeProdOne.v.  Whence the paper's constants   *)
 (* [24 = 10.5 + 10.5 + 3] and [39 = 18 + 18 + 3].                             *)
 (*                                                                            *)
-(* STATUS: skeleton.  Definitions are complete and the four results are       *)
-(* stated; every proof is [Admitted].  The plan is in doc/thm10.md; almost    *)
-(* everything it needs is already proved for Algorithm 13 -- see the STEPS    *)
-(* comment before [ThreeDivAux_error].                                        *)
+(* STATUS: everything in this file is PROVED.  The two error bounds rest on   *)
+(* one admitted lemma, [ThreeProdOneTW_error] (Algorithm 20's [delta3]) in    *)
+(* ThreeProdOne.v -- the only genuinely new bound Theorem 10 needs.  The plan *)
+(* is in doc/thm10.md.                                                        *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -223,6 +223,157 @@ Qed.
 (*  [1465u^4] became [1830u^4]).  Note the [u^3] term is itself at risk this  *)
 (*  time -- see the caveat on [ThreeProdOneTW_error].                         *)
 (* ===========================================================================*)
+(* The final arithmetic of Theorem 10, on the bare quantities: [a = |b x|],    *)
+(* [c = |i|], [R0 = |z/x|] and the FOUR error terms (Theorem 9 had three --    *)
+(* the extra one is the second product's, [a' = 3Prod(b, z)], whose error is   *)
+(* then carried through the multiplication by [i]).  Kept apart so that the    *)
+(* assembly below never has to run [nra] in a large context.                   *)
+(*                                                                            *)
+(* The [1 + 107u^2] the paper attaches to [d2 + d3] is generous: [a c] is      *)
+(* [1 + 76u^2] and the [(1 + d2)] that [|a'| <= (1 + d2)|b z|] costs is        *)
+(* another [u^2].  The [1 + 71u^2] on [d1] is [a^2], as in Theorem 9.          *)
+Lemma div_error_assembly a c R0 e1 e2 e3 e4 dd1 dd2 dd3 :
+  0 <= a -> a <= 1 + 35 * (u * u) ->
+  0 <= c -> c <= 1 + 40 * (u * u) ->
+  0 <= R0 -> 0 <= dd1 -> 0 <= dd2 -> dd2 <= u * u -> 0 <= dd3 ->
+  e1 <= dd3 * ((1 + dd2) * (a * R0) * c) ->
+  e2 <= dd2 * (a * R0 * c) ->
+  e3 <= a * R0 * (dd1 * a) ->
+  e4 <= 1165 * (u * u * u * u) * R0 ->
+  e1 + e2 + e3 + e4
+    <= (dd1 * (1 + 71 * (u * u)) + (dd2 + dd3) * (1 + 107 * (u * u))
+        + 1165 * (u * u * u * u)) * R0.
+Proof.
+move=> Ha0 Ha1 Hc0 Hc1 HR0 Hd10 Hd20 Hd2u Hd30 H1 H2 H3 H4.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := @u_le_1024 p Hp10.
+have Hu2 : u * u <= / 1024 * u by nra.
+have Hac : a * c <= 1 + 76 * (u * u) by nra.
+have Hac0 : 0 <= a * c by nra.
+have Haa : a * a <= 1 + 71 * (u * u) by nra.
+have Hd2R : 0 <= dd2 * R0 by nra.
+have Hd1R : 0 <= dd1 * R0 by nra.
+have Hd3R : 0 <= dd3 * R0 by nra.
+have K1 : dd3 * ((1 + dd2) * (a * R0) * c) <= dd3 * (1 + 107 * (u * u)) * R0.
+  have -> : dd3 * ((1 + dd2) * (a * R0) * c) = (dd3 * R0) * ((1 + dd2) * (a * c))
+    by ring.
+  have -> : dd3 * (1 + 107 * (u * u)) * R0 = (dd3 * R0) * (1 + 107 * (u * u))
+    by ring.
+  by apply: Rmult_le_compat_l => //; nra.
+have K2 : dd2 * (a * R0 * c) <= dd2 * (1 + 107 * (u * u)) * R0.
+  have -> : dd2 * (a * R0 * c) = (dd2 * R0) * (a * c) by ring.
+  have -> : dd2 * (1 + 107 * (u * u)) * R0 = (dd2 * R0) * (1 + 107 * (u * u))
+    by ring.
+  by apply: Rmult_le_compat_l => //; nra.
+have K3 : a * R0 * (dd1 * a) <= dd1 * (1 + 71 * (u * u)) * R0.
+  have -> : a * R0 * (dd1 * a) = (dd1 * R0) * (a * a) by ring.
+  have -> : dd1 * (1 + 71 * (u * u)) * R0 = (dd1 * R0) * (1 + 71 * (u * u))
+    by ring.
+  by apply: Rmult_le_compat_l.
+by nra.
+Qed.
+
+(* THE CORE OF THEOREM 10, on the bare reals: [B ~ 1/X] with [reciBW]'s        *)
+(* accuracy, [P] the first product ([~ B X]), [A] the second one ([~ B Z]) and *)
+(* [Y] the third ([~ A (2 - P)]).  Nothing here knows about triple words -- it *)
+(* is the algebraic identity                                                   *)
+(*                                                                            *)
+(*   Y - Z/X = (Y - A i) + (A - B Z) i + (B Z)(X B - P) + Z (B (2 - X B) - 1/X)*)
+(*                                                                            *)
+(* (with [i = 2 - P]) whose last term is [- Z (B X - 1)^2 / X] by [newton_id], *)
+(* plus the two arithmetic lemmas [sub2_near_one] and [div_error_assembly].    *)
+Lemma div_error_core B X Z P A Y d1 d2 d3 :
+  Rabs (B * X - 1) <= 34 * (u * u) + 123 * (u * u * u) ->
+  Rabs (P - B * X) <= d1 * Rabs (B * X) ->
+  Rabs (A - B * Z) <= d2 * Rabs (B * Z) ->
+  Rabs (Y - A * (2 - P)) <= d3 * Rabs (A * (2 - P)) ->
+  0 <= d1 -> d1 <= u * u -> 0 <= d2 -> d2 <= u * u -> 0 <= d3 ->
+  Rabs (Y - Z / X)
+    <= (d1 * (1 + 71 * (u * u)) + (d2 + d3) * (1 + 107 * (u * u))
+        + 1165 * (u * u * u * u)) * Rabs (Z / X).
+Proof.
+move=> HBX HP HA HY Hd10 Hd1u Hd20 Hd2u Hd30.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := @u_le_1024 p Hp10.
+have Hu3 : u * u * u <= / 1024 * (u * u) by nra.
+have HBX35 : Rabs (B * X - 1) <= 35 * (u * u)
+  by clear -HBX Hu0 Hu1024 Hu3; nra.
+(* [x] itself cannot vanish: [b x] is within [35u^2] of [1].                   *)
+have HX0 : X <> 0.
+  move=> HX; move: HBX35; rewrite HX Rmult_0_r.
+  have -> : (0 - 1) = -1 by ring.
+  by rewrite Rabs_Ropp Rabs_R1; clear -Hu0 Hu1024; nra.
+set I := 2 - P in HY *.
+have HI1 : Rabs (I - 1) <= 40 * (u * u)
+  by apply: (@sub2_near_one p Hp10 B X P d1).
+have HIub : Rabs I <= 1 + 40 * (u * u)
+  by have := Rabs_triang_inv I 1; rewrite Rabs_R1; lra.
+have HBXub : Rabs (B * X) <= 1 + 35 * (u * u)
+  by have := Rabs_triang_inv (B * X) 1; rewrite Rabs_R1; lra.
+set R0 := Rabs (Z / X).
+have HR0 : 0 <= R0 by apply: Rabs_pos.
+have Hab : 0 <= Rabs (B * X) by apply: Rabs_pos.
+have Hai : 0 <= Rabs I by apply: Rabs_pos.
+(* [|B Z| = |B X| |Z/X|]: every term is measured against the exact quotient.   *)
+have HBZ : Rabs (B * Z) = Rabs (B * X) * R0.
+  by rewrite /R0 -Rabs_mult; congr Rabs; field.
+have HAub : Rabs A <= (1 + d2) * (Rabs (B * X) * R0).
+  have T := Rabs_triang_inv A (B * Z).
+  by rewrite -HBZ; nra.
+have Hnewton : B * (2 - X * B) - / X = - (B * X - 1) ^ 2 * / X.
+  have H := newton_id B X.
+  have -> : B * (2 - X * B) - / X = ((B * (2 - X * B)) * X - 1) * / X.
+    by field.
+  by rewrite H.
+have Hdecomp : Y - Z / X
+    = (Y - A * I) + (A - B * Z) * I + (B * Z) * (X * B - P)
+      + Z * (B * (2 - X * B) - / X)
+  by rewrite /I; field.
+have E1 : Rabs ((A - B * Z) * I) = Rabs (A - B * Z) * Rabs I
+  by rewrite Rabs_mult.
+have E2 : Rabs ((B * Z) * (X * B - P))
+    = Rabs (B * X) * R0 * Rabs (P - B * X).
+  rewrite Rabs_mult HBZ; congr (_ * _).
+  by rewrite -Rabs_Ropp; congr Rabs; ring.
+have E3 : Rabs (Z * (B * (2 - X * B) - / X)) = (B * X - 1) ^ 2 * R0.
+  rewrite Hnewton.
+  have -> : Z * (- (B * X - 1) ^ 2 * / X) = - ((B * X - 1) ^ 2 * (Z / X))
+    by field.
+  rewrite Rabs_Ropp Rabs_mult -/R0; congr (_ * _).
+  by apply: Rabs_pos_eq; apply: pow2_ge_0.
+have Step1 : Rabs (Y - A * I)
+    <= d3 * ((1 + d2) * (Rabs (B * X) * R0) * Rabs I).
+  apply: Rle_trans HY _.
+  rewrite Rabs_mult; apply: Rmult_le_compat_l => //.
+  by apply: Rmult_le_compat_r.
+have Step2 : Rabs ((A - B * Z) * I) <= d2 * (Rabs (B * X) * R0 * Rabs I).
+  rewrite E1.
+  have -> : d2 * (Rabs (B * X) * R0 * Rabs I) = (d2 * Rabs (B * Z)) * Rabs I
+    by rewrite HBZ; ring.
+  by apply: Rmult_le_compat_r.
+have Step3 : Rabs ((B * Z) * (X * B - P))
+    <= Rabs (B * X) * R0 * (d1 * Rabs (B * X)).
+  rewrite E2; apply: Rmult_le_compat_l; last by [].
+  by apply: Rmult_le_pos.
+have Step4 : Rabs (Z * (B * (2 - X * B) - / X))
+    <= 1165 * (u * u * u * u) * R0.
+  rewrite E3; apply: Rmult_le_compat_r => //.
+  by apply: (@newton_sq_le p Hp10 _ HBX).
+have T2 := Rabs_triang (Y - A * I + (A - B * Z) * I) ((B * Z) * (X * B - P)).
+have T3 := Rabs_triang (Y - A * I) ((A - B * Z) * I).
+have T1 := Rabs_triang (Y - A * I + (A - B * Z) * I + (B * Z) * (X * B - P))
+                       (Z * (B * (2 - X * B) - / X)).
+rewrite Hdecomp.
+apply: Rle_trans T1 _.
+have T4 : Rabs (Y - A * I + (A - B * Z) * I + (B * Z) * (X * B - P))
+            + Rabs (Z * (B * (2 - X * B) - / X))
+    <= Rabs (Y - A * I) + Rabs ((A - B * Z) * I)
+       + Rabs ((B * Z) * (X * B - P)) + Rabs (Z * (B * (2 - X * B) - / X))
+  by lra.
+apply: Rle_trans T4 _.
+by apply: (@div_error_assembly (Rabs (B * X)) (Rabs I) R0).
+Qed.
+
 Lemma ThreeDivAux_error mul1 mul2 mul3 d1 d2 d3 :
   ties_to_even choice ->
   (forall b y, isDW b -> isTW y -> isTW (mul1 b y)) ->
@@ -245,26 +396,128 @@ Lemma ThreeDivAux_error mul1 mul2 mul3 d1 d2 d3 :
       <= (d1 * (1 + 71 * (u * u)) + (d2 + d3) * (1 + 107 * (u * u))
           + 1165 * (u * u * u * u)) * Rabs (TWval z / TWval x).
 Proof.
-Admitted.
+move=> Hc Hmul1 Hmul2 Hhead Herr1 Herr2 Herr3 Hd10 Hd1u Hd20 Hd2u Hd30 Hd3u
+       z x Hz Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := @u_le_1024 p Hp10.
+have Fx0 : format (tw0 x) by case: x Hx {Hx0} => x0 x1 x2 [].
+have Hx1 : tw1 x = 0 \/ Rabs (tw1 x) < ulp (tw0 x)
+  by case: x Hx {Hx0 Fx0} => x0 x1 x2 [].
+rewrite /ThreeDivAux.
+set b := reciBW (tw0 x) (tw1 x).
+have HDW : isDW b by apply: (@reciB_isDW p Hp2 Hp10 choice choice_sym).
+have HBX := @reciBW_x_err p Hp2 Hp10 choice choice_sym x Hx Hx0.
+rewrite -/b in HBX.
+have Hu3 : u * u * u <= / 1024 * (u * u) by nra.
+have HBX35 : Rabs (TWval b * TWval x - 1) <= 35 * (u * u)
+  by clear -HBX Hu0 Hu1024 Hu3; nra.
+(* [i = 2 - mul1 b x] is a triple word with head [1].                          *)
+have Hprod1 : isTW (mul1 b x) by apply: Hmul1.
+have Hhead1 : tw0 (mul1 b x) = 1 by apply: Hhead.
+set i := sub2TW (mul1 b x).
+have Hi : isTW i by apply: (@sub2TW_isTW p Hp2).
+have Hi0 : tw0 i = 1
+  by rewrite /i; case: (mul1 b x) Hhead1 => t0 t1 t2 /= ->; ring.
+have HIval : TWval i = 2 - TWval (mul1 b x) by rewrite /i TWval_sub2TW.
+have HI1 : Rabs (TWval i - 1) <= 40 * (u * u).
+  rewrite HIval.
+  apply: (@sub2_near_one p Hp10
+            (TWval b) (TWval x) (TWval (mul1 b x)) d1) => //.
+  by apply: Herr1.
+(* the three products, then the core.                                          *)
+have Herr1' := Herr1 _ _ HDW Hx.
+have Herr2' := Herr2 _ _ HDW Hz.
+have Herr3' := Herr3 _ _ (Hmul2 _ _ HDW Hz) Hi Hi0 HI1.
+rewrite HIval in Herr3'.
+by apply: (@div_error_core (TWval b) (TWval x) (TWval z) (TWval (mul1 b x))
+             (TWval (mul2 b z)) (TWval (mul3 (mul2 b z) i)) d1 d2 d3).
+Qed.
 
-(* Theorem 10, accurate variant: [24u^3 + 1509u^4].                           *)
+(* Theorem 10, accurate variant.  The paper states [24u^3 + 1509u^4]; at      *)
+(* [p = 10] the honest constant is [1510u^4].  The excess is the [u^5] tail   *)
+(* the paper drops: [24u^3 + 1509.18u^4] exactly, from                        *)
+(* [10.5(1 + 71u^2) + 13.5(1 + 107u^2) + 1165] -- so [1509] holds for every   *)
+(* [p >= 11] and misses by [0.18u^4] at the smallest precision the theorem    *)
+(* allows.  (This is conditional on [delta3 = 3u^3 + 264u^4]; see             *)
+(* [ThreeProdOneTW_error], whose [u^3] is itself under suspicion.)            *)
 Lemma ThreeDiv_error z x :
   ties_to_even choice ->
   isTW z -> isTW x -> tw0 x <> 0 ->
   Rabs (TWval (ThreeDiv z x) - TWval z / TWval x) <=
-     (24 * (u * u * u) + 1509 * (u * u * u * u)) *
+     (24 * (u * u * u) + 1510 * (u * u * u * u)) *
        Rabs (TWval z / TWval x).
 Proof.
-Admitted.
+move=> Hc Hz Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := @u_le_1024 p Hp10.
+have Hu2 : u * u <= / 1024 * u by nra.
+have Hu3 : u * u * u <= / 1024 * (u * u) by nra.
+have Hu4 : u * u * u * u <= / 1024 * (u * u * u) by nra.
+have Hu5 : u * u * u * u * u <= / 1024 * (u * u * u * u) by nra.
+(* the two black boxes: [d1 = d2] is Algorithm 11's error, [d3] Algorithm     *)
+(* 20's; both are far below the [u] the assembly asks for.                    *)
+have Hd0 : 0 <= 105 / 10 * (u * u * u) + 39 * (u * u * u * u) by nra.
+have Hdu : 105 / 10 * (u * u * u) + 39 * (u * u * u * u) <= u * u by nra.
+have He0 : 0 <= 3 * (u * u * u) + 264 * (u * u * u * u) by nra.
+have Heu : 3 * (u * u * u) + 264 * (u * u * u * u) <= u * u by nra.
+have Hgen := @ThreeDivAux_error ThreeProdDW ThreeProdDW ThreeProdOneTW
+  (105 / 10 * (u * u * u) + 39 * (u * u * u * u))
+  (105 / 10 * (u * u * u) + 39 * (u * u * u * u))
+  (3 * (u * u * u) + 264 * (u * u * u * u)) Hc
+  (fun b y Hb Hy => @ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun b y Hb Hy => @ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (@ThreeProdDW_head_one p Hp2 Hp10 choice choice_sym Hc)
+  (fun b y Hb Hy => @ThreeProdDW_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun b y Hb Hy => @ThreeProdDW_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun a y Ha Hy Hy0 Hy1 =>
+     @ThreeProdOneTW_error p Hp2 Hp6 choice choice_sym a y Hc Ha Hy Hy0 Hy1)
+  Hd0 Hdu Hd0 Hdu He0 Heu z x Hz Hx Hx0.
+rewrite /ThreeDiv.
+apply: Rle_trans Hgen _.
+apply: Rmult_le_compat_r; first by apply: Rabs_pos.
+by nra.
+Qed.
 
-(* Theorem 10, fast variant: [39u^3 + 1582u^4].                               *)
+(* Theorem 10, fast variant.  The paper states [39u^3 + 1582u^4]; honestly    *)
+(* [39u^3 + 1582.49u^4] at [p = 10], whence [1583].  Same cause as above.     *)
 Lemma ThreeDivFast_error z x :
   ties_to_even choice ->
   isTW z -> isTW x -> tw0 x <> 0 ->
   Rabs (TWval (ThreeDivFast z x) - TWval z / TWval x) <=
-     (39 * (u * u * u) + 1582 * (u * u * u * u)) *
+     (39 * (u * u * u) + 1583 * (u * u * u * u)) *
        Rabs (TWval z / TWval x).
 Proof.
-Admitted.
+move=> Hc Hz Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := @u_le_1024 p Hp10.
+have Hu2 : u * u <= / 1024 * u by nra.
+have Hu3 : u * u * u <= / 1024 * (u * u) by nra.
+have Hu4 : u * u * u * u <= / 1024 * (u * u * u) by nra.
+have Hu5 : u * u * u * u * u <= / 1024 * (u * u * u * u) by nra.
+have Hd0 : 0 <= 18 * (u * u * u) + 75 * (u * u * u * u) by nra.
+have Hdu : 18 * (u * u * u) + 75 * (u * u * u * u) <= u * u by nra.
+have He0 : 0 <= 3 * (u * u * u) + 264 * (u * u * u * u) by nra.
+have Heu : 3 * (u * u * u) + 264 * (u * u * u * u) <= u * u by nra.
+have Hgen := @ThreeDivAux_error ThreeProdDWFast ThreeProdDWFast ThreeProdOneTW
+  (18 * (u * u * u) + 75 * (u * u * u * u))
+  (18 * (u * u * u) + 75 * (u * u * u * u))
+  (3 * (u * u * u) + 264 * (u * u * u * u)) Hc
+  (fun b y Hb Hy =>
+     @ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun b y Hb Hy =>
+     @ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (@ThreeProdDWFast_head_one p Hp2 Hp10 choice choice_sym Hc)
+  (fun b y Hb Hy =>
+     @ThreeProdDWFast_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun b y Hb Hy =>
+     @ThreeProdDWFast_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun a y Ha Hy Hy0 Hy1 =>
+     @ThreeProdOneTW_error p Hp2 Hp6 choice choice_sym a y Hc Ha Hy Hy0 Hy1)
+  Hd0 Hdu Hd0 Hdu He0 Heu z x Hz Hx Hx0.
+rewrite /ThreeDivFast.
+apply: Rle_trans Hgen _.
+apply: Rmult_le_compat_r; first by apply: Rabs_pos.
+by nra.
+Qed.
 
 End SecThreeDiv.

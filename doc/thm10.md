@@ -125,3 +125,47 @@ The `u⁴` figures are `29u³ + 2575.81u⁴` and `44u³ + 2649.11u⁴` exactly, 
 `u = 2^{-10}`. `δ₃ = 8u³ + 1330u⁴` itself is stated for `p ≥ 6` (`u ≤ 1/64`),
 where the honest chain gives `8u³ + 1211u⁴` against `|x₀|` and the division by
 `|x̄ȳ| ≥ (1−4u)|x₀|` accounts for the rest.
+
+## Is the paper actually wrong? (numerical evidence — `doc/alg20_delta3_*.py`)
+
+A larger *upper* bound is not a refutation, so we went looking for inputs that
+beat the published `δ₃ ≤ 3u³`. **So far the paper is not refuted.**
+
+- Random sampling over legal triple-word inputs (`alg20_delta3_search.py`,
+  binary64, exact rational reference): largest relative error **≈ 2.5u³**.
+- A directed construction that forces both `u³`-scale roundings —
+  `s₃′ = RN(b′₁+z₃)` and `s₃ = RN(s₃′+x₂)` — onto exact ties does reach
+  **`6u³`**, with `|b′₁| = 2u²` (its maximum), `η₃ = −2u³`, `η₄ = −4u³`. **But
+  that candidate is not admissible**: its `y₂` overshoots `ulp(y₁)` by four
+  binades, so `ȳ` is not a triple word. `check_hypotheses` in
+  `alg20_delta3_construct.py` rejects it, and every candidate is now screened.
+
+The obstruction is real, not an accident of the search: to lift `b′₁ + z₃`
+into the binade above `2^{-105}` one needs `z₃` to carry the sign of `b′₁` and
+a magnitude of a few `2^{-158}`, and `z₃ = RN(RN(x₁y₁) + y₂)` is pinned by
+`|y₂| < ulp(y₁)`. The two ties fight each other.
+
+**So our `8u³` is probably loose, and Theorem 10's `24u³` may well stand.**
+Three steps to tighten, in order of expected payoff:
+
+1. `|x₂| ≤ 4u²|x₀|` → `2u²|x₀|`. Since `|x₁| < ulp(x₀)`, `x₁` lies at least one
+   binade below, so `ulp(x₁) ≤ u·ulp(x₀)`. This is a clean, reusable lemma
+   about the `ulp` chain of a P-nonoverlapping triple word, and it alone takes
+   `η₄` from `6u³` to `4u³`, i.e. `δ₃` from `8u³` to `6u³` and Theorem 10 to
+   `27u³ / 42u³`.
+2. `|b′₁| ≤ 2u²|x₀|` is attained only when `b′₀` reaches `ulp(x₀)` exactly;
+   below that the rounding grid is finer and `|b′₁| ≤ u²|x₀|`.
+3. `η₄ ≤ u·|s₃′+x₂|` should be the *half-ulp* of `s₃′+x₂`, which is strictly
+   smaller whenever that sum stays in the binade below — the same binade
+   bookkeeping as (1).
+
+Steps 1–3 together would give `δ₃ = 3u³` and restore the paper's `24u³ / 39u³`.
+
+**For 3Div itself** the paper's own tightness examples are the right seed: its
+Theorem 8 example
+`x̄ = (1+3·2²⁷u, u−2²⁷u²)`, `ȳ = (1+(3·2²⁶+6)u, 2u−5·2²⁷u², 2u²−26u³)`
+(reaching `10u³` of the `10.5u³` bound, and `18u³` of Algorithm 12's `18u³`)
+puts every limb just under its separation ceiling with the low bits tuned —
+exactly the pattern above. In 3Div only `x̄` and `z̄` are free (`b̄` and `ī` are
+computed from `x̄`), so testing `24u³` end to end needs a full binary64
+implementation of Algorithm 11; that is not done yet.

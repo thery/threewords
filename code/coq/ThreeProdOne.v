@@ -1,5 +1,6 @@
 (* ---------------------------------------------------------------------------*)
-(* Algorithm 18 (3Prod^one): the product of a DOUBLE word by a triple word    *)
+(* Algorithms 18 and 20 (3Prod^one): the product of a double word (Alg 18)   *)
+(* resp. a TRIPLE word (Alg 20) by a triple word                              *)
 (* whose leading limb is exactly [1], and its two correctness results -- the  *)
 (* result is a triple word ([ThreeProdOne_isTW]) and the relative error is    *)
 (* [u^3 + 260u^4] ([ThreeProdOne_error]), an order of magnitude sharper than  *)
@@ -31,7 +32,9 @@
 (* error-free unconditionally.  Algorithm 18 keeps its 20 operations and      *)
 (* gains 2 tests -- and the paper's [delta2] then holds.                      *)
 (*                                                                            *)
-(* STATUS: COMPLETE -- both results are PROVED, zero admits.                  *)
+(* STATUS: Algorithm 18 is COMPLETE (zero admits).  Algorithm 20 -- its      *)
+(* [3,3] twin, which Theorem 10 (3Div) needs for its final product -- is      *)
+(* stated and ADMITTED (skeleton).                                            *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -154,9 +157,13 @@ Definition ThreeProdOne (x y : twR) : twR :=
 (*  since every quantity is a fixed multiple of [|x0|].  With [|y1| <= 2u]    *)
 (*  (the second argument has head [1]) and [|x1| <= u|x0|] (a double word):   *)
 (*                                                                            *)
-(*    |z01+| <= 3u|x0|      |z01-| <= 2u^2|x0|     |b'0| <= 5u|x0|            *)
-(*    |b'1|  <= 5u^2|x0|    |z3,1| <= 5u^2|x0|     |z3|  <= 10u^2|x0|         *)
-(*    |s3|   <= 16u^2|x0|                                                     *)
+(*    |z01+| <= 3u|x0|      |z01-| <= 2u^2|x0|     |b'0| <= 6u|x0|            *)
+(*    |b'1|  <= 6u^2|x0|     |z3,1| <= 7u^2|x0|     |z3|  <= 12u^2|x0|        *)
+(*    |s3|   <= 19u^2|x0|    |s3 (Alg 20)| <= 24u^2|x0|                       *)
+(*                                                                            *)
+(*  The hypothesis on [x1] is the TRIPLE word one, [|x1| <= 2u|x0|], so that  *)
+(*  Algorithms 18 and 20 share these bounds; a double word satisfies it a     *)
+(*  fortiori.                                                                 *)
 (* ===========================================================================*)
 
 Lemma p18z01p_le x0 y1 :
@@ -193,8 +200,8 @@ nra.
 Qed.
 
 Lemma p18b0_le x0 x1 y1 :
-  Rabs x1 <= u * Rabs x0 -> Rabs y1 <= 2 * u ->
-  Rabs (dwh (p18b x0 x1 y1)) <= 5 * u * Rabs x0.
+  Rabs x1 <= 2 * u * Rabs x0 -> Rabs y1 <= 2 * u ->
+  Rabs (dwh (p18b x0 x1 y1)) <= 6 * u * Rabs x0.
 Proof.
 move=> Hx1 Hy1.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -204,13 +211,13 @@ rewrite /p18b Fast2SumS_hi.
 apply: Rle_trans (@abs_round_le_rel p Hp2 choice _) _.
 have T := Rabs_triang x1 (p18z01p x0 y1).
 have Hx := Rabs_pos x0.
-have Hkey : 0 <= Rabs x0 * (u * (1 - 4 * u)) by apply: Rmult_le_pos; nra.
+have Hkey : 0 <= Rabs x0 * (u * (1 - 5 * u)) by apply: Rmult_le_pos; nra.
 nra.
 Qed.
 
 Lemma p18b1_le x0 x1 y1 :
-  format x1 -> Rabs x1 <= u * Rabs x0 -> Rabs y1 <= 2 * u ->
-  Rabs (dwl (p18b x0 x1 y1)) <= 5 * (u * u) * Rabs x0.
+  format x1 -> Rabs x1 <= 2 * u * Rabs x0 -> Rabs y1 <= 2 * u ->
+  Rabs (dwl (p18b x0 x1 y1)) <= 6 * (u * u) * Rabs x0.
 Proof.
 move=> Fx1 Hx1 Hy1.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -228,8 +235,8 @@ nra.
 Qed.
 
 Lemma p18z31_le x0 x1 y1 :
-  format x0 -> format y1 -> Rabs x1 <= u * Rabs x0 -> Rabs y1 <= 2 * u ->
-  Rabs (p18z31 x0 x1 y1) <= 5 * (u * u) * Rabs x0.
+  format x0 -> format y1 -> Rabs x1 <= 2 * u * Rabs x0 -> Rabs y1 <= 2 * u ->
+  Rabs (p18z31 x0 x1 y1) <= 7 * (u * u) * Rabs x0.
 Proof.
 move=> Fx0 Fy1 Hx1 Hy1.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -238,21 +245,21 @@ have Hz01m := p18z01m_le Fx0 Fy1 Hy1.
 rewrite /p18z31.
 apply: Rle_trans (@abs_round_le_rel p Hp2 choice _) _.
 have T := Rabs_triang (p18z01m x0 y1) (x1 * y1).
-have Hxy : Rabs (x1 * y1) <= 2 * (u * u) * Rabs x0.
-  rewrite Rabs_mult.
-  have Hx := Rabs_pos x0; have Hx1p := Rabs_pos x1.
-  have H2 : Rabs x1 * Rabs y1 <= (u * Rabs x0) * (2 * u).
-    apply: Rmult_le_compat => //; apply: Rabs_pos.
-  nra.
 have Hx := Rabs_pos x0.
-have Hkey : 0 <= Rabs x0 * (u * u * (1 - 4 * u)) by apply: Rmult_le_pos; nra.
+have Hxy : Rabs (x1 * y1) <= 4 * (u * u) * Rabs x0.
+  rewrite Rabs_mult.
+  have Hx1p := Rabs_pos x1.
+  have H2 : Rabs x1 * Rabs y1 <= (2 * u * Rabs x0) * (2 * u).
+    by apply: Rmult_le_compat => //; apply: Rabs_pos.
+  nra.
+have Hkey : 0 <= Rabs x0 * (u * u * (1 - 6 * u)) by apply: Rmult_le_pos; nra.
 nra.
 Qed.
 
 Lemma p18z3_le x0 x1 y1 y2 :
-  format x0 -> format y1 -> Rabs x1 <= u * Rabs x0 -> Rabs y1 <= 2 * u ->
+  format x0 -> format y1 -> Rabs x1 <= 2 * u * Rabs x0 -> Rabs y1 <= 2 * u ->
   Rabs y2 <= 4 * (u * u) ->
-  Rabs (p18z3 x0 x1 y1 y2) <= 10 * (u * u) * Rabs x0.
+  Rabs (p18z3 x0 x1 y1 y2) <= 12 * (u * u) * Rabs x0.
 Proof.
 move=> Fx0 Fy1 Hx1 Hy1 Hy2.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -268,14 +275,14 @@ have Hxy : Rabs (x0 * y2) <= 4 * (u * u) * Rabs x0.
     by apply: Rmult_le_compat_l.
   nra.
 have Hx := Rabs_pos x0.
-have Hkey : 0 <= Rabs x0 * (u * u * (1 - 9 * u)) by apply: Rmult_le_pos; nra.
+have Hkey : 0 <= Rabs x0 * (u * u * (1 - 11 * u)) by apply: Rmult_le_pos; nra.
 nra.
 Qed.
 
 Lemma p18s3_le x0 x1 y1 y2 :
   format x0 -> format x1 -> format y1 ->
-  Rabs x1 <= u * Rabs x0 -> Rabs y1 <= 2 * u -> Rabs y2 <= 4 * (u * u) ->
-  Rabs (p18s3 x0 x1 y1 y2) <= 16 * (u * u) * Rabs x0.
+  Rabs x1 <= 2 * u * Rabs x0 -> Rabs y1 <= 2 * u -> Rabs y2 <= 4 * (u * u) ->
+  Rabs (p18s3 x0 x1 y1 y2) <= 19 * (u * u) * Rabs x0.
 Proof.
 move=> Fx0 Fx1 Fy1 Hx1 Hy1 Hy2.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -286,7 +293,7 @@ rewrite /p18s3.
 apply: Rle_trans (@abs_round_le_rel p Hp2 choice _) _.
 have T := Rabs_triang (dwl (p18b x0 x1 y1)) (p18z3 x0 x1 y1 y2).
 have Hx := Rabs_pos x0.
-have Hkey : 0 <= Rabs x0 * (u * u * (1 - 15 * u)) by apply: Rmult_le_pos; nra.
+have Hkey : 0 <= Rabs x0 * (u * u * (1 - 18 * u)) by apply: Rmult_le_pos; nra.
 nra.
 Qed.
 
@@ -332,22 +339,23 @@ have Fe : forall i, format (nth 0 (p18e x0 x1 y1 y2) i).
   by apply: (@format_vecSum p Hp2 choice) Fin _ _; apply: mem_nth.
 (* The genuine HALF ulp between the two leading limbs of a VecSum.            *)
 have Hsep1 := @vecSum_head_sep p Hp2 choice choice_sym _ Fin (isT : (1 < 3)%N).
-have Hb0 := p18b0_le Hx1 Hy1.
-have Hs3 := p18s3_le Fx0 Fx1 Fy1 Hx1 Hy1 Hy2.
+have Hx1' : Rabs x1 <= 2 * u * Rabs x0 by have := Rabs_pos x0; nra.
+have Hb0 := p18b0_le Hx1' Hy1.
+have Hs3 := p18s3_le Fx0 Fx1 Fy1 Hx1' Hy1 Hy2.
 have HX := Rabs_pos x0.
 set b0' := dwh (p18b x0 x1 y1) in Fb0 Hb0 *.
 set s3 := p18s3 x0 x1 y1 y2 in Fs3 Hs3 *.
 set S := RND (b0' + s3).
-have HS : Rabs S <= 6 * u * Rabs x0.
+have HS : Rabs S <= 7 * u * Rabs x0.
   apply: Rle_trans (@abs_round_le_rel p Hp2 choice _) _.
   have T := Rabs_triang b0' s3.
-  have Hkey2 : 0 <= Rabs x0 * (u - 21 * (u * u) - 16 * (u * u * u))
+  have Hkey2 : 0 <= Rabs x0 * (u - 25 * (u * u) - 19 * (u * u * u))
     by apply: Rmult_le_pos; nra.
   nra.
 (* [e0] is [x0] to within [7u], so its ulp is at least [u(1 - 7u)|x0|].       *)
-have He0lb : (1 - 7 * u) * Rabs x0 <= Rabs (p18e0 x0 x1 y1 y2).
+have He0lb : (1 - 8 * u) * Rabs x0 <= Rabs (p18e0 x0 x1 y1 y2).
   rewrite He0 -/b0' -/s3 -/S.
-  have H1 : (1 - 6 * u) * Rabs x0 <= Rabs (x0 + S).
+  have H1 : (1 - 7 * u) * Rabs x0 <= Rabs (x0 + S).
     have T := Rabs_triang_inv x0 (- S).
     have E : x0 - - S = x0 + S by ring.
     by rewrite E Rabs_Ropp in T; lra.
@@ -360,7 +368,7 @@ have He0lb : (1 - 7 * u) * Rabs x0 <= Rabs (p18e0 x0 x1 y1 y2).
   have Habs := Rabs_pos (x0 + S).
   nra.
 (* [e2] is the low word of the INNER 2Sum, hence [<= u|S| <= 6u^2|x0|].       *)
-have He2b : Rabs (p18e2 x0 x1 y1 y2) <= 6 * (u * u) * Rabs x0.
+have He2b : Rabs (p18e2 x0 x1 y1 y2) <= 7 * (u * u) * Rabs x0.
   rewrite He2.
   have Hm := @magnitude_TwoSum p Hp2 choice choice_sym b0' s3 Fb0 Fs3.
   have Hu2 := @ulp_2u p beta Hp2 (dwh (TwoSum b0' s3)).
@@ -372,12 +380,12 @@ have He1b : 2 * Rabs (p18e1 x0 x1 y1 y2) <= ulp (p18e0 x0 x1 y1 y2)
 have Hulp0 := @u_abs_le_ulp p Hp2 (p18e0 x0 x1 y1 y2).
 (* so the pair below the head stays under [(1/2 + 7u) ulp e0].                *)
 have Hsum : Rabs (p18e1 x0 x1 y1 y2 + p18e2 x0 x1 y1 y2)
-    <= (/2 + 7 * u) * ulp (p18e0 x0 x1 y1 y2).
+    <= (/2 + 8 * u) * ulp (p18e0 x0 x1 y1 y2).
   have T := Rabs_triang (p18e1 x0 x1 y1 y2) (p18e2 x0 x1 y1 y2).
-  have Hkey : 6 * (u * u) * Rabs x0 <= 7 * u * ulp (p18e0 x0 x1 y1 y2).
-    have H7 : u * ((1 - 7 * u) * Rabs x0) <= u * Rabs (p18e0 x0 x1 y1 y2)
+  have Hkey : 7 * (u * u) * Rabs x0 <= 8 * u * ulp (p18e0 x0 x1 y1 y2).
+    have H7 : u * ((1 - 8 * u) * Rabs x0) <= u * Rabs (p18e0 x0 x1 y1 y2)
       by apply: Rmult_le_compat_l; lra.
-    have Hkey2 : 0 <= Rabs x0 * (u * u * (1 - 49 * u))
+    have Hkey2 : 0 <= Rabs x0 * (u * u * (1 - 64 * u))
       by apply: Rmult_le_pos; nra.
     nra.
   lra.
@@ -404,11 +412,11 @@ split.
   have Hulpp : 0 < ulp (p18e0 x0 x1 y1 y2)
     by rewrite ulp_neq_0 //; apply: bpow_gt_0.
   apply: Rle_lt_trans (@abs_round_le_rel p Hp2 choice _) _.
-  have Hcoef : (1 + u) * (/2 + 7 * u) < 1 by nra.
+  have Hcoef : (1 + u) * (/2 + 8 * u) < 1 by nra.
   have Hstep : (1 + u) * Rabs (p18e1 x0 x1 y1 y2 + p18e2 x0 x1 y1 y2)
-      <= (1 + u) * ((/2 + 7 * u) * ulp (p18e0 x0 x1 y1 y2))
+      <= (1 + u) * ((/2 + 8 * u) * ulp (p18e0 x0 x1 y1 y2))
     by apply: Rmult_le_compat_l; lra.
-  have Hlast : 0 < ulp (p18e0 x0 x1 y1 y2) * (1 - (1 + u) * (/2 + 7 * u))
+  have Hlast : 0 < ulp (p18e0 x0 x1 y1 y2) * (1 - (1 + u) * (/2 + 8 * u))
     by apply: Rmult_lt_0_compat; lra.
   lra.
 have [Hz|Hnz] := Req_dec r1 0.
@@ -679,5 +687,212 @@ have H3 : 0 <= u * u * u by apply: Rmult_le_pos; lra.
 have H4 : 0 <= u * u * u * u by apply: Rmult_le_pos; lra.
 lra.
 Qed.
+
+(* ===========================================================================*)
+(*  Algorithm 20 -- 3Prod^one_{3,3}(x, y) with [y0 = 1] VIRTUAL               *)
+(*  (21 operations + 2 tests; old paper Section 9).                           *)
+(*                                                                            *)
+(*  Algorithm 18 with a TRIPLE word as first argument.  Two changes: the      *)
+(*  chain gains one line for [x2] (which is [0] for a double word), and the   *)
+(*  first limb separation is the WEAKER [|x1| < ulp x0 <= 2u|x0|] of a triple *)
+(*  word instead of the double word's [u|x0|].                                *)
+(*                                                                            *)
+(*    z01+, z01- <- 2Prod(x0, y1)                                             *)
+(*    b'0, b'1   <- Fast2SumS(x1, z01+)     (the paper's Fast2Sum, SORTED)    *)
+(*    z31 <- RN(z01- + x1 y1)               (FMA)                             *)
+(*    z3  <- RN(z31 + x0 y2)                (FMA)                             *)
+(*    s3' <- RN(b'1 + z3)                   (Algorithm 18's [s3])             *)
+(*    s3  <- RN(s3' + x2)                   (the one new line)                *)
+(*    e0, e1, e2 <- VecSum(x0, b'0, s3)                                       *)
+(*    y0 <- e0 ;  y1, y2 <- Fast2SumS(e1, e2)                                 *)
+(* ===========================================================================*)
+(* Everything up to [s3] is Algorithm 18's; the third limb of the first       *)
+(* argument adds exactly one line.                                            *)
+Definition p20s3 (x0 x1 x2 y1 y2 : R) : R := RND (p18s3 x0 x1 y1 y2 + x2).
+
+Definition p20e (x0 x1 x2 y1 y2 : R) : seq R :=
+  vecSum [:: x0; dwh (p18b x0 x1 y1); p20s3 x0 x1 x2 y1 y2].
+
+Definition p20e0 (x0 x1 x2 y1 y2 : R) : R := nth 0 (p20e x0 x1 x2 y1 y2) 0.
+Definition p20e1 (x0 x1 x2 y1 y2 : R) : R := nth 0 (p20e x0 x1 x2 y1 y2) 1.
+Definition p20e2 (x0 x1 x2 y1 y2 : R) : R := nth 0 (p20e x0 x1 x2 y1 y2) 2.
+
+Definition ThreeProdOneTW (x y : twR) : twR :=
+  let: TWR x0 x1 x2 := x in
+  let: TWR _ y1 y2 := y in
+  let: DWR r1 r2 :=
+     Fast2SumS (p20e1 x0 x1 x2 y1 y2) (p20e2 x0 x1 x2 y1 y2) in
+  TWR (p20e0 x0 x1 x2 y1 y2) r1 r2.
+
+Lemma p20s3_le x0 x1 x2 y1 y2 :
+  format x0 -> format x1 -> format y1 ->
+  Rabs x1 <= 2 * u * Rabs x0 -> Rabs x2 <= 4 * (u * u) * Rabs x0 ->
+  Rabs y1 <= 2 * u -> Rabs y2 <= 4 * (u * u) ->
+  Rabs (p20s3 x0 x1 x2 y1 y2) <= 24 * (u * u) * Rabs x0.
+Proof.
+move=> Fx0 Fx1 Fy1 Hx1 Hx2 Hy1 Hy2.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := @u_le_64 p Hp6.
+have Hs3 := p18s3_le Fx0 Fx1 Fy1 Hx1 Hy1 Hy2.
+rewrite /p20s3.
+apply: Rle_trans (@abs_round_le_rel p Hp2 choice _) _.
+have T := Rabs_triang (p18s3 x0 x1 y1 y2) x2.
+have Hx := Rabs_pos x0.
+have Hkey : 0 <= Rabs x0 * (u * u * (1 - 23 * u)) by apply: Rmult_le_pos; nra.
+nra.
+Qed.
+
+(* Correctness, part 1.  Same shape as [ThreeProdOne_isTW]: the head and the  *)
+(* pair below it are separated by the inner VecSum's half-ulp                 *)
+(* ([vecSum_head_sep]), and that pair is a double word ([Fast2SumS]).  Only   *)
+(* the term bounds change ([|x1| <= 2u|x0|], and [x2] joins [s3]).            *)
+Lemma ThreeProdOneTW_isTW x y :
+  ties_to_even choice ->
+  isTW x -> isTW y -> tw0 y = 1 -> isTW (ThreeProdOneTW x y).
+Proof.
+have He0 : forall x0 x1 x2 y1 y2, p20e0 x0 x1 x2 y1 y2
+    = RND (x0 + RND (dwh (p18b x0 x1 y1) + p20s3 x0 x1 x2 y1 y2)) by [].
+have He2 : forall x0 x1 x2 y1 y2, p20e2 x0 x1 x2 y1 y2
+    = dwl (TwoSum (dwh (p18b x0 x1 y1)) (p20s3 x0 x1 x2 y1 y2)) by [].
+move=> Hc Hx Hy Hy0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := @u_le_64 p Hp6.
+case: x Hx => x0 x1 x2 [Fx0 Fx1 Fx2 Hxs1 Hxs2].
+case: y Hy Hy0 => y0 y1 y2 [Fy0 Fy1 Fy2 Hys1 Hys2] /= Hy0.
+rewrite Hy0 in Hys1.
+(* A triple word gives the WEAKER [|x1| <= 2u|x0|], and its third limb is    *)
+(* [O(u^2)] -- that is the whole difference with Algorithm 18.               *)
+have Hx1 : Rabs x1 <= 2 * u * Rabs x0.
+  case: Hxs1 => [->|Hs]; first by rewrite Rabs_R0; have := Rabs_pos x0; nra.
+  by have := @ulp_2u p beta Hp2 x0; lra.
+have Hx2 : Rabs x2 <= 4 * (u * u) * Rabs x0.
+  case: Hxs2 => [->|Hs]; first by rewrite Rabs_R0; have := Rabs_pos x0; nra.
+  have Hu2 := @ulp_2u p beta Hp2 x1.
+  by have := Rabs_pos x1; nra.
+have Hy1 : Rabs y1 <= 2 * u.
+  case: Hys1 => [->|Hs]; first by rewrite Rabs_R0; lra.
+  by move: Hs; rewrite (@ulp_one p); lra.
+have Hy2 : Rabs y2 <= 4 * (u * u).
+  case: Hys2 => [->|Hs]; first by rewrite Rabs_R0; nra.
+  have Hu2 := @ulp_2u p beta Hp2 y1.
+  by have := Rabs_pos y1; nra.
+have Fb0 : format (dwh (p18b x0 x1 y1)).
+  by rewrite /p18b Fast2SumS_hi; apply: generic_format_round.
+have Fs3 : format (p20s3 x0 x1 x2 y1 y2) by apply: generic_format_round.
+have Fin : {in [:: x0; dwh (p18b x0 x1 y1); p20s3 x0 x1 x2 y1 y2],
+             forall z : R, format z}.
+  by move=> z; rewrite !inE => /or3P[] /eqP->.
+have Fe : forall i, format (nth 0 (p20e x0 x1 x2 y1 y2) i).
+  move=> i; case: (ltnP i (size (p20e x0 x1 x2 y1 y2))) => Hi;
+    last by rewrite nth_default //; exact: generic_format_0.
+  by apply: (@format_vecSum p Hp2 choice) Fin _ _; apply: mem_nth.
+have Hsep1 := @vecSum_head_sep p Hp2 choice choice_sym _ Fin (isT : (1 < 3)%N).
+have Hb0 := p18b0_le Hx1 Hy1.
+have Hs3 := p20s3_le Fx0 Fx1 Fy1 Hx1 Hx2 Hy1 Hy2.
+have HX := Rabs_pos x0.
+set b0' := dwh (p18b x0 x1 y1) in Fb0 Hb0 *.
+set s3 := p20s3 x0 x1 x2 y1 y2 in Fs3 Hs3 *.
+set S := RND (b0' + s3).
+have HS : Rabs S <= 8 * u * Rabs x0.
+  apply: Rle_trans (@abs_round_le_rel p Hp2 choice _) _.
+  have T := Rabs_triang b0' s3.
+  have Hkey2 : 0 <= Rabs x0 * (2 * u - 30 * (u * u) - 24 * (u * u * u))
+    by apply: Rmult_le_pos; nra.
+  nra.
+have He0lb : (1 - 9 * u) * Rabs x0 <= Rabs (p20e0 x0 x1 x2 y1 y2).
+  rewrite He0 -/b0' -/s3 -/S.
+  have H1 : (1 - 8 * u) * Rabs x0 <= Rabs (x0 + S).
+    have T := Rabs_triang_inv x0 (- S).
+    have E : x0 - - S = x0 + S by ring.
+    by rewrite E Rabs_Ropp in T; lra.
+  have Hrel := @relative_error_le p beta Hp2 choice (x0 + S).
+  have T3 : Rabs (x0 + S) - Rabs (RND (x0 + S) - (x0 + S))
+              <= Rabs (RND (x0 + S)).
+    have T4 := Rabs_triang (RND (x0 + S)) (- (RND (x0 + S) - (x0 + S))).
+    have E4 : RND (x0 + S) + - (RND (x0 + S) - (x0 + S)) = x0 + S by ring.
+    by rewrite E4 Rabs_Ropp in T4; lra.
+  have Habs := Rabs_pos (x0 + S).
+  nra.
+have He2b : Rabs (p20e2 x0 x1 x2 y1 y2) <= 8 * (u * u) * Rabs x0.
+  rewrite He2.
+  have Hm := @magnitude_TwoSum p Hp2 choice choice_sym b0' s3 Fb0 Fs3.
+  have Hu2 := @ulp_2u p beta Hp2 (dwh (TwoSum b0' s3)).
+  have HdE : dwh (TwoSum b0' s3) = S by [].
+  move: Hm; rewrite /magnitudeDWR HdE in Hu2 *.
+  by case: (TwoSum b0' s3) HdE => h l /= ->; nra.
+have He1b : 2 * Rabs (p20e1 x0 x1 x2 y1 y2) <= ulp (p20e0 x0 x1 x2 y1 y2)
+  by move: Hsep1; rewrite /p20e1 /p20e0 /p20e -/b0' -/s3.
+have Hulp0 := @u_abs_le_ulp p Hp2 (p20e0 x0 x1 x2 y1 y2).
+have Hsum : Rabs (p20e1 x0 x1 x2 y1 y2 + p20e2 x0 x1 x2 y1 y2)
+    <= (/2 + 10 * u) * ulp (p20e0 x0 x1 x2 y1 y2).
+  have T := Rabs_triang (p20e1 x0 x1 x2 y1 y2) (p20e2 x0 x1 x2 y1 y2).
+  have Hkey : 8 * (u * u) * Rabs x0 <= 10 * u * ulp (p20e0 x0 x1 x2 y1 y2).
+    have H7 : u * ((1 - 9 * u) * Rabs x0) <= u * Rabs (p20e0 x0 x1 x2 y1 y2)
+      by apply: Rmult_le_compat_l; lra.
+    have Hkey2 : 0 <= Rabs x0 * (u * u * (2 - 90 * u))
+      by apply: Rmult_le_pos; nra.
+    nra.
+  lra.
+have Hfmt := @format_Fast2SumS p Hp2 choice (p20e1 x0 x1 x2 y1 y2)
+  (p20e2 x0 x1 x2 y1 y2).
+have Hmag := @magnitude_Fast2SumS p Hp2 choice (p20e1 x0 x1 x2 y1 y2)
+  (p20e2 x0 x1 x2 y1 y2) (Fe 1%N) (Fe 2%N).
+have Hhi := @Fast2SumS_hi p choice (p20e1 x0 x1 x2 y1 y2)
+  (p20e2 x0 x1 x2 y1 y2).
+case E : (Fast2SumS (p20e1 x0 x1 x2 y1 y2) (p20e2 x0 x1 x2 y1 y2)) => [r1 r2].
+rewrite E /= in Hfmt Hmag Hhi.
+split.
+- exact: (Fe 0%N).
+- by case: Hfmt.
+- by case: Hfmt.
+- have [Hz|Hnz] := Req_dec (p20e0 x0 x1 x2 y1 y2) 0.
+    left; rewrite Hhi.
+    have Hu00 : ulp (p20e0 x0 x1 x2 y1 y2) = 0 by rewrite Hz ulp_FLX_0.
+    rewrite Hu00 Rmult_0_r in Hsum.
+    have Habs := Rabs_pos (p20e1 x0 x1 x2 y1 y2 + p20e2 x0 x1 x2 y1 y2).
+    have Ez : p20e1 x0 x1 x2 y1 y2 + p20e2 x0 x1 x2 y1 y2 = 0
+      by apply: Rabs_eq_R0; lra.
+    by rewrite Ez round_0.
+  right; rewrite Hhi.
+  have Hulpp : 0 < ulp (p20e0 x0 x1 x2 y1 y2)
+    by rewrite ulp_neq_0 //; apply: bpow_gt_0.
+  apply: Rle_lt_trans (@abs_round_le_rel p Hp2 choice _) _.
+  have Hcoef : (1 + u) * (/2 + 10 * u) < 1 by nra.
+  have Hstep : (1 + u) * Rabs (p20e1 x0 x1 x2 y1 y2 + p20e2 x0 x1 x2 y1 y2)
+      <= (1 + u) * ((/2 + 10 * u) * ulp (p20e0 x0 x1 x2 y1 y2))
+    by apply: Rmult_le_compat_l; lra.
+  have Hlast : 0 < ulp (p20e0 x0 x1 x2 y1 y2) * (1 - (1 + u) * (/2 + 10 * u))
+    by apply: Rmult_lt_0_compat; lra.
+  lra.
+have [Hz|Hnz] := Req_dec r1 0.
+  left; move: Hmag; rewrite Hz ulp_FLX_0.
+  have := Rabs_pos r2.
+  by move=> H1 H2; apply: Rabs_eq_R0; lra.
+right.
+have Hulpp : 0 < ulp r1 by rewrite ulp_neq_0 //; apply: bpow_gt_0.
+lra.
+Qed.
+
+(* Correctness, part 2.  Old paper Section 9: the error analysis is that of   *)
+(* Algorithm 18 with an additional [2u^3], giving [delta3 <= 3u^3 + 264u^4].  *)
+(* Every block is exact here too, so the error is again a handful of terms,   *)
+(*                                                                            *)
+(*   error = - x1 y2 - x2 (y1 + y2) + eta1 + eta2 + eta3 + eta4               *)
+(*                                                                            *)
+(* the neglected products and the roundings of [z31], [z32], [z3], [s3].      *)
+(*                                                                            *)
+(* CAVEAT: the [u^3] coefficient is at risk here, not just the [u^4] one.  In *)
+(* Algorithm 18 the dominant term was [u|b'1 + z3| ~ u^3] with                *)
+(* [|b'1| <= u^2|x0|]; here [|x1| <= 2u|x0|] (a triple word, not a double     *)
+(* word) doubles [b'1] and [|x2| <= 4u^2|x0|] adds to [s3], so the honest     *)
+(* coefficient may be nearer [6u^3] than the paper's [3u^3].  Same discipline *)
+(* as Theorem 9: prove the honest constant, record the discrepancy.           *)
+Lemma ThreeProdOneTW_error x y :
+  ties_to_even choice ->
+  isTW x -> isTW y -> tw0 y = 1 -> Rabs (TWval y - 1) <= 40 * (u * u) ->
+  Rabs (TWval (ThreeProdOneTW x y) - TWval x * TWval y)
+    <= (3 * (u * u * u) + 264 * (u * u * u * u)) * Rabs (TWval x * TWval y).
+Proof.
+Admitted.
 
 End SecThreeProdOne.

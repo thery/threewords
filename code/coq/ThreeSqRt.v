@@ -627,9 +627,61 @@ Lemma sqrtH1_2_le x0 x1 :
   format x0 -> 0 < x0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
   Rabs (sqrtH1_2 x0 x1) <= 3 * u.
 Proof.
-(* PARKED: the chain is written and its shape is right; each remaining        *)
-(* [nra] needs the same spelling-out the lemmas above got.                    *)
-Admitted.
+move=> Fx0 Hx0 Hx1.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HA := sqrtA_gt0 Fx0 Hx0.
+have HP : 0 < sqrtA x0 * x0 by nra.
+have Hsq := sqrtA_sq_le Fx0 Hx0.
+have H01 := sqrtH0_1_le Fx0 Hx0.
+have H11 := sqrtH1_1_le Fx0 Hx0 Hx1.
+have HA' : sqrtA' x0 = sqrtA x0 / 2 by [].
+have FA : format (sqrtA x0) by apply: generic_format_round.
+have FA2 : format (sqrtA' x0).
+  have -> : sqrtA' x0 = sqrtA x0 * pow (-1) by rewrite HA' /=; lra.
+  by apply/format_scale.
+have F01 : format (sqrtH0_1 x0) by apply: generic_format_round.
+have H112 : Rabs (sqrtH11_2 x0)
+    <= u * (sqrtA' x0 * ((1 + u) * (sqrtA x0 * x0))).
+  have HE2 := @TwoProd_exact p Hp2 choice _ _ FA2 F01.
+  have -> : sqrtH11_2 x0 = sqrtA' x0 * sqrtH0_1 x0 - sqrtH01_2 x0.
+    by rewrite /sqrtH11_2 /sqrtH01_2; lra.
+  have -> : sqrtH01_2 x0 = RND (sqrtA' x0 * sqrtH0_1 x0) by [].
+  rewrite Rabs_minus_sym.
+  apply: Rle_trans (@relative_error_le p beta Hp2 choice _) _.
+  rewrite Rabs_mult (Rabs_pos_eq (sqrtA' x0)); last by rewrite HA'; lra.
+  apply: Rmult_le_compat_l; first lra.
+  by apply: Rmult_le_compat_l; [rewrite HA'; lra | exact: H01].
+have Hmix : Rabs (sqrtA' x0 * sqrtH1_1 x0 x1)
+    <= sqrtA' x0 * (4 * u * (sqrtA x0 * x0)).
+  rewrite Rabs_mult (Rabs_pos_eq (sqrtA' x0)); last by rewrite HA'; lra.
+  by apply: Rmult_le_compat_l; [rewrite HA'; lra | exact: H11].
+have Ht := Rabs_triang (sqrtH11_2 x0) (sqrtA' x0 * sqrtH1_1 x0 x1).
+have Hsum : Rabs (sqrtH11_2 x0 + sqrtA' x0 * sqrtH1_1 x0 x1)
+    <= (5 + u) / 2 * u * (sqrtA x0 * sqrtA x0 * x0).
+  (* the two bounds sum EXACTLY to the claim; give [lra] the identity.        *)
+  (* Keep everything in [a'] -- rewriting [HA'] in [Hmix] would also hit its  *)
+  (* SUBJECT and break the match with [Ht].                                   *)
+  have Hid : u * (sqrtA' x0 * ((1 + u) * (sqrtA x0 * x0)))
+           + sqrtA' x0 * (4 * u * (sqrtA x0 * x0))
+      = (5 + u) / 2 * u * (sqrtA x0 * sqrtA x0 * x0)
+    by rewrite HA'; field.
+  by lra.
+have Hr := @abs_round_le_rel p Hp2 choice
+             (sqrtH11_2 x0 + sqrtA' x0 * sqrtH1_1 x0 x1).
+rewrite /sqrtH1_2 Rabs_Ropp.
+apply: Rle_trans Hr _.
+have Hstep : (1 + u) * Rabs (sqrtH11_2 x0 + sqrtA' x0 * sqrtH1_1 x0 x1)
+    <= (1 + u) * ((5 + u) / 2 * u * (sqrtA x0 * sqrtA x0 * x0))
+  by apply: Rmult_le_compat_l; lra.
+apply: Rle_trans Hstep _.
+have Hfin : (1 + u) * ((5 + u) / 2 * u * (sqrtA x0 * sqrtA x0 * x0))
+    <= (1 + u) * ((5 + u) / 2 * u * (1 + 13 * u)).
+  apply: Rmult_le_compat_l; first lra.
+  by apply: Rmult_le_compat_l; [nra | exact: Hsq].
+apply: Rle_trans Hfin _.
+by nra.
+Qed.
 
 Lemma sqrtB11_le x0 :
   format x0 -> 0 < x0 -> Rabs (sqrtB11 x0) <= u * sqrtA x0.
@@ -654,19 +706,77 @@ Qed.
 Lemma sqrtB01_ge x0 :
   format x0 -> 0 < x0 -> (1 - u) / 2 * sqrtA x0 <= Rabs (sqrtB01 x0).
 Proof.
-Admitted.
+move=> Fx0 Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HA := sqrtA_gt0 Fx0 Hx0.
+have [Hh0 Hh1] := sqrtH0_2_range Fx0 Hx0.
+have HP : 0 < sqrtA x0 * sqrtH0_2 x0 by nra.
+have H := @relative_error_le p beta Hp2 choice (sqrtA x0 * sqrtH0_2 x0).
+rewrite (Rabs_pos_eq (sqrtA x0 * sqrtH0_2 x0)) in H; last lra.
+have Hb := Rabs_le_inv _ _ H.
+have -> : sqrtB01 x0 = RND (sqrtA x0 * sqrtH0_2 x0) by [].
+(* [nra], not [lra]: [Hb] bounds [RND] by [(1-u)(a h)], which is nonlinear.   *)
+rewrite Rabs_pos_eq; last by nra.
+(* [(1-u) a h - (1-u)/2 a = (1-u) a (h - 1/2) >= 0]                           *)
+have Hnn : 0 <= (1 - u) * (sqrtA x0 * (sqrtH0_2 x0 - 1 / 2)).
+  by apply: Rmult_le_pos; [lra | apply: Rmult_le_pos; lra].
+by nra.
+Qed.
 
 Lemma sqrtB12_le_B01 x0 x1 :
   format x0 -> 0 < x0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
   Rabs (sqrtB12 x0 x1) <= Rabs (sqrtB01 x0).
 Proof.
-Admitted.
+move=> Fx0 Hx0 Hx1.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HA := sqrtA_gt0 Fx0 Hx0.
+have Hb11 := sqrtB11_le Fx0 Hx0.
+have Hh12 := sqrtH1_2_le Fx0 Hx0 Hx1.
+have Hb01 := sqrtB01_ge Fx0 Hx0.
+have Hmix : Rabs (sqrtA x0 * sqrtH1_2 x0 x1) <= sqrtA x0 * (3 * u).
+  rewrite Rabs_mult (Rabs_pos_eq (sqrtA x0)); last lra.
+  by apply: Rmult_le_compat_l; lra.
+have Ht := Rabs_triang (sqrtB11 x0) (sqrtA x0 * sqrtH1_2 x0 x1).
+have Hsum : Rabs (sqrtB11 x0 + sqrtA x0 * sqrtH1_2 x0 x1)
+    <= 4 * u * sqrtA x0 by nra.
+have Hr := @abs_round_le_rel p Hp2 choice
+             (sqrtB11 x0 + sqrtA x0 * sqrtH1_2 x0 x1).
+rewrite /sqrtB12.
+apply: Rle_trans Hr _.
+have Hstep : (1 + u) * Rabs (sqrtB11 x0 + sqrtA x0 * sqrtH1_2 x0 x1)
+    <= (1 + u) * (4 * u * sqrtA x0)
+  by apply: Rmult_le_compat_l; lra.
+apply: Rle_trans Hstep _.
+apply: Rle_trans Hb01.
+(* [(1-u)/2 a - (1+u)4u a = (1/2 - 9u/2 - 4u^2) a >= 0].                      *)
+have -> : (1 - u) / 2 * sqrtA x0
+    = (1 + u) * (4 * u * sqrtA x0)
+      + (1 / 2 - 9 / 2 * u - 4 * (u * u)) * sqrtA x0 by field.
+have Hnn : 0 <= (1 / 2 - 9 / 2 * u - 4 * (u * u)) * sqrtA x0.
+  by apply: Rmult_le_pos; [nra | lra].
+by lra.
+Qed.
 
 Lemma sqrtB_isDW x0 x1 :
-  format x0 -> format x1 -> 0 < x0 -> isDW (sqrtBW x0 x1).
+  format x0 -> 0 < x0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
+  isDW (sqrtBW x0 x1).
 Proof.
-move=> Fx0 Fx1 Hx0.
-Admitted.
+move=> Fx0 Hx0 Hx1.
+have F01 : format (sqrtB01 x0) by apply: generic_format_round.
+have F12 : format (sqrtB12 x0 x1) by apply: generic_format_round.
+have Hord := sqrtB12_le_B01 Fx0 Hx0 Hx1.
+have Hmag := @magnitude_Fast2Sum p Hp2 choice _ _ F01 F12 (fun _ => Hord).
+have Hfor := @format_Fast2Sum p Hp2 choice (sqrtB01 x0) (sqrtB12 x0 x1).
+rewrite /sqrtBW /sqrtB.
+case E : (Fast2Sum (sqrtB01 x0) (sqrtB12 x0 x1)) => [s e].
+rewrite E in Hmag Hfor.
+rewrite /magnitudeDWR in Hmag.
+case: Hfor => Fs Fe.
+split => //.
+by right; rewrite dwhE dwlE; lra.
+Qed.
 
 (* Step 4.  The seed double word against the true inverse square root, in the *)
 (* dimensionless form the assembly consumes.  The supplementary states it as  *)
@@ -856,6 +966,8 @@ have Hu0 : 0 < u by apply: u_gt_0.
 have Hu1024 := @u_le_1024 p Hp10.
 have [Fx0 Fx1] : format (tw0 x) /\ format (tw1 x)
   by case: x Hx {Hx0} => x0 x1 x2 [].
+have Hx1s : tw1 x = 0 \/ Rabs (tw1 x) < ulp (tw0 x)
+  by case: x Hx {Hx0 Fx0 Fx1} => x0 x1 x2 [].
 have HDW : isDW (sqrtBW (tw0 x) (tw1 x)) by apply: sqrtB_isDW.
 have Hi1 : isTW (mul1 (sqrtBW (tw0 x) (tw1 x)) x) by apply: Hmul1.
 (* The head argument needs [|b i(1) - 1| <= 200u^2].  With [t = b sqrt x]     *)

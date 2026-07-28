@@ -170,6 +170,19 @@ have been combined — that is where the factor three lives.
 
 ## 5. Proof obligations, in the order to attack them
 
+> **Status: the `isTW` half is COMPLETE.** `ThreeSqRt_isTW` and
+> `ThreeSqRtFast_isTW` are `Qed`, on top of `ThreeSqRtAux_isTW`.  Eight admits
+> remain, all in the error half.  Two of them — `sqrtB_isDW` and
+> `sqrtBW_x_err` — are already *consumed* by the `isTW` half, so they are
+> shared and worth doing next.
+>
+> Getting there needed one thing not on this list: `head_one`'s `35u²`
+> threshold is too tight for Algorithm 15, so `ThreeReci.v` gained the
+> tolerance-parametric `head_eq_1_c` / `head_one_gen_c` (side condition
+> `c·u ≤ ¼`, which allows `c` up to 256 at `p ≥ 10`); `head_half` is
+> instantiated at `c = 200` against a need of `162`.  See item 5 below.
+
+
 1. **`sqrtA_bound`** — the seed.  The one genuinely new analytic step; nothing
    else in the development computes with `sqrt`.
 2. **`sqrtH0_2_exact`** — via `h01(2) >= 1/2`, per Section 2.  Grid arithmetic

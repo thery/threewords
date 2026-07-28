@@ -75,11 +75,17 @@
 (* nothing extra: the [delta3] tightening of doc/thm10.md would improve       *)
 (* Theorems 9 and 10, not this one.                                           *)
 (*                                                                            *)
-(* STATUS: SKELETON.  Proved: the definition, [sqrt_newton_id], the           *)
-(* [sub32TW] block, and [head_half] for both multipliers (obligation 5, via   *)
-(* [head_one_half] -- but see the KNOWN GAP on its threshold below).  Nine    *)
-(* admits remain: the four correctness results, the assembly, and four        *)
-(* obligations.  Order of attack in doc/thm11.md Section 5.                   *)
+(* STATUS.  The [isTW] HALF IS COMPLETE: [ThreeSqRt_isTW] and                 *)
+(* [ThreeSqRtFast_isTW] are [Qed] on top of [ThreeSqRtAux_isTW], via          *)
+(* [head_half] (obligation 5), [sub32TW_isTW], [isTW_TWval_gt0] and the       *)
+(* tolerance-parametric [head_one_gen_c] added to ThreeReci.v.                *)
+(*                                                                            *)
+(* Eight admits remain, ALL in the error half: the seed [sqrtA_bound], the    *)
+(* exactness [sqrtH0_2_exact], [sqrtB_isDW], [sqrtBW_x_err],                  *)
+(* [sqrt_newton_residual], the assembly [ThreeSqRtAux_error] and its two      *)
+(* instantiations.  Order of attack in doc/thm11.md Section 5.  Note the      *)
+(* [isTW] half already CONSUMES [sqrtB_isDW] and [sqrtBW_x_err], so those     *)
+(* two are shared and worth doing next.                                       *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -354,9 +360,15 @@ Admitted.
 (* the assembly uses it: [mul2] is applied to [scaleTW (-1) bw], and the      *)
 (* hypothesis available there is Algorithm 13's [|b x - 1| <= 35u^2] -- the   *)
 (* very hypothesis of [head_one].                                             *)
+(* The tolerance is [200u^2], not Algorithm 13's [35u^2].  Algorithm 15       *)
+(* needs the slack: at the call site the second factor is [i(1) =             *)
+(* 3Prod(b, x)], so the product is [b^2 x = (b sqrt x)^2 = (1 + e)^2] with    *)
+(* [|e| <= 81u^2 + 622u^3], giving [|b i(1) - 1| <= 162u^2 + O(u^3)].         *)
+(* Algorithm 13 never meets this because there the second factor is [x]       *)
+(* itself, so the product carries ONE power of the seed error, not two.       *)
 Definition head_half (mul : twR -> twR -> twR) : Prop :=
   forall b y, isDW b -> isTW y ->
-    Rabs (TWval b * TWval y - 1) <= 35 * (u * u) ->
+    Rabs (TWval b * TWval y - 1) <= 200 * (u * u) ->
     tw0 (mul (scaleTW (-1)%Z b) y) = 1 / 2.
 
 (* And it is NOT re-proved from scratch: the products commute with scaling,   *)
@@ -364,27 +376,28 @@ Definition head_half (mul : twR -> twR -> twR) : Prop :=
 (* proved for Algorithms 11 and 12 -- does all the work.  Generic in the      *)
 (* multiplier, so both variants are one line.                                 *)
 (*                                                                            *)
-(* KNOWN GAP, and the next thing to fix.  What is proved below is             *)
-(* [head_one mul -> head_half mul], with [head_one]'s [35u^2] threshold       *)
-(* inherited verbatim -- and that threshold is TOO TIGHT for Algorithm 15.    *)
-(* At the call site the first factor is [b] and the second is                 *)
+(* The threshold is why ThreeReci.v now carries [head_eq_1_c] and             *)
+(* [head_one_gen_c], the tolerance-parametric forms.  Algorithm 13's [35u^2]  *)
+(* is TOO TIGHT here: at the call site the second factor is                   *)
 (* [i(1) = 3Prod(b, x)], so the product is [b^2 x = (b sqrt x)^2 = (1 + e)^2] *)
-(* with [|e| <= 81u^2 + 622u^3] (the seed bound, [sqrtBW_x_err]); hence       *)
-(* [|b i(1) - 1| <= 162u^2 + O(u^3)], not [<= 35u^2].  Algorithm 13 never     *)
-(* sees this because there the second factor is [x] itself and the product is *)
-(* [b x], one power of the seed error rather than two.                        *)
+(* with [|e| <= 81u^2 + 622u^3], hence [|b i(1) - 1| <= 162u^2 + O(u^3)].     *)
+(* Algorithm 13 never meets this: there the second factor is [x] itself, so   *)
+(* the product carries ONE power of the seed error rather than two.           *)
 (*                                                                            *)
-(* The bound is not in danger -- the head argument only needs [|v - 1|] SMALL *)
-(* COMPARED TO [u] (the gap from [1] to its neighbours is [u] below, [2u]     *)
-(* above), and [162u^2 << u] already at [p >= 9].  What is needed is to make  *)
-(* the threshold of [head_eq_1] (ThreeReci.v, currently [36u^2]) a parameter. *)
-(* Bumping the constant blindly does NOT work: the proof balances it against  *)
-(* its own [200u^2] slack term and stops closing.  Do it properly, then       *)
-(* re-instantiate [head_one] and this lemma at the larger threshold.          *)
+(* The head argument does not mind -- it only needs [|v - 1|] small COMPARED  *)
+(* TO [u], the gap from [1] to its neighbours being [u] below and [2u] above. *)
+(* The binding constraint is [head_eq_1_c]'s [e0 < 1] branch, which needs     *)
+(* [(c + 200) u < 1/2]; the side condition [c u <= 1/4] gives it and allows   *)
+(* [c] up to [256] at [p >= 10].  We take [c = 200] against a need of [162].  *)
+(* NOTE bumping the old constant blindly does NOT work -- the proof balances  *)
+(* it against its own [200u^2] slack term -- which is why the tolerance had   *)
+(* to become a parameter rather than a bigger literal.                        *)
 Lemma head_one_half mul :
   (forall a b X Y,
      mul (scaleTW a X) (scaleTW b Y) = scaleTW (a + b) (mul X Y)) ->
-  head_one mul -> head_half mul.
+  (forall b y, isDW b -> isTW y ->
+     Rabs (TWval b * TWval y - 1) <= 200 * (u * u) -> tw0 (mul b y) = 1) ->
+  head_half mul.
 Proof.
 move=> Hscale Hone b y Hb Hy Hclose.
 (* [y] is [scaleTW 0 y], which lets the scaling law fire on both arguments.   *)
@@ -394,12 +407,22 @@ have -> : mul (scaleTW (-1)%Z b) y
 by rewrite tw0_scale (Hone _ _ Hb Hy Hclose) /= /Z.pow_pos /=; lra.
 Qed.
 
+(* [200 u <= 1/4] is what [head_one_gen_c] asks; [u <= 1/1024] gives it.      *)
+Lemma head_c_ok : 200 * u <= / 4.
+Proof.
+have Hu0 : 0 < u by apply: u_gt_0.
+by have := @u_le_1024 p Hp10; lra.
+Qed.
+
 Lemma ThreeProdDW_head_half :
   ties_to_even choice -> head_half ThreeProdDW.
 Proof.
 move=> Hc; apply: head_one_half.
   by move=> a b X Y; apply: ThreeProdDW_scale.
-exact: (@ThreeProdDW_head_one p Hp2 Hp10 choice choice_sym).
+apply: (@head_one_gen_c p Hp2 Hp10 200 ThreeProdDW head_c_ok).
+  by move=> X Y HX HY; apply: (@ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym).
+by move=> X Y HX HY HX0 HY0;
+   apply: (@ThreeProdDW_head_gap p Hp2 Hp10 choice choice_sym).
 Qed.
 
 Lemma ThreeProdDWFast_head_half :
@@ -407,7 +430,11 @@ Lemma ThreeProdDWFast_head_half :
 Proof.
 move=> Hc; apply: head_one_half.
   by move=> a b X Y; apply: ThreeProdDWFast_scale.
-exact: (@ThreeProdDWFast_head_one p Hp2 Hp10 choice choice_sym).
+apply: (@head_one_gen_c p Hp2 Hp10 200 ThreeProdDWFast head_c_ok).
+  by move=> X Y HX HY;
+     apply: (@ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym).
+by move=> X Y HX HY HX0 HY0;
+   apply: (@ThreeProdDWFast_head_gap p Hp2 Hp10 choice choice_sym).
 Qed.
 
 (* ===========================================================================*)
@@ -419,15 +446,136 @@ Qed.
 (*  have head [1/2] (so that [3/2 - mul2 b' i(1)] is again a triple word, by  *)
 (*  [sub32TW_isTW]), and [mul3] must do so on a head-[1] second argument.     *)
 (* ===========================================================================*)
+(* A triple word with a positive head is positive: the two low limbs cannot   *)
+(* bridge the gap, [|x1| <= 2u|x0|] and [|x2| <= 2u^2|x0|].  Needed because   *)
+(* [sqrt] is only informative on nonnegative arguments.                       *)
+Lemma isTW_TWval_gt0 x : isTW x -> 0 < tw0 x -> 0 < TWval x.
+Proof.
+move=> Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := @u_le_1024 p Hp10.
+have Hx2 := @isTW_tw2_le p Hp2 x Hx.
+have Hx1 : Rabs (tw1 x) <= 2 * u * Rabs (tw0 x).
+  case: x Hx {Hx0 Hx2} => x0 x1 x2 [_ _ _ H1 _] /=.
+  case: H1 => [->|H1]; first by rewrite Rabs_R0; have := Rabs_pos x0; nra.
+  by have := @ulp_2u p beta Hp2 x0; lra.
+have Ha0 : Rabs (tw0 x) = tw0 x by apply: Rabs_pos_eq; lra.
+have H1 := Rabs_le_inv _ _ Hx1.
+have H2 := Rabs_le_inv _ _ Hx2.
+by case: x Hx0 Ha0 H1 H2 {Hx Hx1 Hx2} => x0 x1 x2 /= Hx0 Ha0 H1 H2;
+   rewrite /TWval /=; nra.
+Qed.
+
+(* The assembly.  Beyond Algorithm 14's version this needs ONE extra          *)
+(* hypothesis: a (very weak) error bound on [mul1].  Algorithm 14 applies its *)
+(* head property to [b] and [x] directly, but here [mul2] is applied to [b']  *)
+(* and [i(1) = mul1 b x], so the head argument only reaches [i(1)] through    *)
+(* [mul1]'s accuracy.  [u^2] is far more slack than either variant needs      *)
+(* ([10.5u^3] and [18u^3]).                                                   *)
 Lemma ThreeSqRtAux_isTW mul1 mul2 mul3 :
   (forall b y, isDW b -> isTW y -> isTW (mul1 b y)) ->
+  (forall b y, isDW b -> isTW y ->
+     Rabs (TWval (mul1 b y) - TWval b * TWval y)
+       <= (u * u) * Rabs (TWval b * TWval y)) ->
   (forall b y, isDW b -> isTW y -> isTW (mul2 b y)) ->
   (forall a y, isTW a -> isTW y -> tw0 y = 1 -> isTW (mul3 a y)) ->
   head_half mul2 ->
   forall x, isTW x -> 0 < tw0 x ->
     isTW (ThreeSqRtAux mul1 mul2 mul3 x).
 Proof.
-Admitted.
+move=> Hmul1 Herr1 Hmul2 Hmul3 Hhead x Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := @u_le_1024 p Hp10.
+have [Fx0 Fx1] : format (tw0 x) /\ format (tw1 x)
+  by case: x Hx {Hx0} => x0 x1 x2 [].
+have HDW : isDW (sqrtBW (tw0 x) (tw1 x)) by apply: sqrtB_isDW.
+have Hi1 : isTW (mul1 (sqrtBW (tw0 x) (tw1 x)) x) by apply: Hmul1.
+(* The head argument needs [|b i(1) - 1| <= 200u^2].  With [t = b sqrt x]     *)
+(* and [X = t * t] we have [b i(1) = t^2 (1 + d)], [|d| <= u^2], so the       *)
+(* SEED error enters SQUARED -- whence [2 * 81u^2] and the [200u^2] budget.   *)
+have Key : Rabs (TWval (sqrtBW (tw0 x) (tw1 x))
+                 * TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x) - 1)
+             <= 200 * (u * u).
+  have HX0 : 0 < TWval x by apply: isTW_TWval_gt0.
+  have HsX : sqrt (TWval x) * sqrt (TWval x) = TWval x
+    by apply: sqrt_sqrt; lra.
+  have Hseed := sqrtBW_x_err Hx Hx0.
+  have He1 := Herr1 _ _ HDW Hx.
+  set B := TWval (sqrtBW (tw0 x) (tw1 x)) in Hseed He1 *.
+  set I1 := TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x) in He1 *.
+  set s := sqrt (TWval x) in Hseed HsX.
+  (* [B * I1 - 1 = ((B s)^2 - 1) + B * (I1 - B * X)]                          *)
+  have Hsplit : B * I1 - 1
+      = ((B * s) * (B * s) - 1) + B * (I1 - B * TWval x).
+    by rewrite -HsX; ring.
+  have Ht := Rabs_le_inv _ _ Hseed.
+  have HBs : Rabs (B * s) <= 1 + (81 * (u * u) + 622 * (u * u * u)).
+    by have := Rabs_triang_inv (B * s) 1; rewrite Rabs_R1; lra.
+  (* the squared seed term                                                    *)
+  have Hsq : Rabs ((B * s) * (B * s) - 1)
+      <= (81 * (u * u) + 622 * (u * u * u))
+         * (2 + (81 * (u * u) + 622 * (u * u * u))).
+    have -> : (B * s) * (B * s) - 1 = (B * s - 1) * ((B * s - 1) + 2)
+      by ring.
+    rewrite Rabs_mult.
+    apply: Rmult_le_compat => //; try apply: Rabs_pos.
+    apply: Rle_trans (Rabs_triang _ _) _.
+    have -> : Rabs 2 = 2 by rewrite Rabs_pos_eq; lra.
+    by lra.
+  (* the [mul1] term, measured against the same [t^2]                         *)
+  have Hmulterm : Rabs (B * (I1 - B * TWval x))
+      <= (u * u) * ((1 + (81 * (u * u) + 622 * (u * u * u)))
+                    * (1 + (81 * (u * u) + 622 * (u * u * u)))).
+    rewrite Rabs_mult.
+    have HBp := Rabs_pos B.
+    have Hstep : Rabs B * Rabs (I1 - B * TWval x)
+        <= Rabs B * ((u * u) * Rabs (B * TWval x))
+      by apply: Rmult_le_compat_l.
+    apply: Rle_trans Hstep _.
+    have HBX : Rabs B * Rabs (B * TWval x) = Rabs (B * s) * Rabs (B * s).
+      by rewrite -!Rabs_mult -HsX; congr (Rabs _); ring.
+    have -> : Rabs B * ((u * u) * Rabs (B * TWval x))
+        = (u * u) * (Rabs B * Rabs (B * TWval x)) by ring.
+    rewrite HBX.
+    apply: Rmult_le_compat_l; first by nra.
+    by apply: Rmult_le_compat => //; apply: Rabs_pos.
+  have Ht2 := Rabs_triang ((B * s) * (B * s) - 1) (B * (I1 - B * TWval x)).
+  rewrite Hsplit.
+  have Hu2 : u * u <= /1024 * u by nra.
+  have Hu3 : u * u * u <= /1024 * (u * u) by nra.
+  have Hu4 : u * u * u * u <= /1024 * (u * u * u) by nra.
+  by clear -Ht2 Hsq Hmulterm Hu0 Hu1024 Hu2 Hu3 Hu4; nra.
+have Hhalf := Hhead _ _ HDW Hi1 Key.
+rewrite /ThreeSqRtAux.
+apply: Hmul3.
+- exact: Hi1.
+- apply: sub32TW_isTW; last exact: Hhalf.
+  apply: Hmul2 => //.
+  by apply: isDW_scale.
+by case: (mul2 _ _) Hhalf => t0 t1 t2 /= ->; field.
+Qed.
+
+(* Both DW x TW variants are far inside the [u^2] the assembly asks for:      *)
+(* [10.5u^3 + 39u^4] and [18u^3 + 75u^4] against [u^2].                       *)
+Lemma prodDW_err_le_u2 : 105 / 10 * (u * u * u) + 39 * (u * u * u * u)
+                           <= u * u.
+Proof.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := @u_le_1024 p Hp10.
+have L1 : u * u * u <= / 1024 * (u * u) by nra.
+have L2 : u * u * u * u <= / 1024 * (u * u * u) by nra.
+by nra.
+Qed.
+
+Lemma prodDWFast_err_le_u2 : 18 * (u * u * u) + 75 * (u * u * u * u)
+                               <= u * u.
+Proof.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := @u_le_1024 p Hp10.
+have L1 : u * u * u <= / 1024 * (u * u) by nra.
+have L2 : u * u * u * u <= / 1024 * (u * u * u) by nra.
+by nra.
+Qed.
 
 Lemma ThreeSqRt_isTW x :
   ties_to_even choice ->
@@ -436,6 +584,11 @@ Proof.
 move=> Hc Hx Hx0.
 apply: (@ThreeSqRtAux_isTW ThreeProdDW ThreeProdDW ThreeProdOneTW) => //.
 - by move=> b y Hb Hy; apply: (@ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym).
+- move=> b y Hb Hy.
+  apply: Rle_trans
+    (@ThreeProdDW_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy) _.
+  apply: Rmult_le_compat_r; first by apply: Rabs_pos.
+  exact: prodDW_err_le_u2.
 - by move=> b y Hb Hy; apply: (@ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym).
 - by move=> a y Ha Hy Hy0;
      apply: (@ThreeProdOneTW_isTW p Hp2 Hp6 choice choice_sym).
@@ -451,6 +604,11 @@ apply: (@ThreeSqRtAux_isTW ThreeProdDWFast ThreeProdDWFast ThreeProdOneTW)
   => //.
 - by move=> b y Hb Hy;
      apply: (@ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym).
+- move=> b y Hb Hy.
+  apply: Rle_trans
+    (@ThreeProdDWFast_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy) _.
+  apply: Rmult_le_compat_r; first by apply: Rabs_pos.
+  exact: prodDWFast_err_le_u2.
 - by move=> b y Hb Hy;
      apply: (@ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym).
 - by move=> a y Ha Hy Hy0;

@@ -1119,30 +1119,43 @@ Qed.
 (* Margins: [u - 200u^2] above [1] (where [ulp e0 = 2u]) and [u/2 - 200u^2]   *)
 (* below (where [ulp e0 = u]), both of which must beat [36u^2].  The binding  *)
 (* one is [u/2 > 236u^2], i.e. [u < 1/472]; [p >= 10] gives [u <= 1/1024].    *)
-Lemma head_eq_1 e0 v :
+(* The tolerance on [|v - 1|] is a PARAMETER.  Algorithm 13 needs only        *)
+(* [36u^2], but Algorithm 15 arrives with [~162u^2]: there the second factor  *)
+(* is [i(1) = 3Prod(b, x)], so the product is [b^2 x = (b sqrt x)^2] and the  *)
+(* seed error enters SQUARED.  The head argument does not care -- it only     *)
+(* needs [|v - 1|] small compared to [u], the gap from [1] to its neighbours  *)
+(* being [u] below and [2u] above.  The binding constraint is the [e0 < 1]    *)
+(* branch, which needs [(c + 200) u < 1/2]; [c u <= 1/4] gives it, and allows *)
+(* [c] up to [256] at [p >= 10] and [512] at [p >= 11].                       *)
+Lemma head_eq_1_c c e0 v :
+  c * u <= / 4 ->
   format e0 -> Rabs (v - e0) <= / 2 * ulp e0 + 200 * (u * u) ->
-  Rabs (v - 1) <= 36 * (u * u) -> e0 = 1.
+  Rabs (v - 1) <= c * (u * u) -> e0 = 1.
 Proof.
-move=> Fe0 Ht Habs.
+move=> Hc Fe0 Ht Habs.
 have Hu0 : 0 < u by apply: u_gt_0.
 have Hu1024 := u_le_1024.
 have Hulp := @ulp_2u p beta Hp2 e0.
 have Hulp0 : 0 <= ulp e0 by apply: ulp_ge_0.
+(* The one fact every step below needs about [c]: [c u^2 <= u/4].  Keeping it *)
+(* in this LINEAR form is what lets the [nra] calls stay scalar.              *)
+have Hcu2 : c * (u * u) <= / 4 * u by nra.
 (* [e0] is within [2u] of [1]: the tail is at most [u|e0| + 200u^2] (using    *)
-(* [ulp e0 <= 2u|e0|]), so [|e0 - 1| <= 236u^2 + u |e0|].                     *)
-have Hd : Rabs (e0 - 1) <= 36 * (u * u) + (u * Rabs e0 + 200 * (u * u)).
+(* [ulp e0 <= 2u|e0|]), so [|e0 - 1| <= c u^2 + 200u^2 + u |e0|].            *)
+have Hd : Rabs (e0 - 1) <= c * (u * u) + (u * Rabs e0 + 200 * (u * u)).
   have H1 : Rabs (e0 - 1) <= Rabs (v - 1) + Rabs (v - e0).
     have -> : e0 - 1 = (v - 1) + - (v - e0) by ring.
     by have := Rabs_triang (v - 1) (- (v - e0)); rewrite Rabs_Ropp; lra.
   by clear -H1 Ht Habs Hulp Hulp0 Hu0; nra.
 have Hinv := Rabs_triang_inv e0 1.
 have Hae : Rabs e0 <= 101 / 100.
-  by rewrite Rabs_R1 in Hinv; clear -Hinv Hd Hu0 Hu1024; nra.
+  by rewrite Rabs_R1 in Hinv; clear -Hinv Hd Hu0 Hu1024 Hcu2; nra.
 have He0pos : 0 < e0.
   have Hle := Rle_abs e0.
   have Hle2 := Rabs_le_inv e0 (Rabs e0) (Rle_refl _).
-  by clear -Hd Hae Hu0 Hu1024 Hle Hle2; split_Rabs; nra.
-have Hrange : Rabs (e0 - 1) <= 2 * u by clear -Hd Hae Hu0 Hu1024; nra.
+  by clear -Hd Hae Hu0 Hu1024 Hcu2 Hle Hle2; split_Rabs; nra.
+have Hrange : Rabs (e0 - 1) <= 2 * u
+  by clear -Hd Hae Hu0 Hu1024 Hcu2; nra.
 have Hlo : 1 - 2 * u <= e0 by clear -Hrange; split_Rabs; lra.
 have Hhi : e0 <= 1 + 2 * u by clear -Hrange; split_Rabs; lra.
 have Hu1 := @ulp_one p.
@@ -1167,7 +1180,7 @@ case: (Rtotal_order e0 1) => [Hlt|[//|Hgt]].
     by rewrite Hm; congr bpow; lia.
   exfalso; rewrite Hulpe in Ht.
   have Hu2 : u * u <= /1024 * u by nra.
-  by clear -Ht Habs Hpred Hu0 Hu1024 Hu2; split_Rabs; nra.
+  by clear -Ht Habs Hpred Hu0 Hu1024 Hu2 Hcu2; split_Rabs; nra.
 (* [e0 > 1]: then [e0 >= succ 1 = 1 + 2u], which the [2u] window above (in    *)
 (* fact [1.93u], once [|e0| <= 1.01] is used) already excludes.               *)
 have H := @succ_le_lt beta fexp _ 1 e0 format_1 Fe0 Hgt.
@@ -1176,7 +1189,17 @@ move: H2; rewrite succ_eq_pos ?Hu1; last by lra.
 move=> Hsucc; exfalso.
 have {}Hsucc := Hsucc p_gt_0.
 have Hu2 : u * u <= /1024 * u by nra.
-by clear -Hd Hae Hsucc Hu0 Hu1024 Hu2 Hgt; split_Rabs; nra.
+by clear -Hd Hae Hsucc Hu0 Hu1024 Hu2 Hcu2 Hgt; split_Rabs; nra.
+Qed.
+
+(* Algorithm 13's instance, the one Theorems 9 and 10 use.                    *)
+Lemma head_eq_1 e0 v :
+  format e0 -> Rabs (v - e0) <= / 2 * ulp e0 + 200 * (u * u) ->
+  Rabs (v - 1) <= 36 * (u * u) -> e0 = 1.
+Proof.
+apply: head_eq_1_c.
+have Hu0 : 0 < u by apply: u_gt_0.
+by have := u_le_1024; lra.
 Qed.
 
 (* ===========================================================================*)
@@ -1307,16 +1330,21 @@ Qed.
 (* The last step, also generic: a multiplier that returns a triple word and   *)
 (* has the head gap above satisfies [head_one].  The relative [70u^2] turns   *)
 (* absolute here, because the product is within [35u^2] of [1].               *)
-Lemma head_one_gen (mul : twR -> twR -> twR) :
+(* Same, with the tolerance a parameter -- what Algorithm 15 needs, since it *)
+(* arrives at [~162u^2] rather than [35u^2].  See [head_eq_1_c].              *)
+Lemma head_one_gen_c c (mul : twR -> twR -> twR) :
+  c * u <= / 4 ->
   (forall x y, isDW x -> isTW y -> isTW (mul x y)) ->
   (forall x y, isDW x -> isTW y -> tw0 x <> 0 -> tw0 y <> 0 ->
      Rabs (TWval x * TWval y - tw0 (mul x y))
-       <= / 2 * ulp (tw0 (mul x y)) + 70 * (u * u) * Rabs (TWval x * TWval y))
-  -> head_one mul.
+       <= / 2 * ulp (tw0 (mul x y)) + 70 * (u * u) * Rabs (TWval x * TWval y)) ->
+  forall b y, isDW b -> isTW y ->
+    Rabs (TWval b * TWval y - 1) <= c * (u * u) -> tw0 (mul b y) = 1.
 Proof.
-move=> HisTW Hgapgen b y Hb Hy Hprod.
+move=> Hc HisTW Hgapgen b y Hb Hy Hprod.
 have Hu0 : 0 < u by apply: u_gt_0.
 have Hu1024 := u_le_1024.
+have Hcu2 : c * (u * u) <= / 4 * u by nra.
 (* A zero leading limb makes the whole factor zero, and [|0 - 1| = 1].        *)
 have Hb0 : tw0 b <> 0.
   move=> H0.
@@ -1326,7 +1354,7 @@ have Hb0 : tw0 b <> 0.
   rewrite Rmult_0_l.
   have -> : (0 - 1) = -1 by ring.
   rewrite Rabs_Ropp Rabs_R1.
-  by clear -Hu0 Hu1024; nra.
+  by clear -Hu0 Hu1024 Hcu2; nra.
 have Hy0 : tw0 y <> 0.
   move=> H0.
   have Hz := @isTW_zero_lead p Hp2 y Hy H0.
@@ -1335,21 +1363,34 @@ have Hy0 : tw0 y <> 0.
   rewrite Rmult_0_r.
   have -> : (0 - 1) = -1 by ring.
   rewrite Rabs_Ropp Rabs_R1.
-  by clear -Hu0 Hu1024; nra.
+  by clear -Hu0 Hu1024 Hcu2; nra.
 have Hgap := Hgapgen _ _ Hb Hy Hb0 Hy0.
 have Fe0 : format (tw0 (mul b y)).
   have HTW := HisTW _ _ Hb Hy.
   by case: (mul b y) HTW => e0 e1 e2 [].
-apply: (@head_eq_1 (tw0 (mul b y)) (TWval b * TWval y)) => //.
-  (* the relative [70u^2] becomes absolute: the product is within [35u^2]    *)
-  (* of [1], so its magnitude is at most [1 + 35u^2].                        *)
-  have Hv : Rabs (TWval b * TWval y) <= 1 + 35 * (u * u).
-    have := Rabs_triang_inv (TWval b * TWval y) 1.
-    by rewrite Rabs_R1; clear -Hprod; lra.
-  have Hu2 : u * u <= /1024 * u by nra.
-  have Hup := Rabs_pos (TWval b * TWval y).
-  by clear -Hgap Hv Hu0 Hu1024 Hu2 Hup; nra.
-by clear -Hprod Hu0; nra.
+apply: (@head_eq_1_c c (tw0 (mul b y)) (TWval b * TWval y)) => //.
+(* the relative [70u^2] becomes absolute: the product is within [c u^2] of   *)
+(* [1], so its magnitude is at most [1 + c u^2].                            *)
+have Hv : Rabs (TWval b * TWval y) <= 1 + c * (u * u).
+  have := Rabs_triang_inv (TWval b * TWval y) 1.
+  by rewrite Rabs_R1; clear -Hprod; lra.
+have Hu2 : u * u <= /1024 * u by nra.
+have Hup := Rabs_pos (TWval b * TWval y).
+by clear -Hgap Hv Hu0 Hu1024 Hu2 Hcu2 Hup; nra.
+Qed.
+
+(* Algorithm 13's instance, at [35u^2].                                       *)
+Lemma head_one_gen (mul : twR -> twR -> twR) :
+  (forall x y, isDW x -> isTW y -> isTW (mul x y)) ->
+  (forall x y, isDW x -> isTW y -> tw0 x <> 0 -> tw0 y <> 0 ->
+     Rabs (TWval x * TWval y - tw0 (mul x y))
+       <= / 2 * ulp (tw0 (mul x y)) + 70 * (u * u) * Rabs (TWval x * TWval y))
+  -> head_one mul.
+Proof.
+move=> HisTW Hgapgen b y Hb Hy Hprod.
+apply: (@head_one_gen_c 35 mul) => //.
+have Hu0 : 0 < u by apply: u_gt_0.
+by have := u_le_1024; lra.
 Qed.
 
 

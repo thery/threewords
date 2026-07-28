@@ -780,6 +780,101 @@ split => //.
 by right; rewrite dwhE dwlE; lra.
 Qed.
 
+(* [TWval] in projection form -- lets the algebra below avoid [case: x],      *)
+(* which cannot generalise once the context has hypotheses mentioning [x].    *)
+Lemma TWval_split (t : twR) : TWval t = tw0 t + tw1 t + tw2 t.
+Proof. by case: t. Qed.
+
+(* The two low limbs together, against the head.  Extracted because both      *)
+(* [isTW_TWval_gt0] and the seed bridge below need exactly this.              *)
+Lemma isTW_low_le x :
+  isTW x -> 0 < tw0 x ->
+  Rabs (tw1 x + tw2 x) <= (2 * u + 2 * (u * u)) * tw0 x.
+Proof.
+move=> Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have Hx2 := @isTW_tw2_le p Hp2 x Hx.
+have Ha0 : Rabs (tw0 x) = tw0 x by apply: Rabs_pos_eq; lra.
+have Hx1 : Rabs (tw1 x) <= 2 * u * tw0 x.
+  case: x Hx Hx0 Ha0 {Hx2} => x0 x1 x2 [_ _ _ H1 _] /= Hx0 Ha0.
+  case: H1 => [->|H1]; first by rewrite Rabs_R0; nra.
+  rewrite -Ha0.
+  by have := @ulp_2u p beta Hp2 x0; lra.
+rewrite Ha0 in Hx2.
+by apply: Rle_trans (Rabs_triang _ _) _; lra.
+Qed.
+
+(* The seed against the FULL triple-word value, not just its head.            *)
+(*                                                                            *)
+(* Stated and proved through the SQUARE.  [t = a sqrt X] has                  *)
+(* [t * t = a^2 X], which is pure algebra, and [leq_sqrt] (Rmore.v) turns a   *)
+(* bound on [t * t] into one on [t].  Expanding [sqrt (1 + d)] directly --    *)
+(* the obvious route -- is far worse and is not needed.                       *)
+(*                                                                            *)
+(* This is the head-to-full bridge: [sqrtA_bound] pins [a sqrt (tw0 x)], but  *)
+(* the Newton form needs [a sqrt (TWval x)], and the two differ at the [u]    *)
+(* level because [|x1| <= 2u|x0|].                                            *)
+Lemma sqrtA_bound_full x :
+  isTW x -> 0 < tw0 x ->
+  1 <= sqrtA (tw0 x) * sqrt (TWval x) <= 1 + 8 * u.
+Proof.
+move=> Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have Fx0 : format (tw0 x) by case: x Hx {Hx0} => x0 x1 x2 [].
+have HX0 : 0 < TWval x by apply: isTW_TWval_gt0.
+have Hs0 : 0 < sqrt (TWval x) by apply: sqrt_lt_R0.
+have HsX : sqrt (TWval x) * sqrt (TWval x) = TWval x by apply: sqrt_sqrt; lra.
+have HA := sqrtA_gt0 Fx0 Hx0.
+have HR0 : 0 < sqrt (tw0 x) by apply: sqrt_lt_R0.
+have Hsx0 : sqrt (tw0 x) * sqrt (tw0 x) = tw0 x by apply: sqrt_sqrt; lra.
+have [Hlo Hhi] := sqrtA_bound Fx0 Hx0.
+(* [a^2 x0], two-sided                                                        *)
+have Ha2x0 : 1 + 4 * u - 16 * (u * u)
+    <= sqrtA (tw0 x) * sqrtA (tw0 x) * tw0 x <= 1 + 13 * u.
+  split; last by apply: sqrtA_sq_le.
+  have Hgen : forall r a, r * r = tw0 x -> a * a * tw0 x = (a * r) * (a * r).
+    by move=> r a <-; ring.
+  rewrite (Hgen (sqrt (tw0 x)) (sqrtA (tw0 x)) Hsx0).
+  have Hstep : (1 + 2 * u - 8 * (u * u)) * (1 + 2 * u - 8 * (u * u))
+      <= (sqrtA (tw0 x) * sqrt (tw0 x)) * (sqrtA (tw0 x) * sqrt (tw0 x))
+    by apply: Rmult_le_compat; nra.
+  by nra.
+(* the low limbs contribute at most [(2u + 2u^2) a^2 x0]                      *)
+have Hlow := isTW_low_le Hx Hx0.
+have Hlowb := Rabs_le_inv _ _ Hlow.
+have Hsplit : sqrtA (tw0 x) * sqrtA (tw0 x) * TWval x
+    = sqrtA (tw0 x) * sqrtA (tw0 x) * tw0 x
+      + sqrtA (tw0 x) * sqrtA (tw0 x) * (tw1 x + tw2 x).
+  by rewrite {1}TWval_split; ring.
+have Ha2 : 0 < sqrtA (tw0 x) * sqrtA (tw0 x) by nra.
+have Hmix : Rabs (sqrtA (tw0 x) * sqrtA (tw0 x) * (tw1 x + tw2 x))
+    <= (2 * u + 2 * (u * u)) * (sqrtA (tw0 x) * sqrtA (tw0 x) * tw0 x).
+  rewrite Rabs_mult (Rabs_pos_eq (sqrtA (tw0 x) * sqrtA (tw0 x))); last lra.
+  have Hstep : sqrtA (tw0 x) * sqrtA (tw0 x) * Rabs (tw1 x + tw2 x)
+      <= sqrtA (tw0 x) * sqrtA (tw0 x) * ((2 * u + 2 * (u * u)) * tw0 x)
+    by apply: Rmult_le_compat_l; lra.
+  by apply: Rle_trans Hstep _; lra.
+have Hmixb := Rabs_le_inv _ _ Hmix.
+(* whence [a^2 X] in [[1, 1 + 16u]]                                           *)
+have HaX : 1 <= sqrtA (tw0 x) * sqrtA (tw0 x) * TWval x <= 1 + 16 * u
+  by rewrite Hsplit; nra.
+have Hsq : (sqrtA (tw0 x) * sqrt (TWval x)) * (sqrtA (tw0 x) * sqrt (TWval x))
+    = sqrtA (tw0 x) * sqrtA (tw0 x) * TWval x.
+  (* generalise: [TWval x] occurs INSIDE [sqrt (TWval x)], so rewriting it    *)
+  (* directly would go under the [sqrt].                                      *)
+  have Hgen : forall r a, r * r = TWval x ->
+      (a * r) * (a * r) = a * a * TWval x.
+    by move=> r a <-; ring.
+  by apply: Hgen; exact: HsX.
+split.
+- apply: leq_sqrt; first by nra.
+  by rewrite Hsq; nra.
+apply: leq_sqrt; first by nra.
+by rewrite Hsq; nra.
+Qed.
+
 (* ===========================================================================*)
 (*  Step 4, CRUDE.  The [isTW] half only needs a rough seed bound: its head   *)
 (*  argument squares it ([b i(1) = (b sqrt x)^2 (1+d)]) and then asks for     *)

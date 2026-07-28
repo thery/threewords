@@ -148,18 +148,34 @@ a magnitude of a few `2^{-158}`, and `z₃ = RN(RN(x₁y₁) + y₂)` is pinned 
 **So our `8u³` is probably loose, and Theorem 10's `24u³` may well stand.**
 Three steps to tighten, in order of expected payoff:
 
-1. `|x₂| ≤ 4u²|x₀|` → `2u²|x₀|`. Since `|x₁| < ulp(x₀)`, `x₁` lies at least one
-   binade below, so `ulp(x₁) ≤ u·ulp(x₀)`. This is a clean, reusable lemma
-   about the `ulp` chain of a P-nonoverlapping triple word, and it alone takes
-   `η₄` from `6u³` to `4u³`, i.e. `δ₃` from `8u³` to `6u³` and Theorem 10 to
-   `27u³ / 42u³`.
+1. **DONE** (PR #140). `|x₂| ≤ 4u²|x₀|` → `2u²|x₀|`. Since `|x₁| < ulp(x₀)`,
+   `x₁` lies at least one binade below, so `ulp(x₁) ≤ u·ulp(x₀)`. Now
+   `ulp_lt_ulp_mul` (`Fmore.v`) and `isTW_tw2_le` (`TWR.v`). Took `η₄` from
+   `6u³` to `4u³`, `δ₃` from `8u³` to `6u³`, Theorem 10 to `27u³ / 42u³`.
 2. `|b′₁| ≤ 2u²|x₀|` is attained only when `b′₀` reaches `ulp(x₀)` exactly;
    below that the rounding grid is finer and `|b′₁| ≤ u²|x₀|`.
 3. `η₄ ≤ u·|s₃′+x₂|` should be the *half-ulp* of `s₃′+x₂`, which is strictly
    smaller whenever that sum stays in the binade below — the same binade
    bookkeeping as (1).
 
-Steps 1–3 together would give `δ₃ = 3u³` and restore the paper's `24u³ / 39u³`.
+Steps 2–3 together would give `δ₃ = 3u³` and restore the paper's `24u³ / 39u³`.
+
+### Caveat on step 3 — it is NOT free (checked 2026-07-28)
+
+It is tempting to read step 3 as "just use Flocq's `error_le_half_ulp` instead
+of `relative_error_le`". **That gains nothing.** For `t ∈ [2ᵉ, 2ᵉ⁺¹)` we have
+`ulp(t) = 2u·2ᵉ` and `|t| ≥ 2ᵉ`, so
+
+    ½ulp(t) ≤ u|t|      always,
+
+with equality exactly at the bottom of the binade; numerically the ratio
+`½ulp(t) / (u|t|)` ranges over `[½, 1)`. So the half-ulp form is never *worse*
+than what we already use, and it is better by up to a factor 2 **only when
+`|t|` sits near the top of its binade** — which for `t = s₃′+x₂`, a rounded
+quantity we do not control, is precisely what would have to be proved.
+
+In other words step 3 is the same kind of work as step 2: a genuine argument
+about where a computed value can land, not a lemma swap. Both remain open.
 
 ## What the supplementary actually claims for `δ₃`
 

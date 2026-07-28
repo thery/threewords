@@ -298,13 +298,61 @@ Proof. field. Qed.
 (*  than be re-proved.                                                        *)
 (* ===========================================================================*)
 
-(* Step 1.  The seed.  [RN(sqrt x0)] is within [u |sqrt x0|] of [sqrt x0], so *)
-(* [a] approximates [1/sqrt x0] with a deliberate upward bias of [4u].        *)
+(* Step 1.  The seed.  Stated TWO-SIDED and asymmetrically, not as a single   *)
+(* [Rabs] bound -- the house lesson, and here it is not a matter of taste:    *)
+(* the LOWER bound is the whole point of the [1 + 4u].  Both roundings are    *)
+(* within a relative [u], so                                                  *)
+(*                                                                            *)
+(*   (1 + 4u)(1 - u)/(1 + u)  <=  a sqrt x0  <=  (1 + 4u)(1 + u)/(1 - u)      *)
+(*                                                                            *)
+(* i.e. [1 + 2u - O(u^2)] to [1 + 6u + O(u^2)].  Since [a sqrt x0 > 1], its   *)
+(* SQUARE stays above [1], so [h01(2) ~ (1/2)(a sqrt x0)^2 >= 1/2] -- which   *)
+(* is exactly the supplementary's reason for starting at [1 + 4u] rather      *)
+(* than [1], and what [sqrtH0_2_exact] then runs on.                          *)
+(*                                                                            *)
+(* NB an earlier draft of this file stated [|a sqrt x0 - 1| <= 4u + 8u^2].    *)
+(* That is FALSE -- random search over binary64 reaches [5.50u], and the      *)
+(* algebra above allows [6u].                                                 *)
 Lemma sqrtA_bound x0 :
   format x0 -> 0 < x0 ->
-  Rabs (sqrtA x0 * sqrt x0 - 1) <= 4 * u + 8 * (u * u).
+  1 + 2 * u - 8 * (u * u) <= sqrtA x0 * sqrt x0
+    <= 1 + 6 * u + 12 * (u * u).
 Proof.
-Admitted.
+move=> Fx0 Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := @u_le_1024 p Hp10.
+have HR : 0 < sqrt x0 by apply: sqrt_lt_R0.
+(* (1) the rounding of the square root, within a relative [u].               *)
+have HS : Rabs (sqrtS x0 - sqrt x0) <= u * Rabs (sqrt x0)
+  by apply: (@relative_error_le p beta Hp2 choice).
+rewrite (Rabs_pos_eq (sqrt x0)) in HS; last lra.
+have HSb := Rabs_le_inv _ _ HS.
+have HS0 : 0 < sqrtS x0 by nra.
+(* (2) the rounding of the quotient, multiplied through by [S] so that no    *)
+(* division survives into the arithmetic.                                     *)
+have HA : Rabs (sqrtA x0 - (1 + 4 * u) / sqrtS x0)
+            <= u * Rabs ((1 + 4 * u) / sqrtS x0)
+  by apply: (@relative_error_le p beta Hp2 choice).
+have HAS : Rabs (sqrtA x0 * sqrtS x0 - (1 + 4 * u)) <= u * (1 + 4 * u).
+  have -> : sqrtA x0 * sqrtS x0 - (1 + 4 * u)
+      = (sqrtA x0 - (1 + 4 * u) / sqrtS x0) * sqrtS x0
+    by field; lra.
+  rewrite Rabs_mult (Rabs_pos_eq (sqrtS x0)); last lra.
+  have Hq : Rabs ((1 + 4 * u) / sqrtS x0) = (1 + 4 * u) / sqrtS x0.
+    apply: Rabs_pos_eq; rewrite /Rdiv.
+    by apply: Rmult_le_pos; [lra | left; apply: Rinv_0_lt_compat; lra].
+  rewrite Hq in HA.
+  have Hstep : Rabs (sqrtA x0 - (1 + 4 * u) / sqrtS x0) * sqrtS x0
+      <= (u * ((1 + 4 * u) / sqrtS x0)) * sqrtS x0
+    by apply: Rmult_le_compat_r; lra.
+  apply: Rle_trans Hstep _.
+  by rewrite /Rdiv; field_simplify; lra.
+have HASb := Rabs_le_inv _ _ HAS.
+(* (3) [a > 0], so the two magnitudes can be combined.                        *)
+have HA0 : 0 < sqrtA x0 by nra.
+(* (4) [a S] is pinned, [S] is within [(1 +- u) R], so [a R] is pinned too.   *)
+by nra.
+Qed.
 
 (* Step 2.  [h0(2) = 3/2 - h01(2)] is EXACT.  This is NOT Sterbenz -- its     *)
 (* hypothesis fails outright for [3/2 - 1/2].  The supplementary gives the    *)

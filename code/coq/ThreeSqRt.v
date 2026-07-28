@@ -1,0 +1,490 @@
+(* ---------------------------------------------------------------------------*)
+(* Algorithm 15 (3SqRt): the SQUARE ROOT of a triple word, and its two        *)
+(* correctness results -- the result is a triple word ([ThreeSqRt_isTW]) and  *)
+(* the relative error bounds [24u^3 + 10260u^4] (accurate variant,            *)
+(* [ThreeSqRt_error]) and [39u^3 + 10333u^4] (fast variant,                   *)
+(* [ThreeSqRtFast_error]) -- paper doc/paper3.pdf, Section 10 and Theorem 11  *)
+(* (see doc/thm11.md).  Generic over the precision [p] (FLX, no [emin]);      *)
+(* needs [p >= 11].                                                           *)
+(*                                                                            *)
+(* The proof follows the SUPPLEMENTARY MATERIAL, Section 3 of                 *)
+(* doc/Algorithms_for_Triple-Word_Arithmetic.pdf -- the appendix paper3.pdf   *)
+(* defers to.  (The long version doc/old-triplewors.pdf is of no help here:   *)
+(* it stops at Section 9, the quotient, and its own roadmap reads [Section 10 *)
+(* [???]], a placeholder never filled in.)  The underlying iteration is       *)
+(* [r <- r (3/2 - (1/2) r^2 x)], quadratically convergent to [1/sqrt x].      *)
+(*                                                                            *)
+(*     a    <- RN((1 + 4u)/RN(sqrt x0))  )                                    *)
+(*     a'   =  a/2                (exact) )                                   *)
+(*     (h0(1), h11(1)) <- 2Prod(a, x0)   )                                    *)
+(*     h1(1)  <- RN(h11(1) + a*x1)       )  the nine head lines, i.e.         *)
+(*     (h01(2), h11(2)) <- 2Prod(a', h0(1))  [sqrtBW (tw0 x) (tw1 x)],        *)
+(*     h0(2)  <- 3/2 - h01(2)     (exact) )  a double word [b ~ 1/sqrt x0]    *)
+(*     h1(2)  <- -RN(h11(2) + a'*h1(1))  )                                    *)
+(*     (b01, b11) <- 2Prod(a, h0(2))     )                                    *)
+(*     b12  <- RN(b11 + a*h1(2))         )                                    *)
+(*     b    <- Fast2Sum(b01, b12)        )                                    *)
+(*     b'   =  b/2                (exact)                                     *)
+(*     i(1) <- 3Prod_{2,3}(b, x)            (~ sqrt x)                        *)
+(*     i(2) <- 3/2 - 3Prod_{2,3}(b', i(1))  (head [1], as in Algorithm 13)    *)
+(*     y    <- 3Prod_{3,3}(i(1), i(2))                                        *)
+(*                                                                            *)
+(* Three structural differences from Algorithms 13 and 14: the seed [a]       *)
+(* involves a real square root (nothing else in this development computes     *)
+(* with [sqrt]); [2 - .] becomes [3/2 - .] ([sub32TW]), and the two halvings  *)
+(* [a' = a/2], [b' = b/2] are exact scalings by [pow (-1)]; the last product  *)
+(* is again the TW x TW one with a head-[1] SECOND argument, Algorithm 20     *)
+(* ([ThreeProdOneTW] in ThreeProdOne.v).                                      *)
+(*                                                                            *)
+(* WHY THE PUBLISHED [24u^3] IS STILL REACHABLE FOR US, unlike Theorem 10's.  *)
+(* The supplementary's global bound, with [d1], [d2], [d3] the three          *)
+(* products' relative errors, is                                              *)
+(*                                                                            *)
+(*     |y - sqrt x| <= (d1 (1.5 + 287u^2) + d2 (0.5 + 123u^2)                 *)
+(*                     + d3 (1 + 162u^2) + 9916u^4) sqrt x                    *)
+(*                                                                            *)
+(* whence [24 = 1.5(10.5) + 0.5(10.5) + 3] and [39 = 1.5(18) + 0.5(18) + 3].  *)
+(* With OUR [d3 = 8u^3] instead of the announced [3u^3] (Algorithm 20's       *)
+(* [delta3] is loose -- see doc/thm10.md) that route gives [29u^3] and        *)
+(* [44u^3], exactly as it did for Theorem 10.                                 *)
+(*                                                                            *)
+(* BUT the weight [1.5] on [d1] is itself loose, and provably so.  Expanding  *)
+(* to first order -- [i(1)] occurs TWICE, once as a factor of [y] and once    *)
+(* inside [i(2)], with OPPOSITE signs -- gives                                *)
+(*                                                                            *)
+(*     y/sqrt x - 1  ~  d1/2 - d2/2 + d3                                      *)
+(*                                                                            *)
+(* (the seed error [e] cancels too: Newton is self-correcting).  So the true  *)
+(* weight on [d1] is [1/2], not [3/2]: the supplementary reaches [1.5] by     *)
+(* bounding [|d1 - (d1 + d2)/2|] with the triangle inequality, discarding the *)
+(* cancellation.  Exploiting it gives [0.5(10.5) + 0.5(10.5) + 8 = 18.5u^3]   *)
+(* and [26u^3] -- comfortably under the published [24] and [39] DESPITE our   *)
+(* worse [d3].  State the paper's constants and prove them via the            *)
+(* cancellation; if anything has to give, widen the [u^4] term (already       *)
+(* large: the seed is much sloppier than Algorithm 13's [RN((1 + 2u)/x0)])    *)
+(* before touching the [u^3] one.                                             *)
+(*                                                                            *)
+(* STATUS: SKELETON.  The definition is complete and [sqrt_newton_id] is      *)
+(* proved; the four correctness results are stated and admitted, together     *)
+(* with the six intermediate obligations of doc/thm11.md Section 4.           *)
+(* ---------------------------------------------------------------------------*)
+
+From Stdlib Require Import ZArith Reals Psatz.
+From mathcomp Require Import all_ssreflect all_algebra.
+From Flocq Require Import Core Relative Sterbenz Operations Mult_error.
+Require Import Nmore Rmore Fmore Rstruct MULTmore prelim.
+From Flocq Require Import Pff.Pff2Flocq.
+Require Import Uls.
+Require Import TwoSum.
+Require Import Nonoverlap.
+Require Import TWR.
+Require Import Merge.
+Require Import VecSum.
+Require Import VSEB.
+Require Import Thm6.
+Require Import ThreeProd.
+Require Import ThreeProdFast.
+Require Import ThreeProdDW.
+Require Import ThreeProdDWFast.
+Require Import ThreeProdOne.
+Require Import ThreeReci.
+Delimit Scope R_scope with R.
+Delimit Scope Z_scope with Z.
+
+Set Implicit Arguments.
+Unset Strict Implicit.
+Unset Printing Implicit Defensive.
+
+Section SecThreeSqRt.
+
+Variable p : Z.
+Hypothesis Hp2 : (1 < p)%Z.
+(* Algorithm 15 asks for [p >= 11], one more than Algorithms 13 and 14.  Per  *)
+(* the supplementary the extra bit is needed by the MODIFIED product used for *)
+(* [i(2)] -- the variant whose penultimate line is [e1 <- Fast2Sum(.5)(...)]  *)
+(* -- not by the exactness of [h0(2)], which follows from [h01(2) >= 1/2]     *)
+(* alone.  See doc/thm11.md Section 4.                                        *)
+Hypothesis Hp11 : (11 <= p)%Z.
+
+Lemma Hp10 : (10 <= p)%Z. Proof. lia. Qed.
+Lemma Hp6 : (6 <= p)%Z. Proof. lia. Qed.
+
+Local Notation beta := radix2.
+Local Notation pow e := (bpow beta e).
+
+Local Instance p_gt_0 : Prec_gt_0 p.
+Proof. now apply Z.lt_trans with (2 := Hp2). Qed.
+
+Open Scope R_scope.
+
+Local Notation u := (u p beta).
+
+Variable choice : Z -> bool.
+Hypothesis choice_sym : forall x, choice x = ~~ choice (- (x + 1))%Z.
+Local Notation rnd := (Znearest choice).
+Local Instance valid_rnd : Valid_rnd rnd := valid_rnd_N choice.
+
+Local Notation fexp := (FLX_exp p).
+Local Notation format := (generic_format beta fexp).
+Local Notation ulp := (ulp beta fexp).
+Local Notation RND := (round beta fexp rnd).
+Local Notation TwoProd := (TwoProd p radix2 rnd).
+Local Notation Fast2Sum := (Fast2Sum p choice).
+Local Notation isTW := (isTW p).
+Local Notation isDW := (isDW p).
+
+(* The three products: Algorithms 11/12 (DW x TW) and Algorithm 20 (TW x TW   *)
+(* with a head-[1] second argument).                                          *)
+Local Notation ThreeProdDW := (ThreeProdDW p choice).
+Local Notation ThreeProdDWFast := (ThreeProdDWFast p choice).
+Local Notation ThreeProdOneTW := (ThreeProdOneTW p choice).
+
+(* ===========================================================================*)
+(*  [3/2 - x] on triple words                                                 *)
+(*                                                                            *)
+(*  Algorithm 15 subtracts a triple word from [3/2] ([i(2) <- 3/2 - 3Prod]).  *)
+(*  Limb by limb this is [(3/2 - x0, -x1, -x2)]: the two low limbs are just   *)
+(*  negated, and the head subtraction [3/2 - x0] is EXACT as soon as          *)
+(*  [x0 = 1/2], which is what [head_half] below asserts of the product -- the *)
+(*  exact analogue of Algorithm 13's [sub2TW] and its [tw0 = 1].              *)
+(* ===========================================================================*)
+Definition sub32TW (x : twR) : twR :=
+  let: TWR x0 x1 x2 := x in TWR (3 / 2 - x0) (- x1) (- x2).
+
+Lemma TWval_sub32TW x : TWval (sub32TW x) = 3 / 2 - TWval x.
+Proof. by case: x => x0 x1 x2; rewrite /TWval /=; ring. Qed.
+
+Lemma sub32TW_isTW t : isTW t -> tw0 t = 1 / 2 -> isTW (sub32TW t).
+Proof.
+case: t => t0 t1 t2 [F0 F1 F2 H1 H2] /= Ht0.
+have -> : 3 / 2 - t0 = 1 by rewrite Ht0; field.
+split.
+- exact: format_1.
+- exact: generic_format_opp.
+- exact: generic_format_opp.
+- case: H1 => [->|H1]; first by left; rewrite Ropp_0.
+  right; rewrite Rabs_Ropp.
+  (* The head moves from [1/2] up to [1], so the gap WIDENS: [ulp (1/2) = u]  *)
+  (* and [ulp 1 = 2u].  Unlike [sub2TW_isTW], where the head is unchanged,    *)
+  (* this step really needs monotonicity of [ulp].                            *)
+  apply: Rlt_le_trans H1 _.
+  by apply: ulp_le; rewrite Ht0 !Rabs_pos_eq; lra.
+case: H2 => [->|H2]; first by left; rewrite Ropp_0.
+by right; rewrite !Rabs_Ropp ulp_opp.
+Qed.
+
+(* ===========================================================================*)
+(*  Algorithm 15 -- 3SqRt(x0, x1, x2)                                         *)
+(*  (127 operations & 4 tests with Algorithm 11, 111 operations & 2 tests     *)
+(*  with Algorithm 12; paper Section 10).                                     *)
+(* ===========================================================================*)
+(* The nine head lines, named one by one so that the bounds of doc/thm11.md   *)
+(* can be stated and reused without unfolding the algorithm.                  *)
+
+(* The seed.  [RN(sqrt x0)] is the only place in the whole development where  *)
+(* a real square root is rounded; [1 + 4u] plays the role Algorithm 13's      *)
+(* [1 + 2u] plays -- it biases the seed upwards by just enough that the       *)
+(* rounding of [h01(2)] cannot go the wrong way.                              *)
+Definition sqrtS (x0 : R) : R := RND (sqrt x0).
+
+Definition sqrtA (x0 : R) : R := RND ((1 + 4 * u) / sqrtS x0).
+
+(* [a/2] and [b/2] are exact: multiplying by [pow (-1)] never leaves FLX.     *)
+Definition sqrtA' (x0 : R) : R := sqrtA x0 / 2.
+
+Definition sqrtH0_1 (x0 : R) : R := (TwoProd (sqrtA x0) x0).1.
+
+Definition sqrtH11_1 (x0 : R) : R := (TwoProd (sqrtA x0) x0).2.
+
+Definition sqrtH1_1 (x0 x1 : R) : R :=
+  RND (sqrtH11_1 x0 + sqrtA x0 * x1).
+
+Definition sqrtH01_2 (x0 : R) : R :=
+  (TwoProd (sqrtA' x0) (sqrtH0_1 x0)).1.
+
+Definition sqrtH11_2 (x0 : R) : R :=
+  (TwoProd (sqrtA' x0) (sqrtH0_1 x0)).2.
+
+Definition sqrtH0_2 (x0 : R) : R := 3 / 2 - sqrtH01_2 x0.
+
+Definition sqrtH1_2 (x0 x1 : R) : R :=
+  - RND (sqrtH11_2 x0 + sqrtA' x0 * sqrtH1_1 x0 x1).
+
+Definition sqrtB01 (x0 : R) : R := (TwoProd (sqrtA x0) (sqrtH0_2 x0)).1.
+
+Definition sqrtB11 (x0 : R) : R := (TwoProd (sqrtA x0) (sqrtH0_2 x0)).2.
+
+Definition sqrtB12 (x0 x1 : R) : R :=
+  RND (sqrtB11 x0 + sqrtA x0 * sqrtH1_2 x0 x1).
+
+Definition sqrtB (x0 x1 : R) : dwR :=
+  Fast2Sum (sqrtB01 x0) (sqrtB12 x0 x1).
+
+(* The Newton double word [b ~ 1/sqrt x0], packaged as a [twR] with a zero    *)
+(* third limb -- the shape Algorithms 11 and 12 take as their first argument. *)
+Definition sqrtBW (x0 x1 : R) : twR :=
+  TWR (dwh (sqrtB x0 x1)) (dwl (sqrtB x0 x1)) 0.
+
+(* [mul1] computes [i(1) = 3Prod(b, x) ~ sqrt x], [mul2] the inner            *)
+(* [3Prod(b', i(1)) ~ 1/2] of [i(2)], and [mul3] the final [y = i(1) i(2)].   *)
+(* Only [mul2] sees the head property (its result must have head exactly      *)
+(* [1/2], so that [3/2 - .] is exact and [i(2)] has head [1]); only [mul3]    *)
+(* needs to be sharp on a head-[1] second argument.                           *)
+Definition ThreeSqRtAux (mul1 mul2 mul3 : twR -> twR -> twR) (x : twR)
+    : twR :=
+  let bw := sqrtBW (tw0 x) (tw1 x) in
+  let i1 := mul1 bw x in
+  mul3 i1 (sub32TW (mul2 (scaleTW (-1)%Z bw) i1)).
+
+(* The accurate variant: both DW x TW products are Algorithm 11.              *)
+Definition ThreeSqRt (x : twR) : twR :=
+  ThreeSqRtAux ThreeProdDW ThreeProdDW ThreeProdOneTW x.
+
+(* The fast variant: both DW x TW products are Algorithm 12.                  *)
+Definition ThreeSqRtFast (x : twR) : twR :=
+  ThreeSqRtAux ThreeProdDWFast ThreeProdDWFast ThreeProdOneTW x.
+
+(* ===========================================================================*)
+(*  The Newton identity (PROVED)                                              *)
+(*                                                                            *)
+(*  Everything downstream rests on this one polynomial identity.  Writing     *)
+(*  [x = s * s] and [t = b * s], the EXACT value of the algorithm's last two  *)
+(*  lines, [(b x)(3/2 - (1/2) b^2 x)], differs from [s] by                    *)
+(*                                                                            *)
+(*      - s (t - 1)^2 ((t - 1) + 3) / 2   ~   -(3/2) s (t - 1)^2              *)
+(*                                                                            *)
+(*  so the seed's relative error [e = b sqrt x - 1] enters the result only    *)
+(*  SQUARED.  Since [e = O(u^2)] that is [O(u^4)]: the whole [u^3] budget of  *)
+(*  Theorem 11 is made of the three products' rounding errors, none of it of  *)
+(*  the Newton residual.  This is the analogue of Algorithm 13's              *)
+(*  [newton_id : (a(2 - Xa))X - 1 = -(aX - 1)^2].                             *)
+(*                                                                            *)
+(*  Stated on [s] and [b] rather than on [x] and [1/sqrt x] on purpose: it is *)
+(*  then a polynomial identity, with no division and no [sqrt], and [ring]    *)
+(*  closes it.  (House rule: state error chains dimensionlessly.)             *)
+(* ===========================================================================*)
+Lemma sqrt_newton_id s b :
+  (b * (s * s)) * (3 / 2 - (1 / 2) * (b * b) * (s * s)) - s
+    = - s * ((b * s - 1) * (b * s - 1)) * ((b * s - 1) + 3) / 2.
+Proof. field. Qed.
+
+(* ===========================================================================*)
+(*  The six intermediate obligations (doc/thm11.md Section 4)                 *)
+(*                                                                            *)
+(*  Stated here so that their shape is pinned before anything is proved --    *)
+(*  the house top-down method.  Steps 1 and 2 are the genuinely new ones;     *)
+(*  steps 3 and 4 mirror [reciB_isDW] and [reciBW_x_err] of Algorithm 13, and *)
+(*  step 5 should FALL OUT of the already-proved [head_one] by scaling rather *)
+(*  than be re-proved.                                                        *)
+(* ===========================================================================*)
+
+(* Step 1.  The seed.  [RN(sqrt x0)] is within [u |sqrt x0|] of [sqrt x0], so *)
+(* [a] approximates [1/sqrt x0] with a deliberate upward bias of [4u].        *)
+Lemma sqrtA_bound x0 :
+  format x0 -> 0 < x0 ->
+  Rabs (sqrtA x0 * sqrt x0 - 1) <= 4 * u + 8 * (u * u).
+Proof.
+Admitted.
+
+(* Step 2.  [h0(2) = 3/2 - h01(2)] is EXACT.  This is NOT Sterbenz -- its     *)
+(* hypothesis fails outright for [3/2 - 1/2].  The supplementary gives the    *)
+(* reason in one line: the computation is exact BECAUSE [h01(2) >= 0.5], and  *)
+(* [this is why we started with 1 + 4u instead of 1].  So [h01(2)] sits in    *)
+(* the binade [[1/2, 1)], where [ulp = u]; [3/2] is a multiple of [u] there,  *)
+(* hence so is the difference, which lands in [(1/2, 1]] -- representable.    *)
+(* Pin [h01(2) >= 1/2] first; everything else is grid arithmetic.             *)
+Lemma sqrtH0_2_exact x0 :
+  format x0 -> 0 < x0 -> format (sqrtH0_2 x0).
+Proof.
+Admitted.
+
+(* Step 3.  [b] is a double word.  Mirrors [reciB_isDW].  CHECK the Fast2Sum  *)
+(* ordering [|b01| >= |b12|] rather than assuming it: an unguarded Fast2Sum   *)
+(* whose ordering fails loses [u max(|.|)], not [O(u^2)] -- that is exactly   *)
+(* the Algorithm 18 defect recorded in doc/thm9.md.  If the ordering cannot   *)
+(* be proved, switch [sqrtB] to [Fast2SumS], which costs no extra flop.       *)
+Lemma sqrtB_isDW x0 x1 :
+  format x0 -> format x1 -> 0 < x0 -> isDW (sqrtBW x0 x1).
+Proof.
+Admitted.
+
+(* Step 4.  The seed double word against the true inverse square root, in the *)
+(* dimensionless form the assembly consumes.  The supplementary states it as  *)
+(* [|b - 1/sqrt x| <= (81u^2 + 622u^3)|1/sqrt x|]; Algorithm 13's analogue is *)
+(* [reciBW_x_err], with [34u^2 + 126u^3].  The seed is more than twice as     *)
+(* sloppy, which is where Theorem 11's large [u^4] term comes from.           *)
+Lemma sqrtBW_x_err x :
+  isTW x -> 0 < tw0 x ->
+  Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * sqrt (TWval x) - 1)
+    <= 81 * (u * u) + 622 * (u * u * u).
+Proof.
+Admitted.
+
+(* Step 4b.  The Newton residual: the EXACT value of the last two lines is    *)
+(* already within [O(u^4)] of [sqrt x], by [sqrt_newton_id] applied to        *)
+(* step 4.  The supplementary's constant.  This is the only [u^4] contributor *)
+(* that is not a product's error.                                             *)
+Lemma sqrt_newton_residual x :
+  isTW x -> 0 < tw0 x ->
+  let b := TWval (sqrtBW (tw0 x) (tw1 x)) in
+  Rabs (b * TWval x * (3 / 2 - (1 / 2) * (b * b) * TWval x) - sqrt (TWval x))
+    <= 9916 * (u * u * u * u) * Rabs (sqrt (TWval x)).
+Proof.
+Admitted.
+
+(* Step 5.  The head property [mul2] must satisfy: on a first argument that   *)
+(* is [b/2] the product has head exactly [1/2], so that [3/2 - .] is exact    *)
+(* and [i(2)] has head [1] -- which is what [ThreeProdOneTW] requires of its  *)
+(* second argument.  The analogue of [head_one] in ThreeReci.v.               *)
+Definition head_half (mul : twR -> twR -> twR) : Prop :=
+  forall b y, isDW b -> isTW y ->
+    Rabs (TWval b * TWval y - / 2) <= 18 * (u * u) ->
+    tw0 (mul b y) = 1 / 2.
+
+(* DO NOT re-prove this from scratch: [b' = scaleTW (-1) b], the products     *)
+(* commute with scaling ([ThreeProdDW_scale], [ThreeProdDWFast_scale]) and    *)
+(* [head_one] is already proved for both -- so [head_half] should follow from *)
+(* [head_one] together with [isTW_scale] / [TWval_scale] / [tw0_scale].       *)
+Lemma ThreeProdDW_head_half : head_half ThreeProdDW.
+Proof.
+Admitted.
+
+Lemma ThreeProdDWFast_head_half : head_half ThreeProdDWFast.
+Proof.
+Admitted.
+
+(* ===========================================================================*)
+(*  Correctness, part 1: the result is a triple word.                         *)
+(*                                                                            *)
+(*  Exactly Algorithm 14's assembly ([ThreeDivAux_isTW]) with [mul2] applied  *)
+(*  to [b/2] and [i(1)] instead of [b] and [z], and [head_half] in place of   *)
+(*  [head_one]: [mul1] must return a triple word, [mul2] must return one and  *)
+(*  have head [1/2] (so that [3/2 - mul2 b' i(1)] is again a triple word, by  *)
+(*  [sub32TW_isTW]), and [mul3] must do so on a head-[1] second argument.     *)
+(* ===========================================================================*)
+Lemma ThreeSqRtAux_isTW mul1 mul2 mul3 :
+  (forall b y, isDW b -> isTW y -> isTW (mul1 b y)) ->
+  (forall b y, isDW b -> isTW y -> isTW (mul2 b y)) ->
+  (forall a y, isTW a -> isTW y -> tw0 y = 1 -> isTW (mul3 a y)) ->
+  head_half mul2 ->
+  forall x, isTW x -> 0 < tw0 x ->
+    isTW (ThreeSqRtAux mul1 mul2 mul3 x).
+Proof.
+Admitted.
+
+Lemma ThreeSqRt_isTW x :
+  ties_to_even choice ->
+  isTW x -> 0 < tw0 x -> isTW (ThreeSqRt x).
+Proof.
+move=> Hc Hx Hx0.
+apply: (@ThreeSqRtAux_isTW ThreeProdDW ThreeProdDW ThreeProdOneTW) => //.
+- by move=> b y Hb Hy; apply: (@ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym).
+- by move=> b y Hb Hy; apply: (@ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym).
+- by move=> a y Ha Hy Hy0;
+     apply: (@ThreeProdOneTW_isTW p Hp2 Hp6 choice choice_sym).
+exact: ThreeProdDW_head_half.
+Qed.
+
+Lemma ThreeSqRtFast_isTW x :
+  ties_to_even choice ->
+  isTW x -> 0 < tw0 x -> isTW (ThreeSqRtFast x).
+Proof.
+move=> Hc Hx Hx0.
+apply: (@ThreeSqRtAux_isTW ThreeProdDWFast ThreeProdDWFast ThreeProdOneTW)
+  => //.
+- by move=> b y Hb Hy;
+     apply: (@ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym).
+- by move=> b y Hb Hy;
+     apply: (@ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym).
+- by move=> a y Ha Hy Hy0;
+     apply: (@ThreeProdOneTW_isTW p Hp2 Hp6 choice choice_sym).
+exact: ThreeProdDWFast_head_half.
+Qed.
+
+(* ===========================================================================*)
+(*  Correctness, part 2: the relative error (paper Theorem 11).               *)
+(*                                                                            *)
+(*  With [d1] the relative error of [i(1) = 3Prod(b, x)] (relative to [b x]), *)
+(*  [d2] that of the inner [3Prod(b', i(1))] and [d3] that of the final       *)
+(*  [y = 3Prod(i(1), i(2))], the SUPPLEMENTARY's global bound is              *)
+(*                                                                            *)
+(*      |y - sqrt x| <= (d1 (1.5 + 287u^2) + d2 (0.5 + 123u^2)                *)
+(*                      + d3 (1 + 162u^2) + 9916u^4) |sqrt x|                 *)
+(*                                                                            *)
+(*  and it is stated below in THAT shape, so the route can be followed        *)
+(*  literally first.  Its [1.5] is loose -- see the file header: the true     *)
+(*  first-order weight on [d1] is [1/2], the supplementary having triangle-   *)
+(*  inequalitied away the cancellation between the two occurrences of [i(1)]. *)
+(*  With our [d3 = 8u^3] the literal route gives [29u^3]/[44u^3] and the      *)
+(*  sharpened one [18.5u^3]/[26u^3]; only the latter reaches the published    *)
+(*  [24]/[39], so the cancellation has to be exploited, not skipped.          *)
+(*                                                                            *)
+(*  STEPS, and what each one already has:                                     *)
+(*                                                                            *)
+(*  (1) [b] is a double word and [|b sqrt x - 1| <= 81u^2 + 622u^3]:          *)
+(*      [sqrtB_isDW], [sqrtBW_x_err] above -- BOTH TO PROVE (Algorithm 13's   *)
+(*      twins are [reciB_isDW] and [reciBW_x_err], already proved, and the    *)
+(*      route is the same except for the seed).                               *)
+(*  (2) [i(2)] has head [1] and [|i(2) - 1| <= 40u^2]: [head_half] +          *)
+(*      [sub32TW_isTW].  The [40u^2] is what [ThreeProdOneTW_error] demands   *)
+(*      of its second argument, so it must come out as a named lemma.         *)
+(*  (3) the algebraic identity: with [s = sqrt x],                            *)
+(*        y - s = (y - i(1) i(2)) + i(1) (i(2) - (3/2 - b' i(1)))             *)
+(*                + (i(1) - b x)(3/2 - (1/2) b^2 x) + [(b x)(3/2 - (1/2)b^2x) *)
+(*                                                     - s]                   *)
+(*      whose last bracket is [-s e^2 (e + 3)/2] by [sqrt_newton_id], hence   *)
+(*      [<= 9916u^4 |s|] by [sqrt_newton_residual] -- the only [O(u^4)]       *)
+(*      contributor that is not a product's error.  KEEP THE SIGNS: it is in  *)
+(*      the second and third terms that [i(1)]'s error cancels, and dropping  *)
+(*      to absolute values too early is exactly what costs the factor three.  *)
+(*  (4) the final arithmetic on bare quantities, the analogue of              *)
+(*      [reci_error_assembly] / [div_error_assembly]; those take three resp.  *)
+(*      four error terms and this one needs three, so one of them should be   *)
+(*      reusable outright.                                                    *)
+(*  (5) [d1], [d2] = [ThreeProdDW_error] / [ThreeProdDWFast_error] and        *)
+(*      [d3] = [ThreeProdOneTW_error] -- ALL THREE ALREADY PROVED.  Unlike    *)
+(*      Theorems 9 and 10, Theorem 11 needs no new product bound.             *)
+(*                                                                            *)
+(*  The [u^4] terms are the paper's and are the ones at risk (Theorem 9's     *)
+(*  [1465u^4] became [1830u^4], Theorem 10's [1509u^4] became [2576u^4]).     *)
+(* ===========================================================================*)
+Lemma ThreeSqRtAux_error mul1 mul2 mul3 d1 d2 d3 :
+  (forall b y, isDW b -> isTW y ->
+     Rabs (TWval (mul1 b y) - TWval b * TWval y)
+       <= d1 * Rabs (TWval b * TWval y)) ->
+  (forall b y, isDW b -> isTW y ->
+     Rabs (TWval (mul2 b y) - TWval b * TWval y)
+       <= d2 * Rabs (TWval b * TWval y)) ->
+  (forall a y, isTW a -> isTW y -> tw0 y = 1 ->
+     Rabs (TWval y - 1) <= 40 * (u * u) ->
+     Rabs (TWval (mul3 a y) - TWval a * TWval y)
+       <= d3 * Rabs (TWval a * TWval y)) ->
+  head_half mul2 ->
+  0 <= d1 -> 0 <= d2 -> 0 <= d3 ->
+  forall x, isTW x -> 0 < tw0 x ->
+    Rabs (TWval (ThreeSqRtAux mul1 mul2 mul3 x) - sqrt (TWval x))
+      <= (d1 * (3 / 2 + 287 * (u * u)) + d2 * (1 / 2 + 123 * (u * u))
+          + d3 * (1 + 162 * (u * u)) + 9916 * (u * u * u * u))
+         * Rabs (sqrt (TWval x)).
+Proof.
+Admitted.
+
+(* Paper Theorem 11, accurate variant: [24u^3 + 10260u^4].                    *)
+Lemma ThreeSqRt_error x :
+  ties_to_even choice ->
+  isTW x -> 0 < tw0 x ->
+  Rabs (TWval (ThreeSqRt x) - sqrt (TWval x)) <=
+     (24 * (u * u * u) + 10260 * (u * u * u * u)) * Rabs (sqrt (TWval x)).
+Proof.
+Admitted.
+
+(* Paper Theorem 11, fast variant: [39u^3 + 10333u^4].                        *)
+Lemma ThreeSqRtFast_error x :
+  ties_to_even choice ->
+  isTW x -> 0 < tw0 x ->
+  Rabs (TWval (ThreeSqRtFast x) - sqrt (TWval x)) <=
+     (39 * (u * u * u) + 10333 * (u * u * u * u)) * Rabs (sqrt (TWval x)).
+Proof.
+Admitted.
+
+End SecThreeSqRt.

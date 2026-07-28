@@ -161,6 +161,49 @@ Three steps to tighten, in order of expected payoff:
 
 Steps 1–3 together would give `δ₃ = 3u³` and restore the paper's `24u³ / 39u³`.
 
+## What the supplementary actually claims for `δ₃`
+
+`doc/Algorithms_for_Triple-Word_Arithmetic.pdf` §2 — the appendix `paper3.pdf`
+defers to — states the `δ₃` derivation in one sentence:
+
+> The error analysis is similar to the one of Algorithm [17] with an
+> **additional `2u³`**, and we get `|ȳ − āī|/|āī| ≤ (3u³ + 256u⁴) /
+> ((1−2u)(1−35u²)) ≤ 3u³ + 264u⁴`.
+
+So the published claim is not an independent `3u³`: it is
+**`δ₃ = δ₂ + 2u³`**, where `δ₂ = u³ + 260u⁴` is the head-`1` **DW**×TW product
+(its Algorithm 17, our Algorithm 18, `ThreeProdOne_error` — and we proved
+`u³ + 620u⁴`, whose `u³` term matches exactly).  The whole disagreement is
+therefore about **one number**: what the extra `a₂` limb of the TW×TW variant
+costs over the DW×TW one.
+
+- paper: `+2u³`
+- ours: `+7u³` (`8u³` against `ThreeProdOne_error`'s `1u³`)
+
+That is a far sharper target than "8 versus 3", and it says where to look.
+Comparing the two listings, the TW variant differs by exactly one extra
+rounding and a reordering:
+
+    Alg 17 (DW):  z3,1 ← RN(z01⁻ + b1·i1)
+                  z3   ← RN(z3,1 + b0·i2)
+                  s3   ← RN(b′1 + z3)
+
+    Alg 18 (TW):  z3,1 ← RN(z01⁻ + a1·i1)
+                  z3,2 ← RN(z3,1 + a0·i2)
+                  z3   ← RN(z3,2 + b′1)
+                  s3   ← RN(z3   + a2)
+
+i.e. the `b′₁` addition moves into the `z`-chain and a final rounding for `a₂`
+is appended.  The paper budgets `2u³` for that one extra rounding plus the `a₂`
+term; our chain budgets `7u³`, via `η₃ = 2u³` (paper `1u³`) and
+`η₄ = u|s₃′+x₂| = 6u³` (paper `2u³`).  Both of our figures come from the two
+loose steps 1 and 3 above — the `ulp` chain of a P-nonoverlapping *triple* word
+— which is consistent with the numerical evidence that the paper is right.
+
+Nothing here refutes our `8u³`, which is a correct upper bound; it identifies
+the two `ulp`-chain lemmas as the whole of the gap, and confirms the tightening
+plan above is aimed at the right place.
+
 **For 3Div itself** the paper's own tightness examples are the right seed: its
 Theorem 8 example
 `x̄ = (1+3·2²⁷u, u−2²⁷u²)`, `ȳ = (1+(3·2²⁶+6)u, 2u−5·2²⁷u², 2u²−26u³)`

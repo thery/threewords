@@ -298,6 +298,35 @@ Proof. field. Qed.
 (*  than be re-proved.                                                        *)
 (* ===========================================================================*)
 
+(* ===========================================================================*)
+(*  Correctness, part 1: the result is a triple word.                         *)
+(*                                                                            *)
+(*  Exactly Algorithm 14's assembly ([ThreeDivAux_isTW]) with [mul2] applied  *)
+(*  to [b/2] and [i(1)] instead of [b] and [z], and [head_half] in place of   *)
+(*  [head_one]: [mul1] must return a triple word, [mul2] must return one and  *)
+(*  have head [1/2] (so that [3/2 - mul2 b' i(1)] is again a triple word, by  *)
+(*  [sub32TW_isTW]), and [mul3] must do so on a head-[1] second argument.     *)
+(* ===========================================================================*)
+(* A triple word with a positive head is positive: the two low limbs cannot   *)
+(* bridge the gap, [|x1| <= 2u|x0|] and [|x2| <= 2u^2|x0|].  Needed because   *)
+(* [sqrt] is only informative on nonnegative arguments.                       *)
+Lemma isTW_TWval_gt0 x : isTW x -> 0 < tw0 x -> 0 < TWval x.
+Proof.
+move=> Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := @u_le_1024 p Hp10.
+have Hx2 := @isTW_tw2_le p Hp2 x Hx.
+have Hx1 : Rabs (tw1 x) <= 2 * u * Rabs (tw0 x).
+  case: x Hx {Hx0 Hx2} => x0 x1 x2 [_ _ _ H1 _] /=.
+  case: H1 => [->|H1]; first by rewrite Rabs_R0; have := Rabs_pos x0; nra.
+  by have := @ulp_2u p beta Hp2 x0; lra.
+have Ha0 : Rabs (tw0 x) = tw0 x by apply: Rabs_pos_eq; lra.
+have H1 := Rabs_le_inv _ _ Hx1.
+have H2 := Rabs_le_inv _ _ Hx2.
+by case: x Hx0 Ha0 H1 H2 {Hx Hx1 Hx2} => x0 x1 x2 /= Hx0 Ha0 H1 H2;
+   rewrite /TWval /=; nra.
+Qed.
+
 (* Step 1.  The seed.  Stated TWO-SIDED and asymmetrically, not as a single   *)
 (* [Rabs] bound -- the house lesson, and here it is not a matter of taste:    *)
 (* the LOWER bound is the whole point of the [1 + 4u].  Both roundings are    *)
@@ -453,14 +482,12 @@ have Him1 : is_imul (sqrtH01_2 x0) (pow (- p)).
   apply: is_imul_bound_pow_format => //.
   have -> : pow (-1) = / 2 by [].
   by rewrite Rabs_pos_eq; lra.
-(* REMAINS: the [imul_format] invocation.  Everything it consumes is proved   *)
-(* just above -- [Him1] (h01(2) is a multiple of [u], from                    *)
-(* [is_imul_bound_pow_format] and [h01(2) >= 1/2]), [is_imul_3_2], and the    *)
-(* range [[1/2, 1]] -- and [is_imul_minus] closes the difference.  What is    *)
-(* left is purely finding [imul_format]'s argument prefix: it lives in        *)
-(* prelim.v, whose section is generic in [fexp], so the [FLX_exp p]           *)
-(* instantiation has to be supplied.  See the GOTCHA on cross-file prefixes.  *)
-Admitted.
+apply: (@imul_format beta p Hp2 (sqrtH0_2 x0) (- p) 1).
+- by rewrite /sqrtH0_2; apply: is_imul_minus; [exact: is_imul_3_2|].
+- by rewrite /sqrtH0_2 Rabs_pos_eq; lra.
+have -> : (p + - p = 0)%Z by lia.
+by rewrite /=; lra.
+Qed.
 
 (* Step 3.  [b] is a double word.  Mirrors [reciB_isDW].  CHECK the Fast2Sum  *)
 (* ordering [|b01| >= |b12|] rather than assuming it: an unguarded Fast2Sum   *)
@@ -488,13 +515,81 @@ Admitted.
 (* already within [O(u^4)] of [sqrt x], by [sqrt_newton_id] applied to        *)
 (* step 4.  The supplementary's constant.  This is the only [u^4] contributor *)
 (* that is not a product's error.                                             *)
+(* [u <= 2^-11], the [p >= 11] form of [u_le_1024].  Theorem 11 genuinely     *)
+(* needs it: the Newton residual below is [9915.5u^4] at [p = 11] against     *)
+(* the paper's [9916u^4], but [9989.9u^4] at [p = 10].                        *)
+Lemma u_le_2048 : u <= / 2048.
+Proof.
+have -> : / 2048 = pow (-11) by rewrite /= /Z.pow_pos /=; lra.
+by rewrite (u_pow p); apply: bpow_le; lia.
+Qed.
+
+(* The pure-[u] half of the residual bound, split off so that [nra] never     *)
+(* sees it together with the algebra.  This is EXACTLY how the paper's        *)
+(* [9916u^4] arises: [E^2 (3 + E)/2] with [E = 81u^2 + 622u^3], and it is     *)
+(* tight -- [9915.5u^4] at [p = 11].                                          *)
+Lemma newton_residual_const :
+  (81 * (u * u) + 622 * (u * u * u))
+    * (81 * (u * u) + 622 * (u * u * u))
+    * ((3 + (81 * (u * u) + 622 * (u * u * u))) / 2)
+  <= 9916 * (u * u * u * u).
+Proof.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have L5 : u * u * u * u * u <= / 2048 * (u * u * u * u) by nra.
+have L6 : u * u * u * u * u * u <= / 2048 * (u * u * u * u * u) by nra.
+have L7 : u * u * u * u * u * u * u
+            <= / 2048 * (u * u * u * u * u * u) by nra.
+by nra.
+Qed.
+
+(* Step 4b.  The Newton residual: the EXACT value of the last two lines is    *)
+(* already within [O(u^4)] of [sqrt x], by [sqrt_newton_id] applied to the    *)
+(* seed bound.  The only [u^4] contributor that is not a product's error.     *)
 Lemma sqrt_newton_residual x :
   isTW x -> 0 < tw0 x ->
-  let b := TWval (sqrtBW (tw0 x) (tw1 x)) in
-  Rabs (b * TWval x * (3 / 2 - (1 / 2) * (b * b) * TWval x) - sqrt (TWval x))
+  Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * TWval x
+        * (3 / 2 - (1 / 2) * (TWval (sqrtBW (tw0 x) (tw1 x))
+                              * TWval (sqrtBW (tw0 x) (tw1 x))) * TWval x)
+        - sqrt (TWval x))
     <= 9916 * (u * u * u * u) * Rabs (sqrt (TWval x)).
 Proof.
-Admitted.
+move=> Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HX0 : 0 < TWval x by apply: isTW_TWval_gt0.
+have Hs0 : 0 <= sqrt (TWval x) by apply: sqrt_pos.
+have HsX : sqrt (TWval x) * sqrt (TWval x) = TWval x
+  by apply: sqrt_sqrt; lra.
+have Hseed := sqrtBW_x_err Hx Hx0.
+set B := TWval (sqrtBW (tw0 x) (tw1 x)) in Hseed *.
+set s := sqrt (TWval x) in HsX Hseed Hs0 *.
+have Hid := sqrt_newton_id s B.
+rewrite HsX in Hid.
+rewrite Hid.
+(* pull [s] out; what is left is the pure-[u] bound.                          *)
+have -> : - s * ((B * s - 1) * (B * s - 1)) * (B * s - 1 + 3) / 2
+    = - (s * (((B * s - 1) * (B * s - 1))
+              * ((B * s - 1 + 3) / 2))) by field.
+rewrite Rabs_Ropp Rabs_mult !(Rabs_pos_eq s) //.
+rewrite [9916 * (u * u * u * u) * s]Rmult_comm.
+apply: Rmult_le_compat_l => //.
+have He := Rabs_le_inv _ _ Hseed.
+have Hsq : (B * s - 1) * (B * s - 1)
+    <= (81 * (u * u) + 622 * (u * u * u))
+       * (81 * (u * u) + 622 * (u * u * u)) by nra.
+have Hsq0 : 0 <= (B * s - 1) * (B * s - 1) by apply: Rle_0_sqr.
+have Hlin : (B * s - 1 + 3) / 2
+    <= (3 + (81 * (u * u) + 622 * (u * u * u))) / 2 by nra.
+have Hlin0 : 0 <= (B * s - 1 + 3) / 2 by nra.
+have Hstep : ((B * s - 1) * (B * s - 1)) * ((B * s - 1 + 3) / 2)
+    <= (81 * (u * u) + 622 * (u * u * u))
+       * (81 * (u * u) + 622 * (u * u * u))
+       * ((3 + (81 * (u * u) + 622 * (u * u * u))) / 2)
+  by apply: Rmult_le_compat.
+rewrite Rabs_pos_eq; last by nra.
+by apply: Rle_trans Hstep _; exact: newton_residual_const.
+Qed.
 
 (* Step 5.  The head property [mul2] must satisfy: on a first argument that   *)
 (* is [b/2] the product has head exactly [1/2], so that [3/2 - .] is exact    *)
@@ -581,34 +676,6 @@ by move=> X Y HX HY HX0 HY0;
    apply: (@ThreeProdDWFast_head_gap p Hp2 Hp10 choice choice_sym).
 Qed.
 
-(* ===========================================================================*)
-(*  Correctness, part 1: the result is a triple word.                         *)
-(*                                                                            *)
-(*  Exactly Algorithm 14's assembly ([ThreeDivAux_isTW]) with [mul2] applied  *)
-(*  to [b/2] and [i(1)] instead of [b] and [z], and [head_half] in place of   *)
-(*  [head_one]: [mul1] must return a triple word, [mul2] must return one and  *)
-(*  have head [1/2] (so that [3/2 - mul2 b' i(1)] is again a triple word, by  *)
-(*  [sub32TW_isTW]), and [mul3] must do so on a head-[1] second argument.     *)
-(* ===========================================================================*)
-(* A triple word with a positive head is positive: the two low limbs cannot   *)
-(* bridge the gap, [|x1| <= 2u|x0|] and [|x2| <= 2u^2|x0|].  Needed because   *)
-(* [sqrt] is only informative on nonnegative arguments.                       *)
-Lemma isTW_TWval_gt0 x : isTW x -> 0 < tw0 x -> 0 < TWval x.
-Proof.
-move=> Hx Hx0.
-have Hu0 : 0 < u by apply: u_gt_0.
-have Hu1024 := @u_le_1024 p Hp10.
-have Hx2 := @isTW_tw2_le p Hp2 x Hx.
-have Hx1 : Rabs (tw1 x) <= 2 * u * Rabs (tw0 x).
-  case: x Hx {Hx0 Hx2} => x0 x1 x2 [_ _ _ H1 _] /=.
-  case: H1 => [->|H1]; first by rewrite Rabs_R0; have := Rabs_pos x0; nra.
-  by have := @ulp_2u p beta Hp2 x0; lra.
-have Ha0 : Rabs (tw0 x) = tw0 x by apply: Rabs_pos_eq; lra.
-have H1 := Rabs_le_inv _ _ Hx1.
-have H2 := Rabs_le_inv _ _ Hx2.
-by case: x Hx0 Ha0 H1 H2 {Hx Hx1 Hx2} => x0 x1 x2 /= Hx0 Ha0 H1 H2;
-   rewrite /TWval /=; nra.
-Qed.
 
 (* The assembly.  Beyond Algorithm 14's version this needs ONE extra          *)
 (* hypothesis: a (very weak) error bound on [mul1].  Algorithm 14 applies its *)

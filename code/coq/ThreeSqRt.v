@@ -159,6 +159,19 @@ Local Notation ThreeProdDW := (ThreeProdDW p choice).
 Local Notation ThreeProdDWFast := (ThreeProdDWFast p choice).
 Local Notation ThreeProdOneTW := (ThreeProdOneTW p choice).
 
+(* Step 4b.  The Newton residual: the EXACT value of the last two lines is    *)
+(* already within [O(u^4)] of [sqrt x], by [sqrt_newton_id] applied to        *)
+(* step 4.  The supplementary's constant.  This is the only [u^4] contributor *)
+(* that is not a product's error.                                             *)
+(* [u <= 2^-11], the [p >= 11] form of [u_le_1024].  Theorem 11 genuinely     *)
+(* needs it: the Newton residual below is [9915.5u^4] at [p = 11] against     *)
+(* the paper's [9916u^4], but [9989.9u^4] at [p = 10].                        *)
+Lemma u_le_2048 : u <= / 2048.
+Proof.
+have -> : / 2048 = pow (-11) by rewrite /= /Z.pow_pos /=; lra.
+by rewrite (u_pow p); apply: bpow_le; lia.
+Qed.
+
 (* ===========================================================================*)
 (*  [3/2 - x] on triple words                                                 *)
 (*                                                                            *)
@@ -489,14 +502,170 @@ have -> : (p + - p = 0)%Z by lia.
 by rewrite /=; lra.
 Qed.
 
-(* Step 3.  [b] is a double word.  Mirrors [reciB_isDW].  CHECK the Fast2Sum  *)
-(* ordering [|b01| >= |b12|] rather than assuming it: an unguarded Fast2Sum   *)
-(* whose ordering fails loses [u max(|.|)], not [O(u^2)] -- that is exactly   *)
-(* the Algorithm 18 defect recorded in doc/thm9.md.  If the ordering cannot   *)
-(* be proved, switch [sqrtB] to [Fast2SumS], which costs no extra flop.       *)
+(* ===========================================================================*)
+(*  Step 3.  [b] is a double word.                                            *)
+(*                                                                            *)
+(*  Mirrors [reciB_isDW]: the two words are roundings, so both are floats,    *)
+(*  and the low one is at most half an ulp of the high one PROVIDED the       *)
+(*  Fast2Sum operands are ordered.  That ordering is the only real content,   *)
+(*  and -- per doc/thm11.md -- it is CHECKED here, not assumed: an unguarded  *)
+(*  Fast2Sum whose ordering fails loses [u max(|.|)], not [O(u^2)].           *)
+(*                                                                            *)
+(*  The chain below measures every [h]-line against [a x0] (which is the      *)
+(*  natural scale, [a x0 ~ sqrt x0]) and every [b]-line against [a], so that  *)
+(*  the final comparison is dimensionless.                                    *)
+(* ===========================================================================*)
+
+(* [h0(2) = 3/2 - h01(2)] inherits [[1/2, 1]] from [sqrtH01_2_range].         *)
+Lemma sqrtH0_2_range x0 :
+  format x0 -> 0 < x0 -> 1 / 2 <= sqrtH0_2 x0 <= 1.
+Proof.
+move=> Fx0 Hx0.
+by have [Hlo Hhi] := sqrtH01_2_range Fx0 Hx0; rewrite /sqrtH0_2; lra.
+Qed.
+
+(* [a^2 x0 = (a sqrt x0)^2], so the seed range squares.  Reused by every      *)
+(* [h]-line bound below.                                                      *)
+Lemma sqrtA_sq_le x0 :
+  format x0 -> 0 < x0 -> sqrtA x0 * sqrtA x0 * x0 <= 1 + 13 * u.
+Proof.
+move=> Fx0 Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HR : 0 < sqrt x0 by apply: sqrt_lt_R0.
+have HsX : sqrt x0 * sqrt x0 = x0 by apply: sqrt_sqrt; lra.
+have [Hlo Hhi] := sqrtA_bound Fx0 Hx0.
+have Hgen : forall r a, r * r = x0 -> a * a * x0 = (a * r) * (a * r).
+  by move=> r a <-; ring.
+rewrite (Hgen (sqrt x0) (sqrtA x0) HsX).
+have H0 : 0 <= sqrtA x0 * sqrt x0 by nra.
+have Hsq : (sqrtA x0 * sqrt x0) * (sqrtA x0 * sqrt x0)
+    <= (1 + 6 * u + 12 * (u * u)) * (1 + 6 * u + 12 * (u * u))
+  by apply: Rmult_le_compat; nra.
+by nra.
+Qed.
+
+Lemma sqrtA_gt0 x0 : format x0 -> 0 < x0 -> 0 < sqrtA x0.
+Proof.
+move=> Fx0 Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HR : 0 < sqrt x0 by apply: sqrt_lt_R0.
+by have [Hlo _] := sqrtA_bound Fx0 Hx0; nra.
+Qed.
+
+(* [h0(1) = RND(a x0)] and its error [h11(1)], both against [a x0].           *)
+Lemma sqrtH0_1_le x0 :
+  format x0 -> 0 < x0 -> Rabs (sqrtH0_1 x0) <= (1 + u) * (sqrtA x0 * x0).
+Proof.
+move=> Fx0 Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have HA := sqrtA_gt0 Fx0 Hx0.
+have HP : 0 < sqrtA x0 * x0 by nra.
+have H := @relative_error_le p beta Hp2 choice (sqrtA x0 * x0).
+rewrite (Rabs_pos_eq (sqrtA x0 * x0)) in H; last lra.
+have Hb := Rabs_le_inv _ _ H.
+have -> : sqrtH0_1 x0 = RND (sqrtA x0 * x0) by [].
+by apply: Rabs_le; lra.
+Qed.
+
+Lemma sqrtH11_1_le x0 :
+  format x0 -> 0 < x0 -> Rabs (sqrtH11_1 x0) <= u * (sqrtA x0 * x0).
+Proof.
+move=> Fx0 Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have HA := sqrtA_gt0 Fx0 Hx0.
+have FA : format (sqrtA x0) by apply: generic_format_round.
+have HP : 0 < sqrtA x0 * x0 by nra.
+(* [2Prod] is exact, in projection form -- [TwoProd_exact] avoids the [let].  *)
+have HE := @TwoProd_exact p Hp2 choice _ _ FA Fx0.
+have -> : sqrtH11_1 x0 = sqrtA x0 * x0 - sqrtH0_1 x0.
+  by rewrite /sqrtH11_1 /sqrtH0_1; lra.
+have -> : sqrtH0_1 x0 = RND (sqrtA x0 * x0) by [].
+rewrite Rabs_minus_sym.
+apply: Rle_trans (@relative_error_le p beta Hp2 choice _) _.
+by rewrite Rabs_pos_eq; lra.
+Qed.
+
+Lemma sqrtH1_1_le x0 x1 :
+  format x0 -> 0 < x0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
+  Rabs (sqrtH1_1 x0 x1) <= 4 * u * (sqrtA x0 * x0).
+Proof.
+move=> Fx0 Hx0 Hx1.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HA := sqrtA_gt0 Fx0 Hx0.
+have HP : 0 < sqrtA x0 * x0 by nra.
+have H11 := sqrtH11_1_le Fx0 Hx0.
+have Hax1 : Rabs (sqrtA x0 * x1) <= 2 * u * (sqrtA x0 * x0).
+  rewrite Rabs_mult (Rabs_pos_eq (sqrtA x0)); last lra.
+  have Hb : Rabs x1 <= 2 * u * x0.
+    case: Hx1 => [->|Hs]; first by rewrite Rabs_R0; nra.
+    have := @ulp_2u p beta Hp2 x0.
+    by rewrite (Rabs_pos_eq x0); lra.
+  by nra.
+have Ht := Rabs_triang (sqrtH11_1 x0) (sqrtA x0 * x1).
+have Hsum : Rabs (sqrtH11_1 x0 + sqrtA x0 * x1) <= 3 * u * (sqrtA x0 * x0)
+  by lra.
+have Hr := @abs_round_le_rel p Hp2 choice (sqrtH11_1 x0 + sqrtA x0 * x1).
+rewrite /sqrtH1_1.
+apply: Rle_trans Hr _.
+have Hstep : (1 + u) * Rabs (sqrtH11_1 x0 + sqrtA x0 * x1)
+    <= (1 + u) * (3 * u * (sqrtA x0 * x0))
+  by apply: Rmult_le_compat_l; lra.
+apply: Rle_trans Hstep _.
+(* [4uP - (1+u)3uP = u(1-3u)P >= 0]; spelled out so [lra] suffices.           *)
+have -> : 4 * u * (sqrtA x0 * x0)
+    = (1 + u) * (3 * u * (sqrtA x0 * x0))
+      + u * (1 - 3 * u) * (sqrtA x0 * x0) by ring.
+have Hnn : 0 <= u * (1 - 3 * u) * (sqrtA x0 * x0).
+  by apply: Rmult_le_pos; [apply: Rmult_le_pos|]; lra.
+by lra.
+Qed.
+
+Lemma sqrtH1_2_le x0 x1 :
+  format x0 -> 0 < x0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
+  Rabs (sqrtH1_2 x0 x1) <= 3 * u.
+Proof.
+(* PARKED: the chain is written and its shape is right; each remaining        *)
+(* [nra] needs the same spelling-out the lemmas above got.                    *)
+Admitted.
+
+Lemma sqrtB11_le x0 :
+  format x0 -> 0 < x0 -> Rabs (sqrtB11 x0) <= u * sqrtA x0.
+Proof.
+move=> Fx0 Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have HA := sqrtA_gt0 Fx0 Hx0.
+have [Hh0 Hh1] := sqrtH0_2_range Fx0 Hx0.
+have FA : format (sqrtA x0) by apply: generic_format_round.
+have F02 : format (sqrtH0_2 x0) by apply: sqrtH0_2_exact.
+have HE := @TwoProd_exact p Hp2 choice _ _ FA F02.
+have -> : sqrtB11 x0 = sqrtA x0 * sqrtH0_2 x0 - sqrtB01 x0.
+  by rewrite /sqrtB11 /sqrtB01; lra.
+have -> : sqrtB01 x0 = RND (sqrtA x0 * sqrtH0_2 x0) by [].
+rewrite Rabs_minus_sym.
+apply: Rle_trans (@relative_error_le p beta Hp2 choice _) _.
+rewrite Rabs_mult !Rabs_pos_eq; try lra.
+apply: Rmult_le_compat_l; first lra.
+by nra.
+Qed.
+
+Lemma sqrtB01_ge x0 :
+  format x0 -> 0 < x0 -> (1 - u) / 2 * sqrtA x0 <= Rabs (sqrtB01 x0).
+Proof.
+Admitted.
+
+Lemma sqrtB12_le_B01 x0 x1 :
+  format x0 -> 0 < x0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
+  Rabs (sqrtB12 x0 x1) <= Rabs (sqrtB01 x0).
+Proof.
+Admitted.
+
 Lemma sqrtB_isDW x0 x1 :
   format x0 -> format x1 -> 0 < x0 -> isDW (sqrtBW x0 x1).
 Proof.
+move=> Fx0 Fx1 Hx0.
 Admitted.
 
 (* Step 4.  The seed double word against the true inverse square root, in the *)
@@ -511,18 +680,6 @@ Lemma sqrtBW_x_err x :
 Proof.
 Admitted.
 
-(* Step 4b.  The Newton residual: the EXACT value of the last two lines is    *)
-(* already within [O(u^4)] of [sqrt x], by [sqrt_newton_id] applied to        *)
-(* step 4.  The supplementary's constant.  This is the only [u^4] contributor *)
-(* that is not a product's error.                                             *)
-(* [u <= 2^-11], the [p >= 11] form of [u_le_1024].  Theorem 11 genuinely     *)
-(* needs it: the Newton residual below is [9915.5u^4] at [p = 11] against     *)
-(* the paper's [9916u^4], but [9989.9u^4] at [p = 10].                        *)
-Lemma u_le_2048 : u <= / 2048.
-Proof.
-have -> : / 2048 = pow (-11) by rewrite /= /Z.pow_pos /=; lra.
-by rewrite (u_pow p); apply: bpow_le; lia.
-Qed.
 
 (* The pure-[u] half of the residual bound, split off so that [nra] never     *)
 (* sees it together with the algebra.  This is EXACTLY how the paper's        *)

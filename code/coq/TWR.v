@@ -35,6 +35,8 @@ Proof. now apply Z.lt_trans with (2 := Hp2). Qed.
 Local Notation fexp := (FLX_exp p).
 Local Notation format := (generic_format beta fexp).
 Local Notation ulp := (ulp beta fexp).
+Local Notation pow e := (bpow beta e).
+Local Notation u := (u p beta).
 Local Notation Pnonoverlap := (Pnonoverlap p).
 Local Notation pairwise_ulp := (pairwise_ulp p).
 Local Notation format_lt_ulp_le := (@format_lt_ulp_le p Hp2).
@@ -89,6 +91,35 @@ Qed.
 Lemma isTW_format x : isTW x -> {in (TW2l x), forall z, format z}.
 Proof.
 by case : x => x0 x1 x2 [x0F x1F x2F _ _] z; rewrite !inE => /or3P[] /eqP->.
+Qed.
+
+(* [u = pow (- p)] at radix 2 -- the bridge between the development's unit    *)
+(* and the exponent arithmetic of [ulp_lt_ulp_mul].                           *)
+Lemma u_pow : u = pow (- p).
+Proof.
+rewrite /Fmore.u; have -> : (1 - p = 1 + - p)%Z by lia.
+by rewrite bpow_plus bpow_1 /=; lra.
+Qed.
+
+(* A triple word's THIRD limb is bounded by [2u^2|x0|], NOT the naive         *)
+(* [4u^2|x0|].  Reason: [|x1| < ulp x0] puts [x1] a full [p] bits below [x0], *)
+(* so [ulp x1 <= u ulp x0] ([ulp_lt_ulp_mul]), and [|x2| < ulp x1].  Going    *)
+(* through [ulp x1 <= 2u|x1| <= 2u ulp x0] instead loses that binade.  This   *)
+(* is step 1 of doc/thm10.md's plan to bring Algorithm 20's [delta3] down     *)
+(* from [8u^3] towards the paper's [3u^3].                                    *)
+Lemma isTW_tw2_le t : isTW t -> Rabs (tw2 t) <= 2 * (u * u) * Rabs (tw0 t).
+Proof.
+case: t => t0 t1 t2 [F0 F1 F2 H1 H2] /=.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Habs0 : 0 <= Rabs t0 by apply: Rabs_pos.
+have Hpos : 0 <= 2 * (u * u) * Rabs t0 by nra.
+case: H2 => [->|H2]; first by rewrite Rabs_R0.
+case: H1 => [Ht1|H1].
+  by move: H2; rewrite Ht1 ulp_FLX_0 => H2; have := Rabs_pos t2; lra.
+have Hchain := @ulp_lt_ulp_mul p beta Hp2 _ _ H1.
+have Hulp0 := @ulp_2u p beta Hp2 t0.
+rewrite -u_pow in Hchain.
+by nra.
 Qed.
 
 End TWR.

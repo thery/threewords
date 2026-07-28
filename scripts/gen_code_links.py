@@ -76,8 +76,10 @@ COVERAGE = [
      [("isTW", R("ThreeDiv_isTW", "ThreeDiv.v")),
       ("Thm 10 acc", R("ThreeDiv_error", "ThreeDiv.v")),
       ("Thm 10 fast", R("ThreeDivFast_error", "ThreeDiv.v"))], "done"),
-    ("15",    "3SqRt",     None,
-     [("Thm 11", None)], "no"),
+    ("15",    "3SqRt",     R("ThreeSqRtAux", "ThreeSqRt.v"),
+     [("isTW", R("ThreeSqRt_isTW", "ThreeSqRt.v")),
+      ("Thm 11 acc", R("ThreeSqRt_error", "ThreeSqRt.v")),
+      ("Thm 11 fast", R("ThreeSqRtFast_error", "ThreeSqRt.v"))], "skel"),
 ]
 
 STATUS = {"done": "✅", "skel": "🚧", "no": "❌"}

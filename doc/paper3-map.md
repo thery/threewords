@@ -54,7 +54,7 @@ witness). See `doc/thm6.md`.
 | 13 | 3Reci(x) (73, 2 tests) — reciprocal (Newton) | **Thm 9** (err `11.5u³+1465u⁴` with Alg 11, `19u³+1502u⁴` with Alg 12, `p≥10`) | ✓ `ThreeReci`/`ThreeReciFast`; `_isTW` + `_error`, with `11.5u³+1830u⁴` / `19u³+1870u⁴` — the `u³` are the paper's, the `u⁴` are ours (`doc/thm9.md`, findings 3–5) |
 | 18 | the specialised 2nd product Thm 9 really uses (20, +2 tests) | `δ₂ = u³+620u⁴` (paper: `260u⁴`) | ✓ `ThreeProdOne.v` — old paper §8.4; needs the sorted `Fast2SumS` (`TwoSum.v`) |
 | 14 | 3Div(z,x) (119, 4 tests) — quotient | **Thm 10** (err `24u³+1509u⁴`, `p≥10`; honestly `29u³+2576u⁴`) | ✅ `ThreeDiv.v`: `ThreeDiv_isTW`/`ThreeDivFast_isTW`, `div_error_core`, `ThreeDiv_error` (`29u³+2576u⁴`) / `ThreeDivFast_error` (`44u³+2650u⁴`) — the paper's `u³` term moves too, see `doc/thm10.md` |
-| 15 | 3SqRt(x) (127, 4 tests) — square root (Newton) | **Thm 11** (err `24u³+10260u⁴`, `p≥11`) | — |
+| 15 | 3SqRt(x) (127, 4 tests) — square root (Newton) | **Thm 11** (err `24u³+10260u⁴`, `p≥11`) | 🚧 `ThreeSqRt.v`: definition complete, `sqrt_newton_id` proved; `ThreeSqRt_isTW`/`ThreeSqRtFast_isTW`, `ThreeSqRt_error`/`ThreeSqRtFast_error` + six obligations stated and admitted — proof in the supplementary §3, see `doc/thm11.md` |
 | 16–17 | appendix: sign-folded product variants | (support Thms 9–11) | — |
 | 20 | appendix: `3Prod^fast_{3,3}(a,(1),i₁,i₂)` (21) — the `3,3` twin of Alg 18 | `δ₃ = 3u³+264u⁴` claimed; honestly `8u³+1330u⁴` | ✅ `ThreeProdOne.v`: `ThreeProdOneTW_isTW`, `ThreeProdOneTW_error` |
 
@@ -105,5 +105,7 @@ relative errors `δ₁` (Theorem 8, general inputs) and `δ₂ ≈ 1u³` (the se
 product's `ī` has head `1` and second limb `O(u²)`), whence
 `11.5 = 10.5 + 1` and `19 = 18 + 1`; `δ₂` is the one bound still to be derived.
 
-**Not formalised:** the rest of the divide/sqrt half of the paper
-(Alg 14–18 / Thm 10–11).
+**Not formalised:** Algorithms 16–17 and 19 (appendix variants: the sign-folded
+products, which save one operation each but change no bound). Algorithms 1–15,
+18 and 20 and Theorems 1–10 are proved; Theorem 11 is a skeleton
+(`ThreeSqRt.v`, `doc/thm11.md`).

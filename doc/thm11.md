@@ -1,28 +1,23 @@
 # Theorem 11 — Algorithm 15 (3SqRt): square root of a triple word
 
 Paper: `doc/paper3.pdf` Section 10, Algorithm 15 and Theorem 11.
-Proof: **`doc/Algorithms_for_Triple-Word_Arithmetic.pdf` Section 3** — the
-supplementary material `paper3.pdf` defers to.
 Claim: relative error `<= 24u^3 + 10260u^4` (accurate) resp.
 `39u^3 + 10333u^4` (fast), for `p >= 11`.
+The paper's own proof: `doc/Algorithms_for_Triple-Word_Arithmetic.pdf` §3.
 Code: `code/coq/ThreeSqRt.v`.
 
-## 0. Where the proof is
+**This file records OUR proof, which is not the paper's.** Where the two
+differ is the subject of §4; the paper's route is kept in §3 for comparison,
+because our *statement* is theirs verbatim.
 
-`paper3.pdf` says only "the major steps of the proof are given in the appendix,
-see supplementary material".  The long version `doc/old-triplewors.pdf` is no
-help: it stops at Section 9 (the quotient) and its own roadmap reads
-"Section 10 **[???]**" — a placeholder never filled in.  The supplementary
-appendix, however, does contain the proof, in a little over a page.  It is
-terse ("much of the analysis is very similar to what was done for reciprocal
-and division, so we only focus on the differences") but it gives every
-constant, which is what we need.
+## 0. Status
 
-Note its cross-references are broken (`Algorithm ??` throughout) and its
-algorithm numbering differs from the long version's: the head-`1` DW×TW
-product it calls Algorithm 17 and the TW×TW one Algorithm 18 are the ones this
-development calls Algorithm 18 and Algorithm 20 (`ThreeProdOne.v`), following
-`old-triplewors.pdf`.
+| | |
+|---|---|
+| `ThreeSqRt_isTW`, `ThreeSqRtFast_isTW` | **proved, unconditional** — `Print Assumptions` shows only the standard classical/reals axioms |
+| `ThreeSqRt_error`, `ThreeSqRtFast_error` | in progress |
+
+What remains is `ThreeSqRtAux_error` and four named helpers (§6).
 
 ## 1. The algorithm
 
@@ -42,195 +37,164 @@ development calls Algorithm 18 and Algorithm 20 (`ThreeProdOne.v`), following
       i(1)   <- 3Prod_{2,3}(b, x)               (~ sqrt x)
       i(2)   <- 3/2 - 3Prod_{2,3}(b', i(1))     (~ 1, head exactly 1)
       y      <- 3Prod_{3,3}(i(1), i(2))
-      return (y0, y1, y2)
 
-The iteration is `r <- r (3/2 - (1/2) r^2 x)`, quadratically convergent to
-`1/sqrt x`.  Structurally this is 3Div with three changes: the seed involves a
-real square root; `2 - .` becomes `3/2 - .` (`sub32TW`), with the two halvings
-exact scalings by `pow (-1)`; the last product is again the TW×TW one on a
-head-`1` second argument, i.e. `ThreeProdOneTW`.
+Iteration: `r <- r(3/2 - (1/2) r^2 x)`, quadratically convergent to
+`1/sqrt x`.
 
-## 2. What the supplementary states
+## 2. The two Newton identities (both proved, both pure `field`)
 
-Three facts, and then the assembly.
+    sqrt_newton_id   : (b(s*s))(3/2 - (1/2)b^2(s*s)) - s
+                         = -s (t-1)^2 ((t-1)+3) / 2      , t = b s
+    sqrt_newton_seed : a(3/2 - (1/2)a^2(s*s))s - 1
+                         = -((as-1)^2)((as-1)+3) / 2
 
-- **`h0(2)` is exact** "because `h0,1(2) >= 0.5` (this is why we started with
-  `1 + 4u` instead of `1`)".  That is the whole argument: `h01(2)` sits in
-  `[1/2, 1)` where `ulp = u`, `3/2` is a multiple of `u` there, so the
-  difference is too, and it lands in `(1/2, 1]` — representable.  **Not**
-  Sterbenz, whose hypothesis fails outright for `3/2 - 1/2`.
-- **`p >= 11` comes from the `i(2)` product**, not from `h0(2)`: the modified
-  algorithm used there has its penultimate line replaced by
-  `e1 <- Fast2Sum(.5)(-z00+, s1)`, and "this works provided that `p >= 11`".
-- **The two intermediate bounds**:
+The second is the first with one factor of `x` removed — the refined *seed*
+rather than the final product. Both are stated on `s` and `b`, not on `x` and
+`1/sqrt x`, precisely so that no division and no `sqrt` appears and `field`
+closes them.
 
-      |b - 1/sqrt x|                     <= (81u^2 + 622u^3) |1/sqrt x|
-      |b x (1.5 - (1/2) b^2 x) - sqrt x| <= 9916u^4 sqrt x
+## 3. What the paper's proof says
 
-  The first is the seed; compare Algorithm 13's `34u^2 + 126u^3` — the square
-  root seed is more than twice as sloppy, which is where Theorem 11's large
-  `u^4` term comes from.  The second is the Newton residual, and it is `O(u^4)`
-  exactly as `sqrt_newton_id` predicts.
+Its global bound is
 
-- **The global bound**:
+    |y - sqrt x| <= ( d1 (1.5 + 287u^2) + d2 (0.5 + 123u^2)
+                    + d3 (1 + 162u^2) + 9916u^4 ) sqrt x
 
-      |y - sqrt x| <= ( d1 (1.5 + 287u^2)
-                      + d2 (0.5 + 123u^2)
-                      + d3 (1   + 162u^2) + 9916u^4 ) sqrt x
+whence `24 = 1.5(10.5) + 0.5(10.5) + 3` and `39 = 1.5(18) + 0.5(18) + 3`. It
+also gives `|b - 1/sqrt x| <= (81u^2 + 622u^3)|1/sqrt x|`, and states that
+`h0(2)` is exact "because `h0,1(2) >= 0.5` (this is why we started with
+`1 + 4u` instead of `1`)". `p >= 11` is required by the modified `i(2)`
+product, not by that exactness.
 
-  with `d1, d2, d3` the three products' relative errors.  Check:
-  `24 = 1.5(10.5) + 0.5(10.5) + 3` and `39 = 1.5(18) + 0.5(18) + 3`, and on
-  `u^4`, `1.5(39) + 0.5(39) + 263 + 9916 = 10257 ~ 10260`.  It all closes.
+## 4. Where our proof differs, and why it has to
 
-## 3. The Newton identity (PROVED, `sqrt_newton_id`)
+### 4.1 The cancellation — the load-bearing difference
 
-With `x = s*s` and `t = b*s`:
+The paper's weight `1.5` on `d1` comes from a triangle inequality on
+`|d1 - (d1+d2)/2|`. That discards a real cancellation: `i(1)` occurs **twice**
+— once as a factor of `y`, once inside `i(2)` — with opposite signs. We isolate
+it in a single bracket, through the telescoping split (`sqrt_error_split`,
+proved by `field`):
 
-    (b * (s*s)) * (3/2 - (1/2) * (b*b) * (s*s)) - s
-      = - s * (t - 1)^2 * ((t - 1) + 3) / 2
+    y - s = (y - i1 i2)                                   [A: d3]
+          + (- i1 (P - b' i1))                            [B: d2]
+          + (i1 - b X)((3/2 - (1/2)b^2 X) - (b/2) i1)     [C: d1]
+          + (b X (3/2 - (1/2)b^2 X) - s)                  [D: residual]
 
-Pure `ring` after substituting `x = s*s` — no division, no `sqrt`, which is why
-it is stated on `s` and `b` rather than on `x` and `1/sqrt x`.  The analogue of
-`newton_id` in `ThreeReci.v`.  It is what makes the seed error enter only
-squared, hence the `9916u^4` above and nothing at `u^3`.
+**`C`'s bracket is `~ 1 - 1/2 = 1/2`, not `1`.** That is the entire
+difference, and putting it in one bracket is what makes it provable rather
+than an appeal to a first-order expansion. The weights become `(1/2, 1/2, 1)`.
 
-## 4. The one place we must beat the supplementary
+This is not optional for us. Termwise, with our `d3`, Theorem 11 comes out at
+`29u^3 / 44u^3` and the published bound fails on both terms at once; through
+`C` it is `16.5u^3 / 24u^3` and holds.
 
-Our `d3` is `8u^3 + 1330u^4`, not the announced `3u^3 + 263u^4` — Algorithm
-20's `delta3` is loose in our development, see `doc/thm10.md`.  Feeding that
-into the supplementary's assembly gives
+### 4.2 The sharp seed bound is neither reachable nor needed
 
-| | `d1` | `d2` | `d3` | total |
-|---|---|---|---|---|
-| paper, acc | `1.5 × 10.5` | `0.5 × 10.5` | `1 × 3` | **24u³** |
-| ours, literal route, acc | `1.5 × 10.5` | `0.5 × 10.5` | `1 × 8` | 29u³ |
-| ours, sharpened, acc | `0.5 × 10.5` | `0.5 × 10.5` | `1 × 8` | **18.5u³** |
-| paper, fast | `1.5 × 18` | `0.5 × 18` | `1 × 3` | **39u³** |
-| ours, literal route, fast | `1.5 × 18` | `0.5 × 18` | `1 × 8` | 44u³ |
-| ours, sharpened, fast | `0.5 × 18` | `0.5 × 18` | `1 × 8` | **26u³** |
+The paper's `81u^2 + 622u^3` is **not used**, and has been removed.
 
-So the literal route reproduces Theorem 10's fate exactly — `29`/`44` against a
-published `24`/`39`.  But **the supplementary's weight `1.5` on `d1` is itself
-loose**, and provably: writing `b = (1+e)/s`,
+*Not reachable by this route.* `sqrtA_bound_full` gives `e = a sqrt X - 1` in
+`[0, 8u]`, so the Newton residual is already `(3/2)(8u)^2 = 96u^2 > 81u^2`
+before any rounding is added; reaching `81` needs some 5% less slack in both
+the seed and the rounding accounting. And `81` is not negotiable:
+`newton_residual_const` shows the paper's `9916u^4` is *exactly* `E^2(3+E)/2`
+at `E = 81u^2 + 622u^3` — `9915.5u^4` at `p = 11`, `9989.9u^4` at `p = 10`,
+where it fails. Independent confirmation both that `p >= 11` is real and that
+their `E` is what they say it is.
 
-    i(1)    = (1+e) s (1+d1)
-    b' i(1) = (1+e)^2 (1+d1) / 2
-    i(2)    = 3/2 - (1+e)^2 (1+d1)(1+d2)/2   ~  1 - e - (d1+d2)/2
-    y       = i(1) i(2) (1+d3)
+*Not needed.* The cancellation leaves `24 - 16.5 = 7.5u^3`, worth `15360u^4`
+at `p >= 11`, against the `12729u^4` our crude `120u^2` costs. The
+**published** constants therefore follow from the crude bound alone — for both
+variants, the fast one with far more room.
 
-so to first order
+### 4.3 A head bound is not a full bound
 
-    y/s ~ (1 + e + d1 + d3)(1 - e - (d1+d2)/2) = 1 + d1/2 - d2/2 + d3 .
+`sqrtA_bound` pins `a sqrt (tw0 x)`, the **head**; the Newton form needs
+`a sqrt (TWval x)`. They differ at the `u` level because `|x1| <= 2u|x0|`:
+`sqrt(TWval x)/sqrt(tw0 x) = 1 +- 1.1u`. Conflating them cost a false start.
+The bridge is `sqrtA_bound_full`, and the cheap route to it is to work with
+the **square**: `t = a sqrt X` has `t*t = a^2 X`, pure algebra, and `leq_sqrt`
+(`Rmore.v`) converts a bound on `t*t` into one on `t`. Expanding `sqrt(1+d)`
+is never needed.
 
-`i(1)` occurs **twice** — once as a factor of `y`, once inside `i(2)` — with
-opposite signs, so its error half-cancels; the seed error `e` cancels outright
-(Newton is self-correcting).  The supplementary reaches `1.5` by bounding
-`|d1 - (d1+d2)/2|` with the triangle inequality as `|d1| + |d1|/2 + |d2|/2`,
-discarding the cancellation.
+### 4.4 The head threshold had to become a parameter
 
-### And the `u⁴` term: the `u³` slack pays for it
+`head_one`'s `35u^2` cannot reach Algorithm 15: at the call site the second
+factor is `i(1) = 3Prod(b,x)`, so the product is `b^2 x = (b sqrt x)^2` and
+the seed error enters **squared** — `162u^2`, later `241u^2`. Algorithm 13
+never meets this, because there the second factor is `x` itself: one power of
+the seed error, not two. `ThreeReci.v` therefore gained `head_eq_1_c` and
+`head_one_gen_c` with side condition `c u <= 1/4` (so `c <= 512` at
+`p >= 11`); `head_half` runs at `c = 300`. Bumping the literal does **not**
+work — the proof balances it against its own `200u^2` slack term.
 
-Our `d3` is worse at `u⁴` too — `1330` against the announced `263` — and that
-excess lands undiluted, at weight `1`.  So the honest totals are
+### 4.5 Our seed statement is two-sided, and that matters
+
+    1 + 2u - 8u^2 <= a sqrt x0 <= 1 + 6u + 12u^2
+
+The **lower** bound is the whole point of the `1 + 4u`: it forces
+`a sqrt x0 > 1`, so the square stays above `1` and `h01(2) >= 1/2` — the
+paper's own stated reason for the constant. (An early draft of this file said
+`|a sqrt x0 - 1| <= 4u + 8u^2`. That is false: binary64 search reaches `5.50u`
+and the algebra allows `6u`.)
+
+## 5. The resulting constants
 
 | | ours | published |
 |---|---|---|
-| acc | `18.5u³ + 11285u⁴` | `24u³ + 10260u⁴` |
-| fast | `26u³ + 11321u⁴` | `39u³ + 10333u⁴` |
+| `d1`, `d2` (Alg 11 / 12) | `10.5u^3+39u^4` / `18u^3+75u^4` | same |
+| `d3` (Alg 20) | `6u^3 + 1250u^4` | `3u^3 + 264u^4` |
+| seed `E` | `120u^2` | `81u^2 + 622u^3` |
+| residual `E^2(3+E)/2` | `21700u^4` | `9916u^4` |
+| **Thm 11, accurate** | `16.5u^3 + 22989u^4` | `24u^3 + 10260u^4` |
 
-Neither pair is termwise smaller — but that is not what is being asked.  The
-published bound is implied as soon as
+and `22989 - 10260 = 12729u^4 <= 7.5u^3` for `u <= 1/1697`, i.e. from
+`p = 11`. **The published statement holds for us verbatim**, despite every
+intermediate constant being worse — the first place in this development where
+that happens.
 
-    1025u^4 <= 5.5u^3   <=>   u <= 5.5/1025 = 1/187      (accurate)
-     988u^4 <=  13u^3   <=>   u <= 13/988  = 1/76        (fast)
+## 6. What remains, easiest first
 
-and Algorithm 15 requires `p >= 11`, i.e. `u <= 2^-11 = 1/2048`.  Both hold
-with a wide margin — the accurate one would already hold at `p >= 8`.
+    sqrtAux_bX_le       |b X| <= (1 + 8u) sqrt x          <- easiest
+    sqrtAux_i1_le       |i1| <= (1 + 130u^2) sqrt x       <- sits on the above
+    sqrtAux_bracket_le  |bracket of C| <= 1/2 + 300u^2    <- the cancellation
+    sqrtAux_i2_near_1   |i2 - 1| <= 40u^2                 <- what mul3 demands
+    ThreeSqRtAux_error                                    <- the assembly
 
-**So Theorem 11 holds for us exactly as published.**  It is the first of
-Theorems 9–11 for which that is true: there the `u³` term was itself at or
-above the paper's, so there was no slack to trade.  Here the cancellation
-creates `5.5u³` of it, and at these precisions `5.5u³` is worth `~11000u⁴` —
-far more than the `1025u⁴` shortfall.  Note the corollary: the `δ₃` tightening
-of `doc/thm10.md` would improve Theorems 9 and 10, but buys Theorem 11
-nothing.
+then the two instantiations, one-liners on the `ThreeDiv_error` pattern.
 
-**Consequence for the formalisation**: state Theorem 11 with the published
-constants and prove them *through the cancellation* — without it the `u³` term
-is `29`/`44` and there is no slack, so the published bound would fail on both
-terms at once.  Concretely, in step (3) of the assembly keep the signed
-decomposition
+`sqrtAux_bX_le` is nearly immediate: `b X = (b s) s` and
+`|b s - 1| <= 120u^2` is `sqrtBW_x_err_crude`, so `(1 + 8u)` is very loose.
+`sqrtAux_i1_le` follows, `i1 = b X (1 + d1)` with `|d1| <= u^2`.
 
-    y - s = (y - i(1) i(2)) + i(1) (i(2) - (3/2 - b' i(1)))
-          + (i(1) - b x)(3/2 - (1/2) b^2 x)
-          + [(b x)(3/2 - (1/2) b^2 x) - s]
+## 7. Reuse and traps
 
-and do **not** pass to absolute values until after the second and third terms
-have been combined — that is where the factor three lives.
+Proved and reusable: `sqrt_newton_id`, `sqrt_newton_seed`,
+`sqrt_error_split`, `newton_form_id`, `sqrtA_bound`, `sqrtA_bound_full`,
+`sqrtA_sq_le`, `sqrtH01_2_range`, `sqrtH0_2_exact`, `is_imul_3_2`,
+`TWval_split`, `isTW_low_le`, `isTW_TWval_gt0`, `TWval_sqrtBW`, the
+eleven-lemma `sqrtB_isDW` chain, the three `*_sum_le` bounds,
+`sqrtBW_newton_form`, `sqrtBW_x_err_crude`, `u_le_2048`,
+`newton_residual_const`.
 
-## 5. Proof obligations, in the order to attack them
+Traps hit repeatedly, all now commented in place:
 
-> **Status: the `isTW` half is COMPLETE.** `ThreeSqRt_isTW` and
-> `ThreeSqRtFast_isTW` are `Qed`, on top of `ThreeSqRtAux_isTW`.  Eight admits
-> remain, all in the error half.  Two of them — `sqrtB_isDW` and
-> `sqrtBW_x_err` — are already *consumed* by the `isTW` half, so they are
-> shared and worth doing next.
->
-> Getting there needed one thing not on this list: `head_one`'s `35u²`
-> threshold is too tight for Algorithm 15, so `ThreeReci.v` gained the
-> tolerance-parametric `head_eq_1_c` / `head_one_gen_c` (side condition
-> `c·u ≤ ¼`, which allows `c` up to 256 at `p ≥ 10`); `head_half` is
-> instantiated at `c = 200` against a need of `162`.  See item 5 below.
-
-
-1. **`sqrtA_bound`** — the seed.  The one genuinely new analytic step; nothing
-   else in the development computes with `sqrt`.
-2. **`sqrtH0_2_exact`** — via `h01(2) >= 1/2`, per Section 2.  Grid arithmetic
-   once the binade is pinned.
-3. **`sqrtB_isDW`** — mirrors `reciB_isDW`.  **Check the Fast2Sum ordering
-   `|b01| >= |b12|`** rather than assuming it.  The supplementary repeats, for
-   its Algorithm 17, exactly the justification we already machine-checked as
-   false ("a Fast2Sum can be used … because if the condition for Fast2Sum to be
-   errorless is not satisfied, this means that `|b1|` is very small, so that the
-   global error will be small anyway" — see `doc/alg18_fast2sum_bug.py`, which
-   reaches `32u^3`).  If the ordering cannot be proved, use `Fast2SumS`; it
-   costs no extra flop.
-4. **`sqrtBW_x_err`** — `81u^2 + 622u^3`, from the supplementary.
-5. **`head_half`** — `tw0 (mul b' i(1)) = 1/2`.  **Done**, as
-   `head_one_half : head_one mul -> head_half mul`, plus the two instances
-   `ThreeProdDW_head_half` / `ThreeProdDWFast_head_half`.  It was not
-   re-proved: `b'` is `scaleTW (-1) b`, the products commute with scaling
-   (`ThreeProdDW_scale`), so halving the first argument halves the head, and
-   the already-proved `head_one` does the work.  Needed two lines of new
-   `scaleTW` algebra in `ThreeProd.v` (`scaleTW_0`, `scaleTW_add`).
-
-   **But its threshold is too tight, and this is the next thing to fix.**
-   `head_one`'s hypothesis is `|b·y − 1| ≤ 35u²`, inherited verbatim.  At the
-   3SqRt call site the second factor is `i(1) = 3Prod(b,x)`, so the product is
-
-       b · i(1) ≈ b²x = (b √x)² = (1+e)²,   |e| ≤ 81u² + 622u³
-
-   giving `|b·i(1) − 1| ≤ 162u² + O(u³)` — nearly five times the threshold.
-   Algorithm 13 never meets this because there the second factor is `x` itself
-   and the product is `b·x`, **one** power of the seed error rather than two.
-
-   The bound itself is in no danger: the head argument only needs `|v − 1|`
-   small *compared to `u`* (the gap from `1` to its neighbours is `u` below and
-   `2u` above), and `162u² ≪ u` already at `p ≥ 9`.  What is needed is to make
-   the threshold of `head_eq_1` (`ThreeReci.v`, currently `36u²`) a parameter.
-   **Bumping the constant blindly does not work** — tried, `36 → 200`, and the
-   proof stops closing, because it balances that constant against its own
-   `200u²` slack term.  It has to be re-derived with the tolerance symbolic.
-6. **`ThreeSqRtAux_error`** — the assembly, generic in `d1, d2, d3`, stated in
-   the supplementary's shape so the route can be followed literally first, then
-   sharpened per Section 4.
-
-## 6. Reuse checklist
-
-Already proved, do not re-derive: `ThreeProdDW_error` (10.5u³),
-`ThreeProdDWFast_error` (18u³), `ThreeProdOneTW_error` (8u³, head-`1` second
-argument) and the three `_isTW`; `head_one` for both DW×TW products; `scaleTW`
-/ `TWval_scale` / `isTW_scale` (`ThreeProd.v`); `Fast2SumS` (`TwoSum.v`);
-`reciB_isDW` and `reciBW_x_err` as the templates for steps 3 and 4; the whole
-`sub2TW` block in `ThreeReci.v` as the template for `sub32TW`.  **Theorem 11
-needs no new product bound** — unlike Theorems 9 and 10.
+- **A term cannot be rewritten into something that contains it.** `TWval x`
+  sits inside `sqrt (TWval x)`; `x0` inside `sqrt x0`. Either generalise to
+  abstract `r a` with `r*r = x0` and substitute with `<-`, or `set` the `sqrt`
+  first — `set s := sqrt (TWval x)` *hides* `TWval x`, after which
+  `rewrite -HsX` is safe.
+- **`ring` cannot cross a `/2`**; `field` can. This cost many build cycles.
+- **`nra` will not square a range, nor chain a `(1+u)` factor through a
+  triangle inequality.** Hand it the squared bounds via `Rmult_le_compat`, or
+  spell the difference out as a manifestly nonnegative term so `lra` suffices.
+- **`0 <= X * X` wants `Rle_0_sqr`**, not `nra`.
+- **`/=` does not reduce `TwoProd`'s projections usefully** — the same reason
+  `vecSum`/`vseb` are on the never-`/=` list. Use `TwoProd_exact`, or a
+  definitional bridge, `have -> : sqrtH0_1 x0 = RND (sqrtA x0 * x0) by [].`
+- **`Rabs_pos_eq` rewrites the FIRST `Rabs`** — name the target.
+- **A lemma's hypothesis-only variables cannot be inferred.** `apply:` on
+  `newton_form_id` leaves six metavariables; pass them positionally.
+- **Verify an identity numerically before writing it in Coq.** Both
+  `newton_form_id` and `sqrt_error_split` were checked over 200k random points
+  first — far cheaper than a wasted three-minute build on a mis-stated goal.

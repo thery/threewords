@@ -57,16 +57,29 @@
 (* (the seed error [e] cancels too: Newton is self-correcting).  So the true  *)
 (* weight on [d1] is [1/2], not [3/2]: the supplementary reaches [1.5] by     *)
 (* bounding [|d1 - (d1 + d2)/2|] with the triangle inequality, discarding the *)
-(* cancellation.  Exploiting it gives [0.5(10.5) + 0.5(10.5) + 8 = 18.5u^3]   *)
-(* and [26u^3] -- comfortably under the published [24] and [39] DESPITE our   *)
-(* worse [d3].  State the paper's constants and prove them via the            *)
-(* cancellation; if anything has to give, widen the [u^4] term (already       *)
-(* large: the seed is much sloppier than Algorithm 13's [RN((1 + 2u)/x0)])    *)
-(* before touching the [u^3] one.                                             *)
+(* cancellation.  Exploiting it gives [18.5u^3] and [26u^3].                  *)
 (*                                                                            *)
-(* STATUS: SKELETON.  The definition is complete and [sqrt_newton_id] is      *)
-(* proved; the four correctness results are stated and admitted, together     *)
-(* with the six intermediate obligations of doc/thm11.md Section 4.           *)
+(* AND THAT SLACK IS WHAT SAVES THE [u^4] TERM.  Our [d3] is also worse at    *)
+(* [u^4] -- [1330] against the announced [263] -- and that excess lands       *)
+(* undiluted (weight [1]), so the honest totals are [18.5u^3 + 11285u^4] and  *)
+(* [26u^3 + 11321u^4] against the published [24u^3 + 10260u^4] and            *)
+(* [39u^3 + 10333u^4].  Neither pair is termwise smaller.  But                *)
+(*                                                                            *)
+(*     1025u^4 <= 5.5u^3   <=>   u <= 1/187                                   *)
+(*                                                                            *)
+(* and [u <= 2^-11], so the [u^3] slack absorbs the [u^4] excess with a wide  *)
+(* margin (it would already hold at [p >= 8]); likewise [988u^4 <= 13u^3] for *)
+(* the fast variant.  So THEOREM 11 HOLDS FOR US EXACTLY AS PUBLISHED -- the  *)
+(* first of Theorems 9-11 for which that is true, and the reason to state it  *)
+(* below with the paper's own constants rather than corrected ones.  It costs *)
+(* nothing extra: the [delta3] tightening of doc/thm10.md would improve       *)
+(* Theorems 9 and 10, not this one.                                           *)
+(*                                                                            *)
+(* STATUS: SKELETON.  Proved: the definition, [sqrt_newton_id], the           *)
+(* [sub32TW] block, and [head_half] for both multipliers (obligation 5, via   *)
+(* [head_one_half] -- but see the KNOWN GAP on its threshold below).  Nine    *)
+(* admits remain: the four correctness results, the assembly, and four        *)
+(* obligations.  Order of attack in doc/thm11.md Section 5.                   *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -132,6 +145,7 @@ Local Notation TwoProd := (TwoProd p radix2 rnd).
 Local Notation Fast2Sum := (Fast2Sum p choice).
 Local Notation isTW := (isTW p).
 Local Notation isDW := (isDW p).
+Local Notation head_one := (head_one p).
 
 (* The three products: Algorithms 11/12 (DW x TW) and Algorithm 20 (TW x TW   *)
 (* with a head-[1] second argument).                                          *)
@@ -336,22 +350,65 @@ Admitted.
 (* is [b/2] the product has head exactly [1/2], so that [3/2 - .] is exact    *)
 (* and [i(2)] has head [1] -- which is what [ThreeProdOneTW] requires of its  *)
 (* second argument.  The analogue of [head_one] in ThreeReci.v.               *)
+(* Stated on the UNSCALED [b], with the halving inside, because that is how   *)
+(* the assembly uses it: [mul2] is applied to [scaleTW (-1) bw], and the      *)
+(* hypothesis available there is Algorithm 13's [|b x - 1| <= 35u^2] -- the   *)
+(* very hypothesis of [head_one].                                             *)
 Definition head_half (mul : twR -> twR -> twR) : Prop :=
   forall b y, isDW b -> isTW y ->
-    Rabs (TWval b * TWval y - / 2) <= 18 * (u * u) ->
-    tw0 (mul b y) = 1 / 2.
+    Rabs (TWval b * TWval y - 1) <= 35 * (u * u) ->
+    tw0 (mul (scaleTW (-1)%Z b) y) = 1 / 2.
 
-(* DO NOT re-prove this from scratch: [b' = scaleTW (-1) b], the products     *)
-(* commute with scaling ([ThreeProdDW_scale], [ThreeProdDWFast_scale]) and    *)
-(* [head_one] is already proved for both -- so [head_half] should follow from *)
-(* [head_one] together with [isTW_scale] / [TWval_scale] / [tw0_scale].       *)
-Lemma ThreeProdDW_head_half : head_half ThreeProdDW.
+(* And it is NOT re-proved from scratch: the products commute with scaling,   *)
+(* so halving the first argument halves the head, and [head_one] -- already   *)
+(* proved for Algorithms 11 and 12 -- does all the work.  Generic in the      *)
+(* multiplier, so both variants are one line.                                 *)
+(*                                                                            *)
+(* KNOWN GAP, and the next thing to fix.  What is proved below is             *)
+(* [head_one mul -> head_half mul], with [head_one]'s [35u^2] threshold       *)
+(* inherited verbatim -- and that threshold is TOO TIGHT for Algorithm 15.    *)
+(* At the call site the first factor is [b] and the second is                 *)
+(* [i(1) = 3Prod(b, x)], so the product is [b^2 x = (b sqrt x)^2 = (1 + e)^2] *)
+(* with [|e| <= 81u^2 + 622u^3] (the seed bound, [sqrtBW_x_err]); hence       *)
+(* [|b i(1) - 1| <= 162u^2 + O(u^3)], not [<= 35u^2].  Algorithm 13 never     *)
+(* sees this because there the second factor is [x] itself and the product is *)
+(* [b x], one power of the seed error rather than two.                        *)
+(*                                                                            *)
+(* The bound is not in danger -- the head argument only needs [|v - 1|] SMALL *)
+(* COMPARED TO [u] (the gap from [1] to its neighbours is [u] below, [2u]     *)
+(* above), and [162u^2 << u] already at [p >= 9].  What is needed is to make  *)
+(* the threshold of [head_eq_1] (ThreeReci.v, currently [36u^2]) a parameter. *)
+(* Bumping the constant blindly does NOT work: the proof balances it against  *)
+(* its own [200u^2] slack term and stops closing.  Do it properly, then       *)
+(* re-instantiate [head_one] and this lemma at the larger threshold.          *)
+Lemma head_one_half mul :
+  (forall a b X Y,
+     mul (scaleTW a X) (scaleTW b Y) = scaleTW (a + b) (mul X Y)) ->
+  head_one mul -> head_half mul.
 Proof.
-Admitted.
+move=> Hscale Hone b y Hb Hy Hclose.
+(* [y] is [scaleTW 0 y], which lets the scaling law fire on both arguments.   *)
+have -> : mul (scaleTW (-1)%Z b) y
+            = scaleTW (-1)%Z (mul b y).
+  by rewrite -{1}(scaleTW_0 y) Hscale Z.add_0_r.
+by rewrite tw0_scale (Hone _ _ Hb Hy Hclose) /= /Z.pow_pos /=; lra.
+Qed.
 
-Lemma ThreeProdDWFast_head_half : head_half ThreeProdDWFast.
+Lemma ThreeProdDW_head_half :
+  ties_to_even choice -> head_half ThreeProdDW.
 Proof.
-Admitted.
+move=> Hc; apply: head_one_half.
+  by move=> a b X Y; apply: ThreeProdDW_scale.
+exact: (@ThreeProdDW_head_one p Hp2 Hp10 choice choice_sym).
+Qed.
+
+Lemma ThreeProdDWFast_head_half :
+  ties_to_even choice -> head_half ThreeProdDWFast.
+Proof.
+move=> Hc; apply: head_one_half.
+  by move=> a b X Y; apply: ThreeProdDWFast_scale.
+exact: (@ThreeProdDWFast_head_one p Hp2 Hp10 choice choice_sym).
+Qed.
 
 (* ===========================================================================*)
 (*  Correctness, part 1: the result is a triple word.                         *)

@@ -413,6 +413,17 @@ Proof. by case: t => t0 t1 t2 /=; ring. Qed.
 Lemma tw0_scale c t : tw0 (scaleTW c t) = tw0 t * pow c.
 Proof. by case: t. Qed.
 
+(* Scaling is a monoid action: needed whenever an algorithm feeds a SCALED    *)
+(* triple word to a product and the property to reuse is stated on the        *)
+(* unscaled one -- Algorithm 15 does exactly that with its [b' = b/2].        *)
+Lemma scaleTW_0 t : scaleTW 0 t = t.
+Proof. by case: t => t0 t1 t2; rewrite /scaleTW /= !Rmult_1_r. Qed.
+
+Lemma scaleTW_add c d t : scaleTW c (scaleTW d t) = scaleTW (c + d) t.
+Proof.
+by case: t => t0 t1 t2; rewrite /scaleTW /= bpow_plus; congr TWR; ring.
+Qed.
+
 (* [isTW] is scale-invariant (formats, and the strict [ulp] gaps, both        *)
 (* scale).                                                                    *)
 Lemma isTW_scale c t : isTW (scaleTW c t) <-> isTW t.

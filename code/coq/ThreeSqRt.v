@@ -1699,7 +1699,71 @@ Lemma sqrtAux_bracket_le mul1 d1 :
             * TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x))
       <= 1 / 2 + 300 * (u * u).
 Proof.
-Admitted.
+move=> Herr1 Hd10 Hd1u x Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HX0 : 0 < TWval x by apply: isTW_TWval_gt0.
+have Hs0 : 0 < sqrt (TWval x) by apply: sqrt_lt_R0.
+have HsX : sqrt (TWval x) * sqrt (TWval x) = TWval x by apply: sqrt_sqrt; lra.
+have Fx0 : format (tw0 x) by case: x Hx {Hx0 HX0 Hs0 HsX} => x0 x1 x2 [].
+have Hx1s : tw1 x = 0 \/ Rabs (tw1 x) < ulp (tw0 x)
+  by case: x Hx {Hx0 HX0 Hs0 HsX Fx0} => x0 x1 x2 [].
+have HDW : isDW (sqrtBW (tw0 x) (tw1 x)) by apply: sqrtB_isDW.
+have He := Herr1 _ _ HDW Hx.
+have Hseed := sqrtBW_x_err_crude Hx Hx0.
+set B := TWval (sqrtBW (tw0 x) (tw1 x)) in He Hseed *.
+set I1 := TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x) in He *.
+set s := sqrt (TWval x) in HsX Hs0 Hseed *.
+have Ht := Rabs_le_inv _ _ Hseed.
+(* [B^2 X = (B s)^2], generalised so the rewrite does not go under [sqrt].    *)
+have HB2X : forall r b, r * r = TWval x -> b * b * TWval x = (b * r) * (b * r).
+  by move=> r b <-; ring.
+have HBX : B * B * TWval x = (B * s) * (B * s) by apply: HB2X.
+(* [(B/2) I1 = (1/2) B^2 X + (B/2)(I1 - B X)], so the bracket splits into     *)
+(* [3/2 - B^2 X ~ 1/2] and the [mul1] error.  THIS is the cancellation.       *)
+have Hsplit : 3 / 2 - 1 / 2 * (B * B) * TWval x - B / 2 * I1
+    = (3 / 2 - (B * B) * TWval x) - (B / 2) * (I1 - B * TWval x) by field.
+rewrite Hsplit HBX.
+apply: Rle_trans (Rabs_triang _ _) _.
+rewrite Rabs_Ropp.
+have Hhalf : 120 * (u * u) <= 1 / 2.
+  have -> : 120 * (u * u) = 120 * u * u by ring.
+  by nra.
+have Hu4 : 14400 * ((u * u) * (u * u)) <= u * u.
+  have -> : 14400 * ((u * u) * (u * u)) = 14400 * (u * u) * u * u by ring.
+  have Hs2 : 0 <= u * u by apply: Rle_0_sqr.
+  have Hc : 14400 * (u * u) <= 1 by nra.
+  by nra.
+have Hlo : 0 <= B * s by lra.
+have Hsqhi : (B * s) * (B * s) <= (1 + 120 * (u * u)) * (1 + 120 * (u * u))
+  by apply: Rmult_le_compat; nra.
+have Hsqlo : (1 - 120 * (u * u)) * (1 - 120 * (u * u)) <= (B * s) * (B * s)
+  by apply: Rmult_le_compat; nra.
+have Hsq : Rabs (3 / 2 - B * s * (B * s)) <= 1 / 2 + 241 * (u * u)
+  by apply: Rabs_le; nra.
+have Hmix : Rabs (B / 2 * (I1 - B * TWval x)) <= 59 * (u * u).
+  rewrite Rabs_mult.
+  have Hstep : Rabs (B / 2) * Rabs (I1 - B * TWval x)
+      <= Rabs (B / 2) * (d1 * Rabs (B * TWval x))
+    by apply: Rmult_le_compat_l; [apply: Rabs_pos | exact: He].
+  apply: Rle_trans Hstep _.
+  have Hcomb : Rabs (B / 2) * (d1 * Rabs (B * TWval x))
+      = d1 / 2 * Rabs (B * (B * TWval x)).
+    rewrite /Rdiv !Rabs_mult (Rabs_pos_eq (/ 2)); last lra.
+    by field.
+  rewrite Hcomb.
+  have HBBX : B * (B * TWval x) = B * s * (B * s) by rewrite -HBX; ring.
+  rewrite HBBX.
+  have Hpos : Rabs (B * s * (B * s)) <= 2.
+    rewrite (Rabs_pos_eq (B * s * (B * s))); last by apply: Rle_0_sqr.
+    by nra.
+  have Hd2 : 0 <= d1 / 2 by lra.
+  have Hstep2 : d1 / 2 * Rabs (B * s * (B * s)) <= d1 / 2 * 2
+    by apply: Rmult_le_compat_l.
+  apply: Rle_trans Hstep2 _.
+  by nra.
+by lra.
+Qed.
 
 (* [i2] has head [1] and is within [40u^2] of it -- what [mul3] demands.      *)
 Lemma sqrtAux_i2_near_1 mul1 mul2 d1 d2 :
@@ -1749,7 +1813,33 @@ Lemma ThreeSqRt_error x :
   Rabs (TWval (ThreeSqRt x) - sqrt (TWval x)) <=
      (24 * (u * u * u) + 10260 * (u * u * u * u)) * Rabs (sqrt (TWval x)).
 Proof.
-Admitted.
+move=> Hc Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have Hu2 : u * u <= / 2048 * u by nra.
+have Hu3 : u * u * u <= / 2048 * (u * u) by nra.
+have Hu4 : u * u * u * u <= / 2048 * (u * u * u) by nra.
+have Hu5 : u * u * u * u * u <= / 2048 * (u * u * u * u) by nra.
+have Hd0 : 0 <= 105 / 10 * (u * u * u) + 39 * (u * u * u * u) by nra.
+have Hdu : 105 / 10 * (u * u * u) + 39 * (u * u * u * u) <= u * u by nra.
+have He0 : 0 <= 6 * (u * u * u) + 1250 * (u * u * u * u) by nra.
+have Heu : 6 * (u * u * u) + 1250 * (u * u * u * u) <= u * u by nra.
+have Hgen := @ThreeSqRtAux_error ThreeProdDW ThreeProdDW ThreeProdOneTW
+  (105 / 10 * (u * u * u) + 39 * (u * u * u * u))
+  (105 / 10 * (u * u * u) + 39 * (u * u * u * u))
+  (6 * (u * u * u) + 1250 * (u * u * u * u))
+  (fun b y Hb Hy => @ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun b y Hb Hy => @ThreeProdDW_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun b y Hb Hy => @ThreeProdDW_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun a y Ha Hy Hy0 Hy1 =>
+     @ThreeProdOneTW_error p Hp2 Hp6 choice choice_sym a y Hc Ha Hy Hy0 Hy1)
+  (ThreeProdDW_head_half Hc)
+  Hd0 Hdu Hd0 Hdu He0 Heu x Hx Hx0.
+rewrite /ThreeSqRt.
+apply: Rle_trans Hgen _.
+apply: Rmult_le_compat_r; first by apply: Rabs_pos.
+nra.
+Qed.
 
 (* Paper Theorem 11, fast variant: [39u^3 + 10333u^4].                        *)
 Lemma ThreeSqRtFast_error x :
@@ -1758,6 +1848,35 @@ Lemma ThreeSqRtFast_error x :
   Rabs (TWval (ThreeSqRtFast x) - sqrt (TWval x)) <=
      (39 * (u * u * u) + 10333 * (u * u * u * u)) * Rabs (sqrt (TWval x)).
 Proof.
-Admitted.
+move=> Hc Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have Hu2 : u * u <= / 2048 * u by nra.
+have Hu3 : u * u * u <= / 2048 * (u * u) by nra.
+have Hu4 : u * u * u * u <= / 2048 * (u * u * u) by nra.
+have Hu5 : u * u * u * u * u <= / 2048 * (u * u * u * u) by nra.
+have Hd0 : 0 <= 18 * (u * u * u) + 75 * (u * u * u * u) by nra.
+have Hdu : 18 * (u * u * u) + 75 * (u * u * u * u) <= u * u by nra.
+have He0 : 0 <= 6 * (u * u * u) + 1250 * (u * u * u * u) by nra.
+have Heu : 6 * (u * u * u) + 1250 * (u * u * u * u) <= u * u by nra.
+have Hgen := @ThreeSqRtAux_error ThreeProdDWFast ThreeProdDWFast ThreeProdOneTW
+  (18 * (u * u * u) + 75 * (u * u * u * u))
+  (18 * (u * u * u) + 75 * (u * u * u * u))
+  (6 * (u * u * u) + 1250 * (u * u * u * u))
+  (fun b y Hb Hy =>
+     @ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun b y Hb Hy =>
+     @ThreeProdDWFast_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun b y Hb Hy =>
+     @ThreeProdDWFast_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun a y Ha Hy Hy0 Hy1 =>
+     @ThreeProdOneTW_error p Hp2 Hp6 choice choice_sym a y Hc Ha Hy Hy0 Hy1)
+  (ThreeProdDWFast_head_half Hc)
+  Hd0 Hdu Hd0 Hdu He0 Heu x Hx Hx0.
+rewrite /ThreeSqRtFast.
+apply: Rle_trans Hgen _.
+apply: Rmult_le_compat_r; first by apply: Rabs_pos.
+nra.
+Qed.
 
 End SecThreeSqRt.

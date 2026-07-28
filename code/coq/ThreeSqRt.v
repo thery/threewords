@@ -963,6 +963,47 @@ have Hax1 : Rabs (sqrtA x0 * x1) <= 2 * u * (sqrtA x0 * x0).
 by apply: Rle_trans (Rabs_triang _ _) _; lra.
 Qed.
 
+Lemma sqrtH1_2_sum_le x0 x1 :
+  format x0 -> 0 < x0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
+  Rabs (sqrtH11_2 x0 + sqrtA' x0 * sqrtH1_1 x0 x1)
+    <= (5 + u) / 2 * u * (sqrtA x0 * sqrtA x0 * x0).
+Proof.
+move=> Fx0 Hx0 Hx1.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HA := sqrtA_gt0 Fx0 Hx0.
+have HP : 0 < sqrtA x0 * x0 by nra.
+have H01 := sqrtH0_1_le Fx0 Hx0.
+have H11 := sqrtH1_1_le Fx0 Hx0 Hx1.
+have HA' : sqrtA' x0 = sqrtA x0 / 2 by [].
+have FA : format (sqrtA x0) by apply: generic_format_round.
+have FA2 : format (sqrtA' x0).
+  have -> : sqrtA' x0 = sqrtA x0 * pow (-1) by rewrite HA' /=; lra.
+  by apply/format_scale.
+have F01 : format (sqrtH0_1 x0) by apply: generic_format_round.
+have H112 : Rabs (sqrtH11_2 x0)
+    <= u * (sqrtA' x0 * ((1 + u) * (sqrtA x0 * x0))).
+  have HE2 := @TwoProd_exact p Hp2 choice _ _ FA2 F01.
+  have -> : sqrtH11_2 x0 = sqrtA' x0 * sqrtH0_1 x0 - sqrtH01_2 x0.
+    by rewrite /sqrtH11_2 /sqrtH01_2; lra.
+  have -> : sqrtH01_2 x0 = RND (sqrtA' x0 * sqrtH0_1 x0) by [].
+  rewrite Rabs_minus_sym.
+  apply: Rle_trans (@relative_error_le p beta Hp2 choice _) _.
+  rewrite Rabs_mult (Rabs_pos_eq (sqrtA' x0)); last by rewrite HA'; lra.
+  apply: Rmult_le_compat_l; first lra.
+  by apply: Rmult_le_compat_l; [rewrite HA'; lra | exact: H01].
+have Hmix : Rabs (sqrtA' x0 * sqrtH1_1 x0 x1)
+    <= sqrtA' x0 * (4 * u * (sqrtA x0 * x0)).
+  rewrite Rabs_mult (Rabs_pos_eq (sqrtA' x0)); last by rewrite HA'; lra.
+  by apply: Rmult_le_compat_l; [rewrite HA'; lra | exact: H11].
+apply: Rle_trans (Rabs_triang _ _) _.
+have Hid : u * (sqrtA' x0 * ((1 + u) * (sqrtA x0 * x0)))
+         + sqrtA' x0 * (4 * u * (sqrtA x0 * x0))
+    = (5 + u) / 2 * u * (sqrtA x0 * sqrtA x0 * x0)
+  by rewrite HA'; field.
+by lra.
+Qed.
+
 Lemma sqrtB12_sum_le x0 x1 :
   format x0 -> 0 < x0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
   Rabs (sqrtB11 x0 + sqrtA x0 * sqrtH1_2 x0 x1) <= 4 * u * sqrtA x0.
@@ -985,37 +1026,241 @@ Lemma sqrtBW_newton_form x :
           * (3 / 2 - (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) * TWval x))
     <= 10 * (u * u) * sqrtA (tw0 x).
 Proof.
-Admitted.
+move=> Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have Fx0 : format (tw0 x) by case: x Hx {Hx0} => x0 x1 x2 [].
+have Hx1s : tw1 x = 0 \/ Rabs (tw1 x) < ulp (tw0 x)
+  by case: x Hx {Hx0 Fx0} => x0 x1 x2 [].
+have HA := sqrtA_gt0 Fx0 Hx0.
+have Hsq := sqrtA_sq_le Fx0 Hx0.
+have HP : 0 < sqrtA (tw0 x) * tw0 x by nra.
+have HA' : sqrtA' (tw0 x) = sqrtA (tw0 x) / 2 by [].
+have FA : format (sqrtA (tw0 x)) by apply: generic_format_round.
+have FA2 : format (sqrtA' (tw0 x)).
+  have -> : sqrtA' (tw0 x) = sqrtA (tw0 x) * pow (-1)
+    by rewrite HA' /=; lra.
+  by apply/format_scale.
+have F01 : format (sqrtH0_1 (tw0 x)) by apply: generic_format_round.
+have F02 : format (sqrtH0_2 (tw0 x)) by apply: sqrtH0_2_exact.
+(* the three [2Prod] exactness facts                                          *)
+have E1 := @TwoProd_exact p Hp2 choice _ _ FA Fx0.
+have E2 := @TwoProd_exact p Hp2 choice _ _ FA2 F01.
+have E3 := @TwoProd_exact p Hp2 choice _ _ FA F02.
+(* the three roundings                                                        *)
+set eps1 := sqrtH1_1 (tw0 x) (tw1 x)
+            - (sqrtH11_1 (tw0 x) + sqrtA (tw0 x) * tw1 x).
+set eps := - sqrtH1_2 (tw0 x) (tw1 x)
+           - (sqrtH11_2 (tw0 x)
+              + sqrtA' (tw0 x) * sqrtH1_1 (tw0 x) (tw1 x)).
+set eta := sqrtB12 (tw0 x) (tw1 x)
+           - (sqrtB11 (tw0 x) + sqrtA (tw0 x) * sqrtH1_2 (tw0 x) (tw1 x)).
+have Hdec : TWval (sqrtBW (tw0 x) (tw1 x))
+    - sqrtA (tw0 x)
+      * (3 / 2 - (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) * TWval x)
+    = (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x) * sqrtA (tw0 x)) * tw2 x
+      - (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) * eps1
+      - sqrtA (tw0 x) * eps + eta.
+  rewrite (TWval_sqrtBW Fx0 Hx0 Hx1s) TWval_split.
+  (* the six intermediate lines occur only in the HYPOTHESES of               *)
+  (* [newton_form_id], so unification cannot find them -- pass them.          *)
+  apply: (@newton_form_id (sqrtA (tw0 x)) (sqrtB01 (tw0 x))
+            (sqrtB11 (tw0 x)) (sqrtB12 (tw0 x) (tw1 x))
+            (sqrtH0_2 (tw0 x)) (sqrtH1_2 (tw0 x) (tw1 x))
+            (sqrtH01_2 (tw0 x)) (sqrtH11_2 (tw0 x)) (sqrtH0_1 (tw0 x))
+            (sqrtH11_1 (tw0 x)) (sqrtH1_1 (tw0 x) (tw1 x))
+            (tw0 x) (tw1 x) (tw2 x) eps1 eps eta).
+  - by rewrite /sqrtH0_1 /sqrtH11_1; lra.
+  - by rewrite /sqrtH01_2 /sqrtH11_2 -HA'; lra.
+  - by [].
+  - by rewrite /eps1; lra.
+  - by rewrite /eps -HA'; lra.
+  - by rewrite /eta; lra.
+  by rewrite /sqrtB01 /sqrtB11; lra.
+rewrite Hdec.
+(* now the four terms, each [O(u^2) a]                                        *)
+have Hx2 := @isTW_tw2_le p Hp2 x Hx.
+have Ha0 : Rabs (tw0 x) = tw0 x by apply: Rabs_pos_eq; lra.
+rewrite Ha0 in Hx2.
+have Heps1 : Rabs eps1 <= 3 * (u * u) * (sqrtA (tw0 x) * tw0 x).
+  rewrite /eps1.
+  have -> : sqrtH1_1 (tw0 x) (tw1 x)
+      = RND (sqrtH11_1 (tw0 x) + sqrtA (tw0 x) * tw1 x) by [].
+  apply: Rle_trans (@relative_error_le p beta Hp2 choice _) _.
+  have Hs := sqrtH1_1_sum_le Fx0 Hx0 Hx1s.
+  have Hstep : u * Rabs (sqrtH11_1 (tw0 x) + sqrtA (tw0 x) * tw1 x)
+      <= u * (3 * u * (sqrtA (tw0 x) * tw0 x))
+    by apply: Rmult_le_compat_l; lra.
+  by apply: Rle_trans Hstep _; lra.
+have Heps : Rabs eps
+    <= (5 + u) / 2 * (u * u)
+       * (sqrtA (tw0 x) * sqrtA (tw0 x) * tw0 x).
+  rewrite /eps.
+  have -> : - sqrtH1_2 (tw0 x) (tw1 x)
+      = RND (sqrtH11_2 (tw0 x)
+             + sqrtA' (tw0 x) * sqrtH1_1 (tw0 x) (tw1 x))
+    by rewrite /sqrtH1_2; ring.
+  apply: Rle_trans (@relative_error_le p beta Hp2 choice _) _.
+  have Hs := sqrtH1_2_sum_le Fx0 Hx0 Hx1s.
+  have Hstep : u * Rabs (sqrtH11_2 (tw0 x)
+                         + sqrtA' (tw0 x) * sqrtH1_1 (tw0 x) (tw1 x))
+      <= u * ((5 + u) / 2 * u
+              * (sqrtA (tw0 x) * sqrtA (tw0 x) * tw0 x))
+    by apply: Rmult_le_compat_l; lra.
+  by apply: Rle_trans Hstep _; lra.
+have Heta : Rabs eta <= 4 * (u * u) * sqrtA (tw0 x).
+  rewrite /eta.
+  have -> : sqrtB12 (tw0 x) (tw1 x)
+      = RND (sqrtB11 (tw0 x)
+             + sqrtA (tw0 x) * sqrtH1_2 (tw0 x) (tw1 x)) by [].
+  apply: Rle_trans (@relative_error_le p beta Hp2 choice _) _.
+  have Hs := sqrtB12_sum_le Fx0 Hx0 Hx1s.
+  have Hstep : u * Rabs (sqrtB11 (tw0 x)
+                         + sqrtA (tw0 x) * sqrtH1_2 (tw0 x) (tw1 x))
+      <= u * (4 * u * sqrtA (tw0 x))
+    by apply: Rmult_le_compat_l; lra.
+  by apply: Rle_trans Hstep _; lra.
+(* the four terms, each against [u^2 a]; [A^2 x0 <= 1 + 13u] carries the      *)
+(* first three across.                                                        *)
+have Ha3 : 0 <= (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x) * sqrtA (tw0 x))
+  by nra.
+have Ha2 : 0 <= (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) by nra.
+have B1 : Rabs ((1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x) * sqrtA (tw0 x))
+                * tw2 x)
+    <= (u * u) * (sqrtA (tw0 x) * (1 + 13 * u)).
+  rewrite Rabs_mult (Rabs_pos_eq ((1 / 2)
+            * (sqrtA (tw0 x) * sqrtA (tw0 x) * sqrtA (tw0 x)))); last lra.
+  have Hstep : (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x) * sqrtA (tw0 x))
+                 * Rabs (tw2 x)
+      <= (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x) * sqrtA (tw0 x))
+         * (2 * (u * u) * tw0 x)
+    by apply: Rmult_le_compat_l; lra.
+  apply: Rle_trans Hstep _.
+  have -> : (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x) * sqrtA (tw0 x))
+              * (2 * (u * u) * tw0 x)
+      = (u * u) * (sqrtA (tw0 x)
+                   * (sqrtA (tw0 x) * sqrtA (tw0 x) * tw0 x)) by field.
+  apply: Rmult_le_compat_l; first by nra.
+  by apply: Rmult_le_compat_l; lra.
+have B2 : Rabs ((1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) * eps1)
+    <= (3 / 2) * (u * u) * (sqrtA (tw0 x) * (1 + 13 * u)).
+  rewrite Rabs_mult (Rabs_pos_eq ((1 / 2)
+            * (sqrtA (tw0 x) * sqrtA (tw0 x)))); last lra.
+  have Hstep : (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) * Rabs eps1
+      <= (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x))
+         * (3 * (u * u) * (sqrtA (tw0 x) * tw0 x))
+    by apply: Rmult_le_compat_l; lra.
+  apply: Rle_trans Hstep _.
+  have -> : (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x))
+              * (3 * (u * u) * (sqrtA (tw0 x) * tw0 x))
+      = (3 / 2) * (u * u) * (sqrtA (tw0 x)
+                   * (sqrtA (tw0 x) * sqrtA (tw0 x) * tw0 x)) by field.
+  apply: Rmult_le_compat_l; first by nra.
+  by apply: Rmult_le_compat_l; lra.
+have B3 : Rabs (sqrtA (tw0 x) * eps)
+    <= (5 + u) / 2 * (u * u) * (sqrtA (tw0 x) * (1 + 13 * u)).
+  rewrite Rabs_mult (Rabs_pos_eq (sqrtA (tw0 x))); last lra.
+  have Hstep : sqrtA (tw0 x) * Rabs eps
+      <= sqrtA (tw0 x) * ((5 + u) / 2 * (u * u)
+         * (sqrtA (tw0 x) * sqrtA (tw0 x) * tw0 x))
+    by apply: Rmult_le_compat_l; lra.
+  apply: Rle_trans Hstep _.
+  have -> : sqrtA (tw0 x) * ((5 + u) / 2 * (u * u)
+              * (sqrtA (tw0 x) * sqrtA (tw0 x) * tw0 x))
+      = (5 + u) / 2 * (u * u) * (sqrtA (tw0 x)
+                   * (sqrtA (tw0 x) * sqrtA (tw0 x) * tw0 x)) by field.
+  apply: Rmult_le_compat_l; first by nra.
+  by apply: Rmult_le_compat_l; lra.
+(* assemble                                                                   *)
+have -> : (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x) * sqrtA (tw0 x)) * tw2 x
+          - (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) * eps1
+          - sqrtA (tw0 x) * eps + eta
+    = ((1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x) * sqrtA (tw0 x)) * tw2 x)
+      + (- ((1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) * eps1))
+      + (- (sqrtA (tw0 x) * eps)) + eta by field.
+apply: Rle_trans (Rabs_triang _ _) _.
+have T1 := Rabs_triang ((1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)
+                                   * sqrtA (tw0 x)) * tw2 x
+                        + - ((1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) * eps1))
+                       (- (sqrtA (tw0 x) * eps)).
+have T2 := Rabs_triang ((1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)
+                                   * sqrtA (tw0 x)) * tw2 x)
+                       (- ((1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) * eps1)).
+rewrite !Rabs_Ropp in T1 T2.
+have Hfin : (u * u) * (sqrtA (tw0 x) * (1 + 13 * u))
+            + (3 / 2) * (u * u) * (sqrtA (tw0 x) * (1 + 13 * u))
+            + (5 + u) / 2 * (u * u) * (sqrtA (tw0 x) * (1 + 13 * u))
+            + 4 * (u * u) * sqrtA (tw0 x)
+    <= 10 * (u * u) * sqrtA (tw0 x).
+  have -> : (u * u) * (sqrtA (tw0 x) * (1 + 13 * u))
+            + (3 / 2) * (u * u) * (sqrtA (tw0 x) * (1 + 13 * u))
+            + (5 + u) / 2 * (u * u) * (sqrtA (tw0 x) * (1 + 13 * u))
+            + 4 * (u * u) * sqrtA (tw0 x)
+      = (u * u) * sqrtA (tw0 x)
+        * ((1 + 13 * u) * (5 + u / 2) + 4) by field.
+  have -> : 10 * (u * u) * sqrtA (tw0 x)
+      = (u * u) * sqrtA (tw0 x) * 10 by field.
+  apply: Rmult_le_compat_l; first by nra.
+  by nra.
+by lra.
+Qed.
 
 Lemma sqrtBW_x_err_crude x :
   isTW x -> 0 < tw0 x ->
-  Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * sqrt (TWval x) - 1) <= 90 * (u * u).
+  Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * sqrt (TWval x) - 1)
+    <= 120 * (u * u).
 Proof.
-(* MISSING PIECE, found while proving this: [sqrtA_bound] pins                *)
-(* [a * sqrt (tw0 x)] -- the HEAD -- but the Newton form needs                *)
-(* [a * sqrt (TWval x)], the full triple-word value.  They differ at the [u]  *)
-(* level, not [u^2]: [|x1| <= 2u|x0|] gives                                   *)
-(* [sqrt (TWval x) / sqrt (tw0 x) = 1 +- 1.1u], so                            *)
-(*                                                                            *)
-(*    a sqrt (TWval x) - 1  in  [0.9u, 7.1u]   (not [2u, 6u])                 *)
-(*                                                                            *)
-(* and the Newton residual is [(3/2)(7.1u)^2 ~ 78u^2], which no longer fits   *)
-(* under [90u^2] once the [10u^2] of [sqrtBW_newton_form] is added.           *)
-(*                                                                            *)
-(* TWO THINGS TO DO, in this order:                                           *)
-(*  1. a bridging lemma [sqrtA_bound_full : |a sqrt (TWval x) - 1| <= 8u],    *)
-(*     from [sqrtA_bound] plus [|x1 + x2| <= 2.1u|x0|] and monotonicity of    *)
-(*     [sqrt].  This is the only genuinely new [sqrt] reasoning left.         *)
-(*  2. raise this bound to [120u^2] and [head_half]'s threshold from [200]    *)
-(*     to [300] -- [head_eq_1_c] allows [c u <= 1/4], i.e. [c <= 512] at      *)
-(*     [p >= 11], so there is room.  Then [2*120 + 1 = 241 <= 300] and the    *)
-(*     margin is comfortable at both ends.                                    *)
-(*                                                                            *)
-(* Everything else for this lemma is already in place: [sqrt_newton_seed]     *)
-(* gives the residual in closed form, and [sqrtBW_newton_form] collects the   *)
-(* rounding.  The proof body that assumed the head bound has been removed     *)
-(* rather than left misleading.                                               *)
-Admitted.
+move=> Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have Fx0 : format (tw0 x) by case: x Hx {Hx0} => x0 x1 x2 [].
+have HX0 : 0 < TWval x by apply: isTW_TWval_gt0.
+have Hs0 : 0 < sqrt (TWval x) by apply: sqrt_lt_R0.
+have HsX : sqrt (TWval x) * sqrt (TWval x) = TWval x by apply: sqrt_sqrt; lra.
+have HA := sqrtA_gt0 Fx0 Hx0.
+have HN := sqrtBW_newton_form Hx Hx0.
+have [Hlo Hhi] := sqrtA_bound_full Hx Hx0.
+set B := TWval (sqrtBW (tw0 x) (tw1 x)) in HN *.
+set A := sqrtA (tw0 x) in HN HA Hlo Hhi *.
+set s := sqrt (TWval x) in HsX Hs0 Hlo Hhi *.
+(* [s] now hides [TWval x], so this rewrite is safe.                          *)
+rewrite -HsX in HN.
+have Hsplit : B * s - 1
+    = (A * (3 / 2 - (1 / 2) * (A * A) * (s * s)) * s - 1)
+      + (B - A * (3 / 2 - (1 / 2) * (A * A) * (s * s))) * s by field.
+rewrite Hsplit.
+apply: Rle_trans (Rabs_triang _ _) _.
+(* (i) the Newton residual, in closed form: [e^2 (e+3)/2] with [0 <= e <= 8u] *)
+have Hnew : Rabs (A * (3 / 2 - (1 / 2) * (A * A) * (s * s)) * s - 1)
+    <= 100 * (u * u).
+  rewrite sqrt_newton_seed.
+  have -> : - ((A * s - 1) * (A * s - 1)) * (A * s - 1 + 3) / 2
+      = - (((A * s - 1) * (A * s - 1)) * ((A * s - 1 + 3) / 2)) by field.
+  rewrite Rabs_Ropp Rabs_mult.
+  have Hsq : Rabs ((A * s - 1) * (A * s - 1)) <= (8 * u) * (8 * u).
+    rewrite (Rabs_pos_eq ((A * s - 1) * (A * s - 1))); last exact: Rle_0_sqr.
+    by nra.
+  have Hlin : Rabs ((A * s - 1 + 3) / 2) <= (3 + 8 * u) / 2.
+    rewrite (Rabs_pos_eq ((A * s - 1 + 3) / 2)); last lra.
+    by lra.
+  have Hstep : Rabs ((A * s - 1) * (A * s - 1))
+                 * Rabs ((A * s - 1 + 3) / 2)
+      <= ((8 * u) * (8 * u)) * ((3 + 8 * u) / 2)
+    by apply: Rmult_le_compat; try apply: Rabs_pos.
+  by apply: Rle_trans Hstep _; nra.
+(* (ii) the collected rounding, carried across by [A s <= 1 + 8u]             *)
+have Hrest : Rabs ((B - A * (3 / 2 - (1 / 2) * (A * A) * (s * s))) * s)
+    <= 11 * (u * u).
+  rewrite Rabs_mult (Rabs_pos_eq s); last lra.
+  have Hstep : Rabs (B - A * (3 / 2 - (1 / 2) * (A * A) * (s * s))) * s
+      <= (10 * (u * u) * A) * s
+    by apply: Rmult_le_compat_r; lra.
+  apply: Rle_trans Hstep _.
+  have -> : 10 * (u * u) * A * s = 10 * (u * u) * (A * s) by ring.
+  by nra.
+have Hu2p : 0 <= u * u by apply: Rle_0_sqr.
+by lra.
+Qed.
 
 (* Step 4.  The seed double word against the true inverse square root, in the *)
 (* dimensionless form the assembly consumes.  The supplementary states it as  *)
@@ -1113,7 +1358,7 @@ Qed.
 (* itself, so the product carries ONE power of the seed error, not two.       *)
 Definition head_half (mul : twR -> twR -> twR) : Prop :=
   forall b y, isDW b -> isTW y ->
-    Rabs (TWval b * TWval y - 1) <= 200 * (u * u) ->
+    Rabs (TWval b * TWval y - 1) <= 300 * (u * u) ->
     tw0 (mul (scaleTW (-1)%Z b) y) = 1 / 2.
 
 (* And it is NOT re-proved from scratch: the products commute with scaling,   *)
@@ -1141,7 +1386,7 @@ Lemma head_one_half mul :
   (forall a b X Y,
      mul (scaleTW a X) (scaleTW b Y) = scaleTW (a + b) (mul X Y)) ->
   (forall b y, isDW b -> isTW y ->
-     Rabs (TWval b * TWval y - 1) <= 200 * (u * u) -> tw0 (mul b y) = 1) ->
+     Rabs (TWval b * TWval y - 1) <= 300 * (u * u) -> tw0 (mul b y) = 1) ->
   head_half mul.
 Proof.
 move=> Hscale Hone b y Hb Hy Hclose.
@@ -1153,10 +1398,10 @@ by rewrite tw0_scale (Hone _ _ Hb Hy Hclose) /= /Z.pow_pos /=; lra.
 Qed.
 
 (* [200 u <= 1/4] is what [head_one_gen_c] asks; [u <= 1/1024] gives it.      *)
-Lemma head_c_ok : 200 * u <= / 4.
+Lemma head_c_ok : 300 * u <= / 4.
 Proof.
 have Hu0 : 0 < u by apply: u_gt_0.
-by have := @u_le_1024 p Hp10; lra.
+by have := u_le_2048; lra.
 Qed.
 
 Lemma ThreeProdDW_head_half :
@@ -1164,7 +1409,7 @@ Lemma ThreeProdDW_head_half :
 Proof.
 move=> Hc; apply: head_one_half.
   by move=> a b X Y; apply: ThreeProdDW_scale.
-apply: (@head_one_gen_c p Hp2 Hp10 200 ThreeProdDW head_c_ok).
+apply: (@head_one_gen_c p Hp2 Hp10 300 ThreeProdDW head_c_ok).
   by move=> X Y HX HY; apply: (@ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym).
 by move=> X Y HX HY HX0 HY0;
    apply: (@ThreeProdDW_head_gap p Hp2 Hp10 choice choice_sym).
@@ -1175,7 +1420,7 @@ Lemma ThreeProdDWFast_head_half :
 Proof.
 move=> Hc; apply: head_one_half.
   by move=> a b X Y; apply: ThreeProdDWFast_scale.
-apply: (@head_one_gen_c p Hp2 Hp10 200 ThreeProdDWFast head_c_ok).
+apply: (@head_one_gen_c p Hp2 Hp10 300 ThreeProdDWFast head_c_ok).
   by move=> X Y HX HY;
      apply: (@ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym).
 by move=> X Y HX HY HX0 HY0;
@@ -1214,7 +1459,7 @@ have Hi1 : isTW (mul1 (sqrtBW (tw0 x) (tw1 x)) x) by apply: Hmul1.
 (* SEED error enters SQUARED -- whence [2 * 81u^2] and the [200u^2] budget.   *)
 have Key : Rabs (TWval (sqrtBW (tw0 x) (tw1 x))
                  * TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x) - 1)
-             <= 200 * (u * u).
+             <= 300 * (u * u).
   have HX0 : 0 < TWval x by apply: isTW_TWval_gt0.
   have HsX : sqrt (TWval x) * sqrt (TWval x) = TWval x
     by apply: sqrt_sqrt; lra.
@@ -1228,12 +1473,12 @@ have Key : Rabs (TWval (sqrtBW (tw0 x) (tw1 x))
       = ((B * s) * (B * s) - 1) + B * (I1 - B * TWval x).
     by rewrite -HsX; ring.
   have Ht := Rabs_le_inv _ _ Hseed.
-  have HBs : Rabs (B * s) <= 1 + (90 * (u * u)).
+  have HBs : Rabs (B * s) <= 1 + (120 * (u * u)).
     by have := Rabs_triang_inv (B * s) 1; rewrite Rabs_R1; lra.
   (* the squared seed term                                                    *)
   have Hsq : Rabs ((B * s) * (B * s) - 1)
-      <= (90 * (u * u))
-         * (2 + (90 * (u * u))).
+      <= (120 * (u * u))
+         * (2 + (120 * (u * u))).
     have -> : (B * s) * (B * s) - 1 = (B * s - 1) * ((B * s - 1) + 2)
       by ring.
     rewrite Rabs_mult.
@@ -1243,8 +1488,8 @@ have Key : Rabs (TWval (sqrtBW (tw0 x) (tw1 x))
     by lra.
   (* the [mul1] term, measured against the same [t^2]                         *)
   have Hmulterm : Rabs (B * (I1 - B * TWval x))
-      <= (u * u) * ((1 + (90 * (u * u)))
-                    * (1 + (90 * (u * u)))).
+      <= (u * u) * ((1 + (120 * (u * u)))
+                    * (1 + (120 * (u * u)))).
     rewrite Rabs_mult.
     have HBp := Rabs_pos B.
     have Hstep : Rabs B * Rabs (I1 - B * TWval x)

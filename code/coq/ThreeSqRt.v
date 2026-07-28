@@ -75,19 +75,24 @@
 (* nothing extra: the [delta3] tightening of doc/thm10.md would improve       *)
 (* Theorems 9 and 10, not this one.                                           *)
 (*                                                                            *)
-(* STATUS.  FOUR admits remain: [sqrtBW_x_err], the assembly                  *)
-(* [ThreeSqRtAux_error], and its two instantiations.                          *)
+(* STATUS.  THE [isTW] HALF IS COMPLETE AND UNCONDITIONAL:                    *)
+(* [ThreeSqRt_isTW] and [ThreeSqRtFast_isTW] are [Qed], and                   *)
+(* [Print Assumptions] on either shows only the standard classical/reals      *)
+(* axioms that every result in this development carries.                      *)
 (*                                                                            *)
-(* [ThreeSqRt_isTW] and [ThreeSqRtFast_isTW] are [Qed] -- but read that       *)
-(* carefully: they are proved MODULO [sqrtBW_x_err], which                    *)
-(* [ThreeSqRtAux_isTW] consumes (it needs [|b i(1) - 1| <= 200u^2] for the    *)
-(* head argument, and that comes from the seed bound).                        *)
-(* [Print Assumptions ThreeSqRt_isTW] lists it alongside the standard         *)
-(* classical/reals axioms.  So the [isTW] half is complete in SHAPE but not   *)
-(* yet unconditional.                                                         *)
+(* THREE admits remain, all in the error half: the assembly                   *)
+(* [ThreeSqRtAux_error] and its two instantiations.                           *)
 (*                                                                            *)
-(* That makes [sqrtBW_x_err] load-bearing for BOTH halves, and the thing to   *)
-(* do next.  Order of attack in doc/thm11.md Section 5.                       *)
+(* NOTE the sharp seed bound [81u^2 + 622u^3] the supplementary states is     *)
+(* NOT USED, and has been removed.  Two reasons.  It is out of reach of this  *)
+(* chain -- [sqrtA_bound_full] gives [e <= 8u], so the Newton residual is     *)
+(* already [(3/2)(8u)^2 = 96u^2] before any rounding is added, and reaching   *)
+(* [81] would need some 5% less slack throughout.  And it is unnecessary: the *)
+(* cancellation leaves [24 - 16.5 = 7.5u^3], worth [15360u^4] at [p >= 11],   *)
+(* against the [12629u^4] that the crude [120u^2] costs.  So Theorem 11's     *)
+(* PUBLISHED constants are reachable from the crude bound alone.              *)
+(*                                                                            *)
+(* Order of attack in doc/thm11.md Section 5.                                 *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -1262,35 +1267,19 @@ have Hu2p : 0 <= u * u by apply: Rle_0_sqr.
 by lra.
 Qed.
 
-(* Step 4.  The seed double word against the true inverse square root, in the *)
-(* dimensionless form the assembly consumes.  The supplementary states it as  *)
-(* [|b - 1/sqrt x| <= (81u^2 + 622u^3)|1/sqrt x|]; Algorithm 13's analogue is *)
-(* [reciBW_x_err], with [34u^2 + 126u^3].  The seed is more than twice as     *)
-(* sloppy, which is where Theorem 11's large [u^4] term comes from.           *)
-Lemma sqrtBW_x_err x :
-  isTW x -> 0 < tw0 x ->
-  Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * sqrt (TWval x) - 1)
-    <= 81 * (u * u) + 622 * (u * u * u).
-Proof.
-Admitted.
-
 
 (* The pure-[u] half of the residual bound, split off so that [nra] never     *)
 (* sees it together with the algebra.  This is EXACTLY how the paper's        *)
 (* [9916u^4] arises: [E^2 (3 + E)/2] with [E = 81u^2 + 622u^3], and it is     *)
 (* tight -- [9915.5u^4] at [p = 11].                                          *)
 Lemma newton_residual_const :
-  (81 * (u * u) + 622 * (u * u * u))
-    * (81 * (u * u) + 622 * (u * u * u))
-    * ((3 + (81 * (u * u) + 622 * (u * u * u))) / 2)
-  <= 9916 * (u * u * u * u).
+  (120 * (u * u)) * (120 * (u * u)) * ((3 + 120 * (u * u)) / 2)
+  <= 21700 * (u * u * u * u).
 Proof.
 have Hu0 : 0 < u by apply: u_gt_0.
 have Hu2048 := u_le_2048.
 have L5 : u * u * u * u * u <= / 2048 * (u * u * u * u) by nra.
 have L6 : u * u * u * u * u * u <= / 2048 * (u * u * u * u * u) by nra.
-have L7 : u * u * u * u * u * u * u
-            <= / 2048 * (u * u * u * u * u * u) by nra.
 by nra.
 Qed.
 
@@ -1303,7 +1292,7 @@ Lemma sqrt_newton_residual x :
         * (3 / 2 - (1 / 2) * (TWval (sqrtBW (tw0 x) (tw1 x))
                               * TWval (sqrtBW (tw0 x) (tw1 x))) * TWval x)
         - sqrt (TWval x))
-    <= 9916 * (u * u * u * u) * Rabs (sqrt (TWval x)).
+    <= 21700 * (u * u * u * u) * Rabs (sqrt (TWval x)).
 Proof.
 move=> Hx Hx0.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -1312,7 +1301,7 @@ have HX0 : 0 < TWval x by apply: isTW_TWval_gt0.
 have Hs0 : 0 <= sqrt (TWval x) by apply: sqrt_pos.
 have HsX : sqrt (TWval x) * sqrt (TWval x) = TWval x
   by apply: sqrt_sqrt; lra.
-have Hseed := sqrtBW_x_err Hx Hx0.
+have Hseed := sqrtBW_x_err_crude Hx Hx0.
 set B := TWval (sqrtBW (tw0 x) (tw1 x)) in Hseed *.
 set s := sqrt (TWval x) in HsX Hseed Hs0 *.
 have Hid := sqrt_newton_id s B.
@@ -1323,20 +1312,20 @@ have -> : - s * ((B * s - 1) * (B * s - 1)) * (B * s - 1 + 3) / 2
     = - (s * (((B * s - 1) * (B * s - 1))
               * ((B * s - 1 + 3) / 2))) by field.
 rewrite Rabs_Ropp Rabs_mult !(Rabs_pos_eq s) //.
-rewrite [9916 * (u * u * u * u) * s]Rmult_comm.
+rewrite [21700 * (u * u * u * u) * s]Rmult_comm.
 apply: Rmult_le_compat_l => //.
 have He := Rabs_le_inv _ _ Hseed.
 have Hsq : (B * s - 1) * (B * s - 1)
-    <= (81 * (u * u) + 622 * (u * u * u))
-       * (81 * (u * u) + 622 * (u * u * u)) by nra.
+    <= (120 * (u * u))
+       * (120 * (u * u)) by nra.
 have Hsq0 : 0 <= (B * s - 1) * (B * s - 1) by apply: Rle_0_sqr.
 have Hlin : (B * s - 1 + 3) / 2
-    <= (3 + (81 * (u * u) + 622 * (u * u * u))) / 2 by nra.
+    <= (3 + (120 * (u * u))) / 2 by nra.
 have Hlin0 : 0 <= (B * s - 1 + 3) / 2 by nra.
 have Hstep : ((B * s - 1) * (B * s - 1)) * ((B * s - 1 + 3) / 2)
-    <= (81 * (u * u) + 622 * (u * u * u))
-       * (81 * (u * u) + 622 * (u * u * u))
-       * ((3 + (81 * (u * u) + 622 * (u * u * u))) / 2)
+    <= (120 * (u * u))
+       * (120 * (u * u))
+       * ((3 + (120 * (u * u))) / 2)
   by apply: Rmult_le_compat.
 rewrite Rabs_pos_eq; last by nra.
 by apply: Rle_trans Hstep _; exact: newton_residual_const.

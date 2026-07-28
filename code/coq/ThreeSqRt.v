@@ -534,7 +534,7 @@ Qed.
 (* [a^2 x0 = (a sqrt x0)^2], so the seed range squares.  Reused by every      *)
 (* [h]-line bound below.                                                      *)
 Lemma sqrtA_sq_le x0 :
-  format x0 -> 0 < x0 -> sqrtA x0 * sqrtA x0 * x0 <= 1 + 13 * u.
+  format x0 -> 0 < x0 -> sqrtA x0 * sqrtA x0 * x0 <= 1 + 12 * u + 62 * (u * u).
 Proof.
 move=> Fx0 Hx0.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -549,7 +549,12 @@ have H0 : 0 <= sqrtA x0 * sqrt x0 by nra.
 have Hsq : (sqrtA x0 * sqrt x0) * (sqrtA x0 * sqrt x0)
     <= (1 + 6 * u + 12 * (u * u)) * (1 + 6 * u + 12 * (u * u))
   by apply: Rmult_le_compat; nra.
-by nra.
+(* [(1 + 6u + 12u^2)^2 = 1 + 12u + 60u^2 + 144u^3 + 144u^4]; the [u^3] tail   *)
+(* fits inside the [2u^2] of slack because [u <= 1/2048].  The old [1 + 13u]  *)
+(* threw that whole [u] away, and it propagated all the way to the seed.      *)
+have L3 : u * u * u <= / 2048 * (u * u) by nra.
+have L4 : u * u * u * u <= / 2048 * (u * u * u) by nra.
+nra.
 Qed.
 
 Lemma sqrtA_gt0 x0 : format x0 -> 0 < x0 -> 0 < sqrtA x0.
@@ -630,6 +635,19 @@ have Hnn : 0 <= u * (1 - 3 * u) * (sqrtA x0 * x0).
 by lra.
 Qed.
 
+(* A pure-[u] side condition.  [nra] is much faster in a tiny context, so    *)
+(* the numeric tail of [sqrtH1_2_le] is stated on its own rather than left    *)
+(* to close inside that lemma's twenty-hypothesis context.                    *)
+Lemma sqrtH1_2_num :
+  (1 + u) * ((5 + u) / 2 * u * (1 + 12 * u + 62 * (u * u))) <= 3 * u.
+Proof.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have L3 : u * u * u <= / 2048 * (u * u) by nra.
+have L4 : u * u * u * u <= / 2048 * (u * u * u) by nra.
+nra.
+Qed.
+
 Lemma sqrtH1_2_le x0 x1 :
   format x0 -> 0 < x0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
   Rabs (sqrtH1_2 x0 x1) <= 3 * u.
@@ -683,11 +701,11 @@ have Hstep : (1 + u) * Rabs (sqrtH11_2 x0 + sqrtA' x0 * sqrtH1_1 x0 x1)
   by apply: Rmult_le_compat_l; lra.
 apply: Rle_trans Hstep _.
 have Hfin : (1 + u) * ((5 + u) / 2 * u * (sqrtA x0 * sqrtA x0 * x0))
-    <= (1 + u) * ((5 + u) / 2 * u * (1 + 13 * u)).
+    <= (1 + u) * ((5 + u) / 2 * u * (1 + 12 * u + 62 * (u * u))).
   apply: Rmult_le_compat_l; first lra.
   by apply: Rmult_le_compat_l; [nra | exact: Hsq].
 apply: Rle_trans Hfin _.
-by nra.
+exact: sqrtH1_2_num.
 Qed.
 
 Lemma sqrtB11_le x0 :
@@ -822,7 +840,7 @@ Qed.
 (* level because [|x1| <= 2u|x0|].                                            *)
 Lemma sqrtA_bound_full x :
   isTW x -> 0 < tw0 x ->
-  1 <= sqrtA (tw0 x) * sqrt (TWval x) <= 1 + 8 * u.
+  1 <= sqrtA (tw0 x) * sqrt (TWval x) <= 1 + 15 * u / 2.
 Proof.
 move=> Hx Hx0.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -837,7 +855,7 @@ have Hsx0 : sqrt (tw0 x) * sqrt (tw0 x) = tw0 x by apply: sqrt_sqrt; lra.
 have [Hlo Hhi] := sqrtA_bound Fx0 Hx0.
 (* [a^2 x0], two-sided                                                        *)
 have Ha2x0 : 1 + 4 * u - 16 * (u * u)
-    <= sqrtA (tw0 x) * sqrtA (tw0 x) * tw0 x <= 1 + 13 * u.
+    <= sqrtA (tw0 x) * sqrtA (tw0 x) * tw0 x <= 1 + 12 * u + 62 * (u * u).
   split; last by apply: sqrtA_sq_le.
   have Hgen : forall r a, r * r = tw0 x -> a * a * tw0 x = (a * r) * (a * r).
     by move=> r a <-; ring.
@@ -862,8 +880,22 @@ have Hmix : Rabs (sqrtA (tw0 x) * sqrtA (tw0 x) * (tw1 x + tw2 x))
     by apply: Rmult_le_compat_l; lra.
   by apply: Rle_trans Hstep _; lra.
 have Hmixb := Rabs_le_inv _ _ Hmix.
-(* whence [a^2 X] in [[1, 1 + 16u]]                                           *)
-have HaX : 1 <= sqrtA (tw0 x) * sqrtA (tw0 x) * TWval x <= 1 + 16 * u
+have L3 : u * u * u <= / 2048 * (u * u) by nra.
+have L4 : u * u * u * u <= / 2048 * (u * u * u) by nra.
+(* [nra] times out if it has to expand [(2u + 2u^2)(1 + 12u + 62u^2)] itself, *)
+(* so hand it the product already collected.                                  *)
+have Hmix2 : (2 * u + 2 * (u * u))
+    * (sqrtA (tw0 x) * sqrtA (tw0 x) * tw0 x) <= 2 * u + 27 * (u * u).
+  have Hstep : (2 * u + 2 * (u * u))
+      * (sqrtA (tw0 x) * sqrtA (tw0 x) * tw0 x)
+      <= (2 * u + 2 * (u * u)) * (1 + 12 * u + 62 * (u * u))
+    by apply: Rmult_le_compat_l; nra.
+  by nra.
+have Hu2 : 43 * (u * u) <= 2 * u by nra.
+(* whence [a^2 X] in [[1, 1 + 14u + 90u^2]], and [(1 + 15u/2)^2] covers it    *)
+(* because [u >= 33.75u^2].  The old route stopped at [1 + 16u] hence [8u].   *)
+have HaX : 1 <= sqrtA (tw0 x) * sqrtA (tw0 x) * TWval x
+    <= 1 + 14 * u + 90 * (u * u)
   by rewrite Hsplit; nra.
 have Hsq : (sqrtA (tw0 x) * sqrt (TWval x)) * (sqrtA (tw0 x) * sqrt (TWval x))
     = sqrtA (tw0 x) * sqrtA (tw0 x) * TWval x.
@@ -1024,6 +1056,16 @@ have Hmix : Rabs (sqrtA x0 * sqrtH1_2 x0 x1) <= sqrtA x0 * (3 * u).
 by apply: Rle_trans (Rabs_triang _ _) _; lra.
 Qed.
 
+(* Another pure-[u] side condition, kept in its own tiny context.             *)
+Lemma sqrtBW_newton_num :
+  (1 + 12 * u + 62 * (u * u)) * (5 + u / 2) + 4 <= 10.
+Proof.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have L3 : u * u * u <= / 2048 * (u * u) by nra.
+nra.
+Qed.
+
 Lemma sqrtBW_newton_form x :
   isTW x -> 0 < tw0 x ->
   Rabs (TWval (sqrtBW (tw0 x) (tw1 x))
@@ -1132,7 +1174,7 @@ have Ha3 : 0 <= (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x) * sqrtA (tw0 x))
 have Ha2 : 0 <= (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) by nra.
 have B1 : Rabs ((1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x) * sqrtA (tw0 x))
                 * tw2 x)
-    <= (u * u) * (sqrtA (tw0 x) * (1 + 13 * u)).
+    <= (u * u) * (sqrtA (tw0 x) * (1 + 12 * u + 62 * (u * u))).
   rewrite Rabs_mult (Rabs_pos_eq ((1 / 2)
             * (sqrtA (tw0 x) * sqrtA (tw0 x) * sqrtA (tw0 x)))); last lra.
   have Hstep : (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x) * sqrtA (tw0 x))
@@ -1148,7 +1190,7 @@ have B1 : Rabs ((1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x) * sqrtA (tw0 x))
   apply: Rmult_le_compat_l; first by nra.
   by apply: Rmult_le_compat_l; lra.
 have B2 : Rabs ((1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) * eps1)
-    <= (3 / 2) * (u * u) * (sqrtA (tw0 x) * (1 + 13 * u)).
+    <= (3 / 2) * (u * u) * (sqrtA (tw0 x) * (1 + 12 * u + 62 * (u * u))).
   rewrite Rabs_mult (Rabs_pos_eq ((1 / 2)
             * (sqrtA (tw0 x) * sqrtA (tw0 x)))); last lra.
   have Hstep : (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) * Rabs eps1
@@ -1163,7 +1205,7 @@ have B2 : Rabs ((1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) * eps1)
   apply: Rmult_le_compat_l; first by nra.
   by apply: Rmult_le_compat_l; lra.
 have B3 : Rabs (sqrtA (tw0 x) * eps)
-    <= (5 + u) / 2 * (u * u) * (sqrtA (tw0 x) * (1 + 13 * u)).
+    <= (5 + u) / 2 * (u * u) * (sqrtA (tw0 x) * (1 + 12 * u + 62 * (u * u))).
   rewrite Rabs_mult (Rabs_pos_eq (sqrtA (tw0 x))); last lra.
   have Hstep : sqrtA (tw0 x) * Rabs eps
       <= sqrtA (tw0 x) * ((5 + u) / 2 * (u * u)
@@ -1192,28 +1234,28 @@ have T2 := Rabs_triang ((1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)
                                    * sqrtA (tw0 x)) * tw2 x)
                        (- ((1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) * eps1)).
 rewrite !Rabs_Ropp in T1 T2.
-have Hfin : (u * u) * (sqrtA (tw0 x) * (1 + 13 * u))
-            + (3 / 2) * (u * u) * (sqrtA (tw0 x) * (1 + 13 * u))
-            + (5 + u) / 2 * (u * u) * (sqrtA (tw0 x) * (1 + 13 * u))
+have Hfin : (u * u) * (sqrtA (tw0 x) * (1 + 12 * u + 62 * (u * u)))
+            + (3 / 2) * (u * u) * (sqrtA (tw0 x) * (1 + 12 * u + 62 * (u * u)))
+            + (5 + u) / 2 * (u * u) * (sqrtA (tw0 x) * (1 + 12 * u + 62 * (u * u)))
             + 4 * (u * u) * sqrtA (tw0 x)
     <= 10 * (u * u) * sqrtA (tw0 x).
-  have -> : (u * u) * (sqrtA (tw0 x) * (1 + 13 * u))
-            + (3 / 2) * (u * u) * (sqrtA (tw0 x) * (1 + 13 * u))
-            + (5 + u) / 2 * (u * u) * (sqrtA (tw0 x) * (1 + 13 * u))
+  have -> : (u * u) * (sqrtA (tw0 x) * (1 + 12 * u + 62 * (u * u)))
+            + (3 / 2) * (u * u) * (sqrtA (tw0 x) * (1 + 12 * u + 62 * (u * u)))
+            + (5 + u) / 2 * (u * u) * (sqrtA (tw0 x) * (1 + 12 * u + 62 * (u * u)))
             + 4 * (u * u) * sqrtA (tw0 x)
       = (u * u) * sqrtA (tw0 x)
-        * ((1 + 13 * u) * (5 + u / 2) + 4) by field.
+        * ((1 + 12 * u + 62 * (u * u)) * (5 + u / 2) + 4) by field.
   have -> : 10 * (u * u) * sqrtA (tw0 x)
       = (u * u) * sqrtA (tw0 x) * 10 by field.
   apply: Rmult_le_compat_l; first by nra.
-  by nra.
+  exact: sqrtBW_newton_num.
 by lra.
 Qed.
 
 Lemma sqrtBW_x_err_crude x :
   isTW x -> 0 < tw0 x ->
   Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * sqrt (TWval x) - 1)
-    <= 120 * (u * u).
+    <= 100 * (u * u).
 Proof.
 move=> Hx Hx0.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -1235,22 +1277,22 @@ have Hsplit : B * s - 1
       + (B - A * (3 / 2 - (1 / 2) * (A * A) * (s * s))) * s by field.
 rewrite Hsplit.
 apply: Rle_trans (Rabs_triang _ _) _.
-(* (i) the Newton residual, in closed form: [e^2 (e+3)/2] with [0 <= e <= 8u] *)
+(* (i) the Newton residual, in closed form: [e^2 (e+3)/2], [0 <= e <= 7.5u] *)
 have Hnew : Rabs (A * (3 / 2 - (1 / 2) * (A * A) * (s * s)) * s - 1)
-    <= 100 * (u * u).
+    <= 85 * (u * u).
   rewrite sqrt_newton_seed.
   have -> : - ((A * s - 1) * (A * s - 1)) * (A * s - 1 + 3) / 2
       = - (((A * s - 1) * (A * s - 1)) * ((A * s - 1 + 3) / 2)) by field.
   rewrite Rabs_Ropp Rabs_mult.
-  have Hsq : Rabs ((A * s - 1) * (A * s - 1)) <= (8 * u) * (8 * u).
+  have Hsq : Rabs ((A * s - 1) * (A * s - 1)) <= (15 * u / 2) * (15 * u / 2).
     rewrite (Rabs_pos_eq ((A * s - 1) * (A * s - 1))); last exact: Rle_0_sqr.
     by nra.
-  have Hlin : Rabs ((A * s - 1 + 3) / 2) <= (3 + 8 * u) / 2.
+  have Hlin : Rabs ((A * s - 1 + 3) / 2) <= (3 + 15 * u / 2) / 2.
     rewrite (Rabs_pos_eq ((A * s - 1 + 3) / 2)); last lra.
     by lra.
   have Hstep : Rabs ((A * s - 1) * (A * s - 1))
                  * Rabs ((A * s - 1 + 3) / 2)
-      <= ((8 * u) * (8 * u)) * ((3 + 8 * u) / 2)
+      <= ((15 * u / 2) * (15 * u / 2)) * ((3 + 15 * u / 2) / 2)
     by apply: Rmult_le_compat; try apply: Rabs_pos.
   by apply: Rle_trans Hstep _; nra.
 (* (ii) the collected rounding, carried across by [A s <= 1 + 8u]             *)
@@ -1273,8 +1315,8 @@ Qed.
 (* [9916u^4] arises: [E^2 (3 + E)/2] with [E = 81u^2 + 622u^3], and it is     *)
 (* tight -- [9915.5u^4] at [p = 11].                                          *)
 Lemma newton_residual_const :
-  (120 * (u * u)) * (120 * (u * u)) * ((3 + 120 * (u * u)) / 2)
-  <= 21700 * (u * u * u * u).
+  (100 * (u * u)) * (100 * (u * u)) * ((3 + 100 * (u * u)) / 2)
+  <= 15200 * (u * u * u * u).
 Proof.
 have Hu0 : 0 < u by apply: u_gt_0.
 have Hu2048 := u_le_2048.
@@ -1292,7 +1334,7 @@ Lemma sqrt_newton_residual x :
         * (3 / 2 - (1 / 2) * (TWval (sqrtBW (tw0 x) (tw1 x))
                               * TWval (sqrtBW (tw0 x) (tw1 x))) * TWval x)
         - sqrt (TWval x))
-    <= 21700 * (u * u * u * u) * Rabs (sqrt (TWval x)).
+    <= 15200 * (u * u * u * u) * Rabs (sqrt (TWval x)).
 Proof.
 move=> Hx Hx0.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -1312,20 +1354,20 @@ have -> : - s * ((B * s - 1) * (B * s - 1)) * (B * s - 1 + 3) / 2
     = - (s * (((B * s - 1) * (B * s - 1))
               * ((B * s - 1 + 3) / 2))) by field.
 rewrite Rabs_Ropp Rabs_mult !(Rabs_pos_eq s) //.
-rewrite [21700 * (u * u * u * u) * s]Rmult_comm.
+rewrite [15200 * (u * u * u * u) * s]Rmult_comm.
 apply: Rmult_le_compat_l => //.
 have He := Rabs_le_inv _ _ Hseed.
 have Hsq : (B * s - 1) * (B * s - 1)
-    <= (120 * (u * u))
-       * (120 * (u * u)) by nra.
+    <= (100 * (u * u))
+       * (100 * (u * u)) by nra.
 have Hsq0 : 0 <= (B * s - 1) * (B * s - 1) by apply: Rle_0_sqr.
 have Hlin : (B * s - 1 + 3) / 2
-    <= (3 + (120 * (u * u))) / 2 by nra.
+    <= (3 + (100 * (u * u))) / 2 by nra.
 have Hlin0 : 0 <= (B * s - 1 + 3) / 2 by nra.
 have Hstep : ((B * s - 1) * (B * s - 1)) * ((B * s - 1 + 3) / 2)
-    <= (120 * (u * u))
-       * (120 * (u * u))
-       * ((3 + (120 * (u * u))) / 2)
+    <= (100 * (u * u))
+       * (100 * (u * u))
+       * ((3 + (100 * (u * u))) / 2)
   by apply: Rmult_le_compat.
 rewrite Rabs_pos_eq; last by nra.
 by apply: Rle_trans Hstep _; exact: newton_residual_const.
@@ -1462,12 +1504,12 @@ have Key : Rabs (TWval (sqrtBW (tw0 x) (tw1 x))
       = ((B * s) * (B * s) - 1) + B * (I1 - B * TWval x).
     by rewrite -HsX; ring.
   have Ht := Rabs_le_inv _ _ Hseed.
-  have HBs : Rabs (B * s) <= 1 + (120 * (u * u)).
+  have HBs : Rabs (B * s) <= 1 + (100 * (u * u)).
     by have := Rabs_triang_inv (B * s) 1; rewrite Rabs_R1; lra.
   (* the squared seed term                                                    *)
   have Hsq : Rabs ((B * s) * (B * s) - 1)
-      <= (120 * (u * u))
-         * (2 + (120 * (u * u))).
+      <= (100 * (u * u))
+         * (2 + (100 * (u * u))).
     have -> : (B * s) * (B * s) - 1 = (B * s - 1) * ((B * s - 1) + 2)
       by ring.
     rewrite Rabs_mult.
@@ -1477,8 +1519,8 @@ have Key : Rabs (TWval (sqrtBW (tw0 x) (tw1 x))
     by lra.
   (* the [mul1] term, measured against the same [t^2]                         *)
   have Hmulterm : Rabs (B * (I1 - B * TWval x))
-      <= (u * u) * ((1 + (120 * (u * u)))
-                    * (1 + (120 * (u * u)))).
+      <= (u * u) * ((1 + (100 * (u * u)))
+                    * (1 + (100 * (u * u)))).
     rewrite Rabs_mult.
     have HBp := Rabs_pos B.
     have Hstep : Rabs B * Rabs (I1 - B * TWval x)
@@ -1618,8 +1660,8 @@ have Hgen : forall r b, r * r = TWval x -> b * TWval x = (b * r) * r.
 rewrite (Hgen s B HsX) Rabs_mult (Rabs_pos_eq s); last lra.
 have Hb := Rabs_le_inv _ _ Hseed.
 (* [120u^2 <= 1/2], factored so [lra] can see it.                             *)
-have Hhalf : 120 * (u * u) <= 1 / 2.
-  have -> : 120 * (u * u) = 120 * u * u by ring.
+have Hhalf : 100 * (u * u) <= 1 / 2.
+  have -> : 100 * (u * u) = 100 * u * u by ring.
   by nra.
 have HBs : Rabs (B * s) <= 1 + 121 * (u * u).
   rewrite (Rabs_pos_eq (B * s)); last by lra.
@@ -1726,8 +1768,8 @@ have Hsplit : 3 / 2 - 1 / 2 * (B * B) * TWval x - B / 2 * I1
 rewrite Hsplit HBX.
 apply: Rle_trans (Rabs_triang _ _) _.
 rewrite Rabs_Ropp.
-have Hhalf : 120 * (u * u) <= 1 / 2.
-  have -> : 120 * (u * u) = 120 * u * u by ring.
+have Hhalf : 100 * (u * u) <= 1 / 2.
+  have -> : 100 * (u * u) = 100 * u * u by ring.
   by nra.
 have Hu4 : 14400 * ((u * u) * (u * u)) <= u * u.
   have -> : 14400 * ((u * u) * (u * u)) = 14400 * (u * u) * u * u by ring.
@@ -1735,9 +1777,9 @@ have Hu4 : 14400 * ((u * u) * (u * u)) <= u * u.
   have Hc : 14400 * (u * u) <= 1 by nra.
   by nra.
 have Hlo : 0 <= B * s by lra.
-have Hsqhi : (B * s) * (B * s) <= (1 + 120 * (u * u)) * (1 + 120 * (u * u))
+have Hsqhi : (B * s) * (B * s) <= (1 + 100 * (u * u)) * (1 + 100 * (u * u))
   by apply: Rmult_le_compat; nra.
-have Hsqlo : (1 - 120 * (u * u)) * (1 - 120 * (u * u)) <= (B * s) * (B * s)
+have Hsqlo : (1 - 100 * (u * u)) * (1 - 100 * (u * u)) <= (B * s) * (B * s)
   by apply: Rmult_le_compat; nra.
 have Hsq : Rabs (3 / 2 - B * s * (B * s)) <= 1 / 2 + 241 * (u * u)
   by apply: Rabs_le; nra.
@@ -1801,7 +1843,7 @@ Lemma ThreeSqRtAux_error mul1 mul2 mul3 d1 d2 d3 :
   forall x, isTW x -> 0 < tw0 x ->
     Rabs (TWval (ThreeSqRtAux mul1 mul2 mul3 x) - sqrt (TWval x))
       <= (d1 * (1 / 2 + 300 * (u * u)) + d2 * (1 / 2 + 300 * (u * u))
-          + d3 * (1 + 300 * (u * u)) + 21700 * (u * u * u * u))
+          + d3 * (1 + 300 * (u * u)) + 15200 * (u * u * u * u))
          * Rabs (sqrt (TWval x)).
 Proof.
 Admitted.

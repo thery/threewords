@@ -276,6 +276,27 @@ move: uxLuy; rewrite -pow1E !ulp_neq_0 // -bpow_plus.
 by move=> /lt_bpow H; apply: bpow_le; lia.
 Qed.
 
+(* If [y] fits strictly inside ONE ulp of [x] -- the separation that consec-  *)
+(* utive limbs of a triple word satisfy -- then [y] sits a full [p] bits      *)
+(* below [x], so its own ulp is down by a further factor [pow (- p)].  The    *)
+(* naive chain [ulp y <= 2u|y| <= 2u ulp x] throws that binade away and is    *)
+(* a factor [2] worse; see doc/thm10.md, step 1.                              *)
+Lemma ulp_lt_ulp_mul x y : Rabs y < ulp x -> ulp y <= pow (- p) * ulp x.
+Proof.
+move=> Hy.
+have Hux : 0 < ulp x by apply: Rle_lt_trans Hy; apply: Rabs_pos.
+have x_neq0 : x <> 0 by move=> x0; move: Hux; rewrite x0 ulp_FLX_0; lra.
+have Hux_eq : ulp x = pow (mag beta x - p) by rewrite ulp_neq_0 // /cexp /fexp.
+have [->|y_neq0] := Req_dec y 0.
+  rewrite ulp_FLX_0; apply: Rmult_le_pos; [apply: bpow_ge_0|apply: ulp_ge_0].
+have Hmag : (mag beta y <= mag beta x - p)%Z.
+  suff H : (mag beta y - 1 < mag beta x - p)%Z by lia.
+  apply: (lt_bpow beta); rewrite -Hux_eq.
+  by apply: Rle_lt_trans Hy; apply: bpow_mag_le.
+rewrite [ulp y]ulp_neq_0 // /cexp /fexp Hux_eq -bpow_plus.
+by apply: bpow_le; lia.
+Qed.
+
 
 (* About round to the nearest                                                 *)
 

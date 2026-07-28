@@ -1,5 +1,5 @@
 (* ---------------------------------------------------------------------------*)
-(* Algorithms 18 and 20 (3Prod^one): the product of a double word (Alg 18)   *)
+(* Algorithms 18 and 20 (3Prod^one): the product of a double word (Alg 18)    *)
 (* resp. a TRIPLE word (Alg 20) by a triple word                              *)
 (* whose leading limb is exactly [1], and its two correctness results -- the  *)
 (* result is a triple word ([ThreeProdOne_isTW]) and the relative error is    *)
@@ -18,7 +18,7 @@
 (* ONE DEVIATION FROM THE PAPER, and it is necessary.  Algorithm 18 sums      *)
 (* [b1] and [z01+] with a Fast2Sum, justified by its Remark 10 -- if the      *)
 (* condition to be errorless is false, it means that [b1] is very small, so   *)
-(* that the global error will be small anyway.  That is FALSE: the           *)
+(* that the global error will be small anyway.  That is FALSE: the            *)
 (* condition fails exactly when [|b1| < |z01+|], and the worst case is        *)
 (* [|b1| ~ ulp(z01+)], where [b1] is absorbed and what is lost is             *)
 (* [~ u|z01+| ~ 41u^3], not [O(u^4)].  doc/alg18_fast2sum_bug.py exhibits     *)
@@ -32,7 +32,7 @@
 (* error-free unconditionally.  Algorithm 18 keeps its 20 operations and      *)
 (* gains 2 tests -- and the paper's [delta2] then holds.                      *)
 (*                                                                            *)
-(* STATUS: Algorithm 18 is COMPLETE (zero admits).  Algorithm 20 -- its      *)
+(* STATUS: Algorithm 18 is COMPLETE (zero admits).  Algorithm 20 -- its       *)
 (* [3,3] twin, which Theorem 10 (3Div) needs for its final product -- is      *)
 (* stated and ADMITTED (skeleton).                                            *)
 (* ---------------------------------------------------------------------------*)
@@ -119,7 +119,7 @@ Local Notation tw_normP := (tw_normP p).
 (*  it is [1], which is what its callers guarantee.  The third limb of [x] is *)
 (*  ignored too: [x] is a double word.                                        *)
 (* ===========================================================================*)
-(* One definition per line of the algorithm, so that every intermediate      *)
+(* One definition per line of the algorithm, so that every intermediate       *)
 (* quantity can be bounded without ever unfolding [ThreeProdOne] (the same    *)
 (* discipline as [reciA]/[reciB] in ThreeReci.v).  [x0], [x1] are the double  *)
 (* word, [y1], [y2] the tail of the triple word whose head is [1].            *)
@@ -458,8 +458,8 @@ case: y Hy Hy0 Hy1v => y0 y1 y2 [Fy0 Fy1 Fy2 Hys1 Hys2] /= Hy0.
 rewrite Hy0 in Hys1 *.
 move=> Hy1v.
 rewrite Hx2.
-(* [|x1| <= u|x0|] (a double word); and since the head is [1] and the whole  *)
-(* is within [40u^2] of it, [|y1| <= 42u^2] and [|y2| <= 84u^3].             *)
+(* [|x1| <= u|x0|] (a double word); and since the head is [1] and the whole   *)
+(* is within [40u^2] of it, [|y1| <= 42u^2] and [|y2| <= 84u^3].              *)
 have Hx1 : Rabs x1 <= u * Rabs x0.
   case: Hsep => [->|Hs]; first by rewrite Rabs_R0; have := Rabs_pos x0; nra.
   by have := @ulp_2u p beta Hp2 x0; lra.
@@ -488,8 +488,8 @@ have Fe : forall i, format (nth 0 (p18e x0 x1 y1 y2) i).
   move=> i; case: (ltnP i (size (p18e x0 x1 y1 y2))) => Hi;
     last by rewrite nth_default //; exact: generic_format_0.
   by apply: (@format_vecSum p Hp2 choice) Fin _ _; apply: mem_nth.
-(* EVERY block is exact -- 2Prod, the two sorted Fast2Sums, VecSum -- so the *)
-(* result is just [x0 + b'0 + s3].                                           *)
+(* EVERY block is exact -- 2Prod, the two sorted Fast2Sums, VecSum -- so the  *)
+(* result is just [x0 + b'0 + s3].                                            *)
 have Hval : TWval (let: DWR r1 r2 := Fast2SumS (p18e1 x0 x1 y1 y2)
       (p18e2 x0 x1 y1 y2) in TWR (p18e0 x0 x1 y1 y2) r1 r2)
     = x0 + dwh (p18b x0 x1 y1) + p18s3 x0 x1 y1 y2.
@@ -515,7 +515,7 @@ have Hprod : p18z01p x0 y1 + p18z01m x0 y1 = x0 * y1.
   rewrite (_ : x0 * y1 - p18z01p x0 y1 = -(p18z01p x0 y1 - x0 * y1));
     last by ring.
   by apply: generic_format_opp; rewrite /p18z01p; apply: format_err_mul.
-(* THE ERROR IS FOUR TERMS: the neglected [x1 y2] and the three roundings.   *)
+(* THE ERROR IS FOUR TERMS: the neglected [x1 y2] and the three roundings.    *)
 set eta1 := p18z31 x0 x1 y1 - (p18z01m x0 y1 + x1 * y1).
 set eta2 := p18z3 x0 x1 y1 y2 - (p18z31 x0 x1 y1 + x0 * y2).
 set eta3 := p18s3 x0 x1 y1 y2 - (dwl (p18b x0 x1 y1) + p18z3 x0 x1 y1 y2).
@@ -525,8 +525,8 @@ have Hid : x0 + dwh (p18b x0 x1 y1) + p18s3 x0 x1 y1 y2
     - (x0 + x1 + 0) * (1 + y1 + y2) = - (x1 * y2) + eta1 + eta2 + eta3.
   by rewrite HE /eta1 /eta2 /eta3; lra.
 rewrite Hid.
-(* Three shapes cover every bound below: a product, a rounding, and the      *)
-(* error of a rounding, all measured against [|x0|].                         *)
+(* Three shapes cover every bound below: a product, a rounding, and the       *)
+(* error of a rounding, all measured against [|x0|].                          *)
 have Hmono : forall c d : R, c <= d -> c * Rabs x0 <= d * Rabs x0
   by move=> c d Hcd; apply: Rmult_le_compat_r.
 have Hmul : forall a b ca cb : R, Rabs a <= ca * Rabs x0 -> Rabs b <= cb ->
@@ -612,7 +612,7 @@ have Hb1 : Rabs (dwl (p18b x0 x1 y1)) <= (u * u + 45 * (u * u * u)) * Rabs x0.
 have Ht3 : Rabs (dwl (p18b x0 x1 y1) + p18z3 x0 x1 y1 y2)
     <= (u * u + 218 * (u * u * u)) * Rabs x0.
   by have T := Rabs_triang (dwl (p18b x0 x1 y1)) (p18z3 x0 x1 y1 y2); lra.
-(* ... and THIS is the only one that reaches [u^3].                          *)
+(* ... and THIS is the only one that reaches [u^3].                           *)
 have Heta3 : Rabs eta3 <= (u * u * u + 218 * (u * u * u * u)) * Rabs x0.
   rewrite /eta3 /p18s3.
   apply: Rle_trans (Herr _ (u * u + 218 * (u * u * u)) Ht3 (ltac:(nra))) _.
@@ -624,7 +624,7 @@ have Hfin : Rabs (- (x1 * y2) + eta1 + eta2 + eta3)
   have T3 := Rabs_triang (- (x1 * y2)) eta1.
   rewrite Rabs_Ropp in T3.
   lra.
-(* Finally, the product itself is at least [(1 - 2u)|x0|].                   *)
+(* Finally, the product itself is at least [(1 - 2u)|x0|].                    *)
 have Hxy : (1 - 2 * u) * Rabs x0 <= Rabs ((x0 + x1 + 0) * (1 + y1 + y2)).
   have E : x0 + x1 + 0 = x0 + x1 by ring.
   rewrite E Rabs_mult.
@@ -726,9 +726,9 @@ Definition ThreeProdOneTW (x y : twR) : twR :=
 
 Lemma p20s3_le x0 x1 x2 y1 y2 :
   format x0 -> format x1 -> format y1 ->
-  Rabs x1 <= 2 * u * Rabs x0 -> Rabs x2 <= 4 * (u * u) * Rabs x0 ->
+  Rabs x1 <= 2 * u * Rabs x0 -> Rabs x2 <= 2 * (u * u) * Rabs x0 ->
   Rabs y1 <= 2 * u -> Rabs y2 <= 4 * (u * u) ->
-  Rabs (p20s3 x0 x1 x2 y1 y2) <= 24 * (u * u) * Rabs x0.
+  Rabs (p20s3 x0 x1 x2 y1 y2) <= 22 * (u * u) * Rabs x0.
 Proof.
 move=> Fx0 Fx1 Fy1 Hx1 Hx2 Hy1 Hy2.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -760,15 +760,16 @@ have Hu64 := @u_le_64 p Hp6.
 case: x Hx => x0 x1 x2 [Fx0 Fx1 Fx2 Hxs1 Hxs2].
 case: y Hy Hy0 => y0 y1 y2 [Fy0 Fy1 Fy2 Hys1 Hys2] /= Hy0.
 rewrite Hy0 in Hys1.
-(* A triple word gives the WEAKER [|x1| <= 2u|x0|], and its third limb is    *)
-(* [O(u^2)] -- that is the whole difference with Algorithm 18.               *)
+(* A triple word gives the WEAKER [|x1| <= 2u|x0|], and its third limb is     *)
+(* [O(u^2)] -- that is the whole difference with Algorithm 18.                *)
 have Hx1 : Rabs x1 <= 2 * u * Rabs x0.
   case: Hxs1 => [->|Hs]; first by rewrite Rabs_R0; have := Rabs_pos x0; nra.
   by have := @ulp_2u p beta Hp2 x0; lra.
-have Hx2 : Rabs x2 <= 4 * (u * u) * Rabs x0.
-  case: Hxs2 => [->|Hs]; first by rewrite Rabs_R0; have := Rabs_pos x0; nra.
-  have Hu2 := @ulp_2u p beta Hp2 x1.
-  by have := Rabs_pos x1; nra.
+(* [2u^2], NOT the naive [4u^2]: [|x1| < ulp x0] puts [x1] a full [p] bits    *)
+(* below [x0], so [ulp x1 <= u ulp x0] -- see [isTW_tw2_le] in TWR.v and      *)
+(* doc/thm10.md step 1.  This is what pulls [delta3] down from [8u^3].        *)
+have Hx2 : Rabs x2 <= 2 * (u * u) * Rabs x0.
+  by apply: (@isTW_tw2_le p Hp2 (TWR x0 x1 x2)); split.
 have Hy1 : Rabs y1 <= 2 * u.
   case: Hys1 => [->|Hs]; first by rewrite Rabs_R0; lra.
   by move: Hs; rewrite (@ulp_one p); lra.
@@ -881,27 +882,35 @@ Qed.
 (* the three neglected products and the roundings of [z31], [z3], [s3'],      *)
 (* [s3].                                                                      *)
 (*                                                                            *)
-(* THE PAPER'S [u^3] IS TOO SMALL.  Old paper Section 9 calls this "Algorithm *)
-(* 18's analysis with an additional [2u^3]", i.e. [delta3 = 3u^3 + 264u^4].   *)
-(* The honest bound is [8u^3 + 1330u^4], and the gap is structural, not       *)
-(* slack: a TRIPLE word only gives [|x1| < ulp x0 <= 2u|x0|] and              *)
-(* [|x2| < ulp x1 <= 4u^2|x0|], TWICE a double word's separation at each      *)
-(* level.  So                                                                 *)
+(* THE PAPER'S [u^3], AND HOW FAR WE NOW ARE FROM IT.  The supplementary      *)
+(* (doc/Algorithms_for_Triple-Word_Arithmetic.pdf Section 2) calls this       *)
+(* Algorithm 18's analysis with an additional [2u^3], i.e.                    *)
+(* [delta3 = delta2 + 2u^3 = 3u^3 + 264u^4] -- and since our [delta2] matches *)
+(* the paper's [u^3] exactly, the WHOLE disagreement is what the extra [x2]   *)
+(* limb costs.  The two contributors are                                      *)
 (*                                                                            *)
 (*   eta3 = u |b'1 + z3|  with  |b'1| <= u|b'0| <= 2u^2|x0|   ->  2u^3        *)
-(*   eta4 = u |s3' + x2|  with  |x2| <= 4u^2|x0|              ->  6u^3        *)
+(*   eta4 = u |s3' + x2|  with  |x2| <= 2u^2|x0|              ->  4u^3        *)
 (*                                                                            *)
-(* against Algorithm 18's [1u^3] and the paper's announced [2u^3].  Its       *)
-(* [3u^3] is what the double-word separations [|x1| <= u|x0|],                *)
-(* [|x2| <= u^2|x0|] would give.  Consequence: Theorem 10's leading term is   *)
-(* [29u^3] / [44u^3], not [24u^3] / [39u^3] -- see doc/thm10.md, which also   *)
-(* records the tightening (to [6u^3]) that recording "the last two limbs of   *)
-(* the multipliers' output form a double word" would buy.                     *)
+(* so [delta3 = 6u^3 + 1250u^4] and Theorem 10 is [27u^3] / [42u^3].  The     *)
+(* paper's implied split is [eta3 = 1u^3], [eta4 = 2u^3], summing to its      *)
+(* [3u^3]; we are a factor two out on EACH, and both are our own slack:       *)
+(*                                                                            *)
+(*  - [eta4] was [6u^3] until [isTW_tw2_le] (TWR.v) replaced the naive        *)
+(*    [|x2| < ulp x1 <= 2u|x1| <= 4u^2|x0|] by [2u^2|x0|] -- doc/thm10.md     *)
+(*    step 1, DONE.  Step 3, the half-ulp form of the rounding error, would   *)
+(*    take it to [2u^3].                                                      *)
+(*  - [eta3]'s [|b'1| <= 2u^2|x0|] is attained only when [b'0] reaches        *)
+(*    [ulp x0] exactly; off that point the grid is finer -- doc/thm10.md      *)
+(*    step 2, which would take it to [1u^3].                                  *)
+(*                                                                            *)
+(* Numerical search reaches only [~2.5u^3] on legal inputs, so the paper's    *)
+(* [3u^3] does look attained and the remaining gap is ours to close.          *)
 Lemma ThreeProdOneTW_error x y :
   ties_to_even choice ->
   isTW x -> isTW y -> tw0 y = 1 -> Rabs (TWval y - 1) <= 40 * (u * u) ->
   Rabs (TWval (ThreeProdOneTW x y) - TWval x * TWval y)
-    <= (8 * (u * u * u) + 1330 * (u * u * u * u)) * Rabs (TWval x * TWval y).
+    <= (6 * (u * u * u) + 1250 * (u * u * u * u)) * Rabs (TWval x * TWval y).
 Proof.
 move=> Hc Hx Hy Hy0 Hy1v.
 have Hu0 : 0 < u by apply: u_gt_0.
@@ -915,10 +924,11 @@ move=> Hy1v.
 have Hx1 : Rabs x1 <= 2 * u * Rabs x0.
   case: Hxs1 => [->|Hs]; first by rewrite Rabs_R0; have := Rabs_pos x0; nra.
   by have := @ulp_2u p beta Hp2 x0; lra.
-have Hx2 : Rabs x2 <= 4 * (u * u) * Rabs x0.
-  case: Hxs2 => [->|Hs]; first by rewrite Rabs_R0; have := Rabs_pos x0; nra.
-  have Hu2 := @ulp_2u p beta Hp2 x1.
-  by have := Rabs_pos x1; nra.
+(* [2u^2], NOT the naive [4u^2]: [|x1| < ulp x0] puts [x1] a full [p] bits    *)
+(* below [x0], so [ulp x1 <= u ulp x0] -- see [isTW_tw2_le] in TWR.v and      *)
+(* doc/thm10.md step 1.  This is what pulls [delta3] down from [8u^3].        *)
+have Hx2 : Rabs x2 <= 2 * (u * u) * Rabs x0.
+  by apply: (@isTW_tw2_le p Hp2 (TWR x0 x1 x2)); split.
 have Hy2u : Rabs y2 <= 2 * u * Rabs y1.
   case: Hys2 => [->|Hs]; first by rewrite Rabs_R0; have := Rabs_pos y1; nra.
   by have := @ulp_2u p beta Hp2 y1; lra.
@@ -970,7 +980,7 @@ have Hprod : p18z01p x0 y1 + p18z01m x0 y1 = x0 * y1.
   rewrite (_ : x0 * y1 - p18z01p x0 y1 = -(p18z01p x0 y1 - x0 * y1));
     last by ring.
   by apply: generic_format_opp; rewrite /p18z01p; apply: format_err_mul.
-(* THE ERROR IS SEVEN TERMS: three neglected products and four roundings.    *)
+(* THE ERROR IS SEVEN TERMS: three neglected products and four roundings.     *)
 set eta1 := p18z31 x0 x1 y1 - (p18z01m x0 y1 + x1 * y1).
 set eta2 := p18z3 x0 x1 y1 y2 - (p18z31 x0 x1 y1 + x0 * y2).
 set eta3 := p18s3 x0 x1 y1 y2 - (dwl (p18b x0 x1 y1) + p18z3 x0 x1 y1 y2).
@@ -983,8 +993,8 @@ have Hid : x0 + dwh (p18b x0 x1 y1) + p20s3 x0 x1 x2 y1 y2
     = - (x1 * y2) - (x2 * y1) - (x2 * y2) + eta1 + eta2 + eta3 + eta4.
   by rewrite HE /eta1 /eta2 /eta3 /eta4; lra.
 rewrite Hid.
-(* Three shapes cover every bound below: a product, a rounding, and the      *)
-(* error of a rounding, all measured against [|x0|].                         *)
+(* Three shapes cover every bound below: a product, a rounding, and the       *)
+(* error of a rounding, all measured against [|x0|].                          *)
 have Hmono : forall c d : R, c <= d -> c * Rabs x0 <= d * Rabs x0
   by move=> c d Hcd; apply: Rmult_le_compat_r.
 have Hmul : forall a b ca cb : R, Rabs a <= ca * Rabs x0 -> Rabs b <= cb ->
@@ -1026,16 +1036,16 @@ have Hx1y2 : Rabs (x1 * y2) <= (168 * (u * u * u * u)) * Rabs x0.
   have H := Hmul x1 y2 (2 * u) (84 * (u * u * u)) Hx1 Hy2 Hc1.
   by move: H;
      have -> : 2 * u * (84 * (u * u * u)) = 168 * (u * u * u * u) by ring.
-have Hx2y1 : Rabs (x2 * y1) <= (168 * (u * u * u * u)) * Rabs x0.
+have Hx2y1 : Rabs (x2 * y1) <= (84 * (u * u * u * u)) * Rabs x0.
   have Hc1 : 0 <= 42 * (u * u) by lra.
-  have H := Hmul x2 y1 (4 * (u * u)) (42 * (u * u)) Hx2 Hy1 Hc1.
+  have H := Hmul x2 y1 (2 * (u * u)) (42 * (u * u)) Hx2 Hy1 Hc1.
   by move: H;
-     have -> : 4 * (u * u) * (42 * (u * u)) = 168 * (u * u * u * u) by ring.
-(* [x2 y2] is [336u^5], which [u <= 1/64] absorbs into [6u^4].              *)
+     have -> : 2 * (u * u) * (42 * (u * u)) = 84 * (u * u * u * u) by ring.
+(* [x2 y2] is [336u^5], which [u <= 1/64] absorbs into [6u^4].                *)
 have Hx2y2 : Rabs (x2 * y2) <= (6 * (u * u * u * u)) * Rabs x0.
   have Hc1 : 0 <= 84 * (u * u * u) by lra.
-  have H := Hmul x2 y2 (4 * (u * u)) (84 * (u * u * u)) Hx2 Hy2 Hc1.
-  have Hstep : 4 * (u * u) * (84 * (u * u * u)) * Rabs x0
+  have H := Hmul x2 y2 (2 * (u * u)) (84 * (u * u * u)) Hx2 Hy2 Hc1.
+  have Hstep : 2 * (u * u) * (84 * (u * u * u)) * Rabs x0
       <= 6 * (u * u * u * u) * Rabs x0 by apply: Hmono; nra.
   by lra.
 have Hz01p : Rabs (p18z01p x0 y1) <= (43 * (u * u)) * Rabs x0.
@@ -1099,7 +1109,7 @@ have Ht3 : Rabs (dwl (p18b x0 x1 y1) + p18z3 x0 x1 y1 y2)
     <= (2 * (u * u) + 262 * (u * u * u)) * Rabs x0.
   by have T := Rabs_triang (dwl (p18b x0 x1 y1)) (p18z3 x0 x1 y1 y2); lra.
 have Hc3 : 0 <= 2 * (u * u) + 262 * (u * u * u) by lra.
-(* [eta3] is Algorithm 18's [u^3] term, DOUBLED by [|b'1| <= 2u^2|x0|].      *)
+(* [eta3] is Algorithm 18's [u^3] term, DOUBLED by [|b'1| <= 2u^2|x0|].       *)
 have Heta3 : Rabs eta3
     <= (2 * (u * u * u) + 262 * (u * u * u * u)) * Rabs x0.
   rewrite /eta3 /p18s3.
@@ -1111,18 +1121,20 @@ have Hs3' : Rabs (p18s3 x0 x1 y1 y2)
   apply: Rle_trans (Hround _ (2 * (u * u) + 262 * (u * u * u)) Ht3 Hc3) _.
   by apply: Hmono; nra.
 have Ht4 : Rabs (p18s3 x0 x1 y1 y2 + x2)
-    <= (6 * (u * u) + 269 * (u * u * u)) * Rabs x0.
+    <= (4 * (u * u) + 269 * (u * u * u)) * Rabs x0.
   by have T := Rabs_triang (p18s3 x0 x1 y1 y2) x2; lra.
-have Hc4 : 0 <= 6 * (u * u) + 269 * (u * u * u) by lra.
-(* ... and [eta4], the new line, is the DOMINANT [6u^3]: [|x2| <= 4u^2|x0|]. *)
+have Hc4 : 0 <= 4 * (u * u) + 269 * (u * u * u) by lra.
+(* ... and [eta4], the new line, is [4u^3]: [2u^2] from [s3'] and [2u^2]      *)
+(* from [x2] ([isTW_tw2_le]).  It was [6u^3] while [x2] was taken at the      *)
+(* naive [4u^2|x0|] -- doc/thm10.md step 1, and the bulk of [delta3].         *)
 have Heta4 : Rabs eta4
-    <= (6 * (u * u * u) + 269 * (u * u * u * u)) * Rabs x0.
+    <= (4 * (u * u * u) + 269 * (u * u * u * u)) * Rabs x0.
   rewrite /eta4 /p20s3.
-  apply: Rle_trans (Herr _ (6 * (u * u) + 269 * (u * u * u)) Ht4 Hc4) _.
+  apply: Rle_trans (Herr _ (4 * (u * u) + 269 * (u * u * u)) Ht4 Hc4) _.
   by apply: Hmono; nra.
 have Hfin : Rabs (- (x1 * y2) - (x2 * y1) - (x2 * y2)
                   + eta1 + eta2 + eta3 + eta4)
-    <= (8 * (u * u * u) + 1211 * (u * u * u * u)) * Rabs x0.
+    <= (6 * (u * u * u) + 1127 * (u * u * u * u)) * Rabs x0.
   have E : - (x1 * y2) - (x2 * y1) - (x2 * y2) + eta1 + eta2 + eta3 + eta4
       = - (x1 * y2) + - (x2 * y1) + - (x2 * y2) + eta1 + eta2 + eta3 + eta4
     by ring.
@@ -1139,7 +1151,7 @@ have Hfin : Rabs (- (x1 * y2) - (x2 * y1) - (x2 * y2)
   rewrite !Rabs_Ropp in T6.
   rewrite Rabs_Ropp in T5.
   lra.
-(* Finally, the product itself is at least [(1 - 3u)|x0|].                   *)
+(* Finally, the product itself is at least [(1 - 3u)|x0|].                    *)
 have Hxy : (1 - 4 * u) * Rabs x0 <= Rabs ((x0 + x1 + x2) * (1 + y1 + y2)).
   rewrite Rabs_mult.
   have H1 : (1 - 3 * u) * Rabs x0 <= Rabs (x0 + x1 + x2).
@@ -1149,7 +1161,7 @@ have Hxy : (1 - 4 * u) * Rabs x0 <= Rabs ((x0 + x1 + x2) * (1 + y1 + y2)).
     have T2 := Rabs_triang_inv x0 (- x1).
     have E3 : x0 - - x1 = x0 + x1 by ring.
     rewrite E3 Rabs_Ropp in T2.
-    have Hslack : 4 * (u * u) * Rabs x0 <= u * Rabs x0
+    have Hslack : 2 * (u * u) * Rabs x0 <= u * Rabs x0
       by apply: Hmono; clear -Hu0 Hu64; nra.
     lra.
   have H2 : 1 - 44 * (u * u) <= Rabs (1 + y1 + y2).
@@ -1179,24 +1191,24 @@ have Hxy : (1 - 4 * u) * Rabs x0 <= Rabs ((x0 + x1 + x2) * (1 + y1 + y2)).
     by apply: Rmult_le_pos; nra.
   by nra.
 apply: Rle_trans Hfin _.
-have Hpos : 0 <= 8 * (u * u * u) + 1330 * (u * u * u * u).
+have Hpos : 0 <= 6 * (u * u * u) + 1250 * (u * u * u * u).
   have H4 : 0 <= u * u * u * u by apply: Rmult_le_pos; lra.
   by lra.
-apply: Rle_trans (_ : (8 * (u * u * u) + 1330 * (u * u * u * u))
+apply: Rle_trans (_ : (6 * (u * u * u) + 1250 * (u * u * u * u))
     * ((1 - 4 * u) * Rabs x0) <= _); last first.
   by apply: Rmult_le_compat_l.
 have Hexp2 :
-    (8 * (u * u * u) + 1330 * (u * u * u * u)) * ((1 - 4 * u) * Rabs x0)
-    = ((8 * (u * u * u) + 1330 * (u * u * u * u)) * (1 - 4 * u)) * Rabs x0
+    (6 * (u * u * u) + 1250 * (u * u * u * u)) * ((1 - 4 * u) * Rabs x0)
+    = ((6 * (u * u * u) + 1250 * (u * u * u * u)) * (1 - 4 * u)) * Rabs x0
   by ring.
 rewrite Hexp2.
 apply: Hmono.
 have H4 : 0 <= u * u * u * u by apply: Rmult_le_pos; lra.
 have H5 : u * u * u * u * u <= u * u * u * u * / 64
   by apply: Rmult_le_compat_l; lra.
-have -> : (8 * (u * u * u) + 1330 * (u * u * u * u)) * (1 - 4 * u)
-    = 8 * (u * u * u) + 1298 * (u * u * u * u)
-      - 5320 * (u * u * u * u * u) by ring.
+have -> : (6 * (u * u * u) + 1250 * (u * u * u * u)) * (1 - 4 * u)
+    = 6 * (u * u * u) + 1226 * (u * u * u * u)
+      - 5000 * (u * u * u * u * u) by ring.
 lra.
 Qed.
 

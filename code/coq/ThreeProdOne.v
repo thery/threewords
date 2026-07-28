@@ -970,6 +970,16 @@ have Hcu : (6 * cy + 48) * u <= 11 by nra.
 nra.
 Qed.
 
+Lemma prodone_num7 cy : 0 <= cy -> cy <= 105 ->
+  (2 * cy + 8) * (u * u * u) <= 4 * (u * u).
+Proof.
+move=> Hcy0 Hcy.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu64 := @u_le_64 p Hp6.
+have Hcu : (2 * cy + 8) * u <= 4 by nra.
+nra.
+Qed.
+
 Lemma prodone_num6 cy : 0 <= cy -> cy <= 105 ->
   6 * (u * u * u) + (26 * cy + 178) * (u * u * u * u)
     <= 6 * (u * u * u) + (29 * cy + 210) * (u * u * u * u)
@@ -1281,9 +1291,10 @@ have Hxy : (1 - 5 * u) * Rabs x0 <= Rabs ((x0 + x1 + x2) * (1 + y1 + y2)).
     have T2 := Rabs_triang_inv 1 (- y1).
     have E3 : 1 - - y1 = 1 + y1 by ring.
     rewrite E3 Rabs_Ropp Rabs_R1 in T2.
-    have Hu3 : u * u * u <= /64 * (u * u).
-      have -> : /64 * (u * u) = (u * u) * /64 by ring.
-      by apply: Rmult_le_compat_l.
+    (* [|y2| <= (2cy + 8)u^3] must fit in the [4u^2] of slack, i.e.          *)
+    (* [(2cy + 8)u <= 4] -- nonlinear in [cy], so [lra] needs it handed over. *)
+    have Hcu : (2 * cy + 8) * u <= 4 by nra.
+    have Hu3 : (2 * cy + 8) * (u * u * u) <= 4 * (u * u) by nra.
     lra.
   have Hxp := Rabs_pos (x0 + x1 + x2).
   have Hyp := Rabs_pos (1 + y1 + y2).
@@ -1336,10 +1347,8 @@ Lemma ThreeProdOneTW_error x y :
     <= (6 * (u * u * u) + 1400 * (u * u * u * u)) * Rabs (TWval x * TWval y).
 Proof.
 move=> Hc Hx Hy Hy0 Hy1v.
-have H40a : (0 : R) <= 40 by lra.
-have H40b : (40 : R) <= 105 by lra.
-have H := ThreeProdOneTW_error_gen x y 40 Hc Hx Hy Hy0 Hy1v H40a H40b.
-by have -> : 29 * 40 + 240 = 1400 by lra.
+have -> : 1400 = 29 * 40 + 240 by lra.
+by apply: ThreeProdOneTW_error_gen => //; lra.
 Qed.
 
 End SecThreeProdOne.

@@ -1648,7 +1648,30 @@ Lemma sqrtAux_bX_le x :
   Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * TWval x)
     <= (1 + 8 * u) * sqrt (TWval x).
 Proof.
-Admitted.
+move=> Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HX0 : 0 < TWval x by apply: isTW_TWval_gt0.
+have Hs0 : 0 < sqrt (TWval x) by apply: sqrt_lt_R0.
+have HsX : sqrt (TWval x) * sqrt (TWval x) = TWval x by apply: sqrt_sqrt; lra.
+have Hseed := sqrtBW_x_err_crude Hx Hx0.
+set B := TWval (sqrtBW (tw0 x) (tw1 x)) in Hseed *.
+set s := sqrt (TWval x) in HsX Hs0 Hseed *.
+(* [b X = (b s) s], and [|b s - 1| <= 120u^2] is already proved.              *)
+have Hgen : forall r b, r * r = TWval x -> b * TWval x = (b * r) * r.
+  by move=> r b <-; ring.
+rewrite (Hgen s B HsX) Rabs_mult (Rabs_pos_eq s); last lra.
+have Hb := Rabs_le_inv _ _ Hseed.
+(* [120u^2 <= 8u] and [<= 1/2]: given to [lra] in factored form.              *)
+have Hlin : 120 * (u * u) <= 8 * u.
+  have -> : 120 * (u * u) = 120 * u * u by ring.
+  by nra.
+have Hhalf : 120 * (u * u) <= 1 / 2 by nra.
+have HBs : Rabs (B * s) <= 1 + 8 * u.
+  rewrite (Rabs_pos_eq (B * s)); last by lra.
+  by lra.
+by apply: Rmult_le_compat_r; lra.
+Qed.
 
 Lemma ThreeSqRtAux_error mul1 mul2 mul3 d1 d2 d3 :
   (forall b y, isDW b -> isTW y -> isTW (mul1 b y)) ->

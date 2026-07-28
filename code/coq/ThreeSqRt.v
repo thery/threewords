@@ -322,13 +322,13 @@ move=> Fx0 Hx0.
 have Hu0 : 0 < u by apply: u_gt_0.
 have Hu1024 := @u_le_1024 p Hp10.
 have HR : 0 < sqrt x0 by apply: sqrt_lt_R0.
-(* (1) the rounding of the square root, within a relative [u].               *)
+(* (1) the rounding of the square root, within a relative [u].                *)
 have HS : Rabs (sqrtS x0 - sqrt x0) <= u * Rabs (sqrt x0)
   by apply: (@relative_error_le p beta Hp2 choice).
 rewrite (Rabs_pos_eq (sqrt x0)) in HS; last lra.
 have HSb := Rabs_le_inv _ _ HS.
 have HS0 : 0 < sqrtS x0 by nra.
-(* (2) the rounding of the quotient, multiplied through by [S] so that no    *)
+(* (2) the rounding of the quotient, multiplied through by [S] so that no     *)
 (* division survives into the arithmetic.                                     *)
 have HA : Rabs (sqrtA x0 - (1 + 4 * u) / sqrtS x0)
             <= u * Rabs ((1 + 4 * u) / sqrtS x0)
@@ -361,9 +361,105 @@ Qed.
 (* the binade [[1/2, 1)], where [ulp = u]; [3/2] is a multiple of [u] there,  *)
 (* hence so is the difference, which lands in [(1/2, 1]] -- representable.    *)
 (* Pin [h01(2) >= 1/2] first; everything else is grid arithmetic.             *)
+(* [h01(2)] lands in [[1/2, 1]].  Unfolding, [a' h0(1) = (1/2) a^2 x0 (1+d)]  *)
+(* with [|d| <= u], and [a^2 x0 = (a sqrt x0)^2] is pinned by [sqrtA_bound]   *)
+(* to [[1+2u-8u^2, 1+6u+12u^2]] -- so the half-square sits just ABOVE [1/2],  *)
+(* which is the whole purpose of the [1 + 4u] seed.                           *)
+Lemma sqrtH01_2_range x0 :
+  format x0 -> 0 < x0 -> 1 / 2 <= sqrtH01_2 x0 <= 1.
+Proof.
+move=> Fx0 Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu1024 := @u_le_1024 p Hp10.
+have HR : 0 < sqrt x0 by apply: sqrt_lt_R0.
+have HsX : sqrt x0 * sqrt x0 = x0 by apply: sqrt_sqrt; lra.
+have [Hlo Hhi] := sqrtA_bound Fx0 Hx0.
+(* [h0(1) = RN(a x0)] is within a relative [u].                               *)
+have Hh01 : Rabs (sqrtH0_1 x0 - sqrtA x0 * x0)
+              <= u * Rabs (sqrtA x0 * x0)
+  by apply: (@relative_error_le p beta Hp2 choice).
+have HA0 : 0 < sqrtA x0 by nra.
+have HAx : 0 < sqrtA x0 * x0 by nra.
+rewrite (Rabs_pos_eq (sqrtA x0 * x0)) in Hh01; last lra.
+have Hh01b := Rabs_le_inv _ _ Hh01.
+(* [a' h0(1)] is then within [(1/2)(a sqrt x0)^2 (1 +- u)].                   *)
+have Hprod : 1 / 2 + u <= sqrtA' x0 * sqrtH0_1 x0 <= 1 / 2 + 7 * u.
+  (* [a' (a x0) = (1/2)(a sqrt x0)^2], rewriting [sqrt x0 * sqrt x0] FORWARD  *)
+  (* to [x0] -- the reverse direction would rewrite under [sqrt] itself.      *)
+  have HPgen : forall r a, r * r = x0 ->
+      a / 2 * (a * x0) = / 2 * ((a * r) * (a * r)).
+    by move=> r a <-; field.
+  have HP : sqrtA' x0 * (sqrtA x0 * x0)
+      = / 2 * ((sqrtA x0 * sqrt x0) * (sqrtA x0 * sqrt x0)).
+    by rewrite /sqrtA'; apply: HPgen; exact: HsX.
+  have HD : sqrtA' x0 * sqrtH0_1 x0
+      = sqrtA' x0 * (sqrtA x0 * x0)
+        + sqrtA' x0 * (sqrtH0_1 x0 - sqrtA x0 * x0) by ring.
+  (* the perturbation is at most [u] times the main term                      *)
+  have HA'0 : 0 < sqrtA' x0 by rewrite /sqrtA'; lra.
+  have Hpert : Rabs (sqrtA' x0 * (sqrtH0_1 x0 - sqrtA x0 * x0))
+      <= u * (sqrtA' x0 * (sqrtA x0 * x0)).
+    rewrite Rabs_mult (Rabs_pos_eq (sqrtA' x0)); last lra.
+    have Hs : Rabs (sqrtH0_1 x0 - sqrtA x0 * x0) <= u * (sqrtA x0 * x0)
+      by lra.
+    have Hm : sqrtA' x0 * Rabs (sqrtH0_1 x0 - sqrtA x0 * x0)
+        <= sqrtA' x0 * (u * (sqrtA x0 * x0))
+      by apply: Rmult_le_compat_l; lra.
+    by apply: Rle_trans Hm _; lra.
+  have Hpb := Rabs_le_inv _ _ Hpert.
+  set T := sqrtA x0 * sqrt x0 in HP Hlo Hhi.
+  (* square the seed range BEFORE handing it to [nra] -- the squared form is  *)
+  (* what the goal needs and [nra] will not find it under the perturbation.   *)
+  have HT0 : 0 < T by nra.
+  have HT2a : (1 + 2 * u - 8 * (u * u)) * (1 + 2 * u - 8 * (u * u)) <= T * T
+    by apply: Rmult_le_compat; nra.
+  have HT2b : T * T <= (1 + 6 * u + 12 * (u * u)) * (1 + 6 * u + 12 * (u * u))
+    by apply: Rmult_le_compat; nra.
+  rewrite HP in Hpb.
+  rewrite HD HP.
+  have Hu2 : u * u <= / 1024 * u by nra.
+  by nra.
+(* rounding cannot leave [[1/2, 1]].                                          *)
+have Hround := @relative_error_le p beta Hp2 choice (sqrtA' x0 * sqrtH0_1 x0).
+rewrite (Rabs_pos_eq (sqrtA' x0 * sqrtH0_1 x0)) in Hround; last lra.
+have Hrb := Rabs_le_inv _ _ Hround.
+by rewrite /sqrtH01_2 /=; nra.
+Qed.
+
+(* [3/2] is on the [u]-grid, being [3 * 2^(p-1)] units of [u].                *)
+Lemma is_imul_3_2 : is_imul (3 / 2) (pow (- p)).
+Proof.
+exists (3 * 2 ^ (p - 1))%Z.
+rewrite mult_IZR.
+have -> : IZR (2 ^ (p - 1)) = pow (p - 1).
+  by rewrite -(IZR_Zpower radix2); [congr IZR|lia].
+rewrite Rmult_assoc -bpow_plus.
+have -> : (p - 1 + - p = -1)%Z by lia.
+by have -> : pow (-1) = / 2 by []; lra.
+Qed.
+
+(* [h0(2) = 3/2 - h01(2)] is EXACT.  NOT Sterbenz -- its hypothesis fails     *)
+(* outright for [3/2 - 1/2].  Both operands are multiples of [u]              *)
+(* ([is_imul_bound_pow_format] on [h01(2) >= 1/2], and [is_imul_3_2]), and    *)
+(* the difference lies in [[1/2, 1]], so [imul_format] applies.               *)
 Lemma sqrtH0_2_exact x0 :
   format x0 -> 0 < x0 -> format (sqrtH0_2 x0).
 Proof.
+move=> Fx0 Hx0.
+have [Hlo Hhi] := sqrtH01_2_range Fx0 Hx0.
+have Fh : format (sqrtH01_2 x0) by apply: generic_format_round.
+have Him1 : is_imul (sqrtH01_2 x0) (pow (- p)).
+  have -> : (- p = -1 - p + 1)%Z by lia.
+  apply: is_imul_bound_pow_format => //.
+  have -> : pow (-1) = / 2 by [].
+  by rewrite Rabs_pos_eq; lra.
+(* REMAINS: the [imul_format] invocation.  Everything it consumes is proved   *)
+(* just above -- [Him1] (h01(2) is a multiple of [u], from                    *)
+(* [is_imul_bound_pow_format] and [h01(2) >= 1/2]), [is_imul_3_2], and the    *)
+(* range [[1/2, 1]] -- and [is_imul_minus] closes the difference.  What is    *)
+(* left is purely finding [imul_format]'s argument prefix: it lives in        *)
+(* prelim.v, whose section is generic in [fexp], so the [FLX_exp p]           *)
+(* instantiation has to be supplied.  See the GOTCHA on cross-file prefixes.  *)
 Admitted.
 
 (* Step 3.  [b] is a double word.  Mirrors [reciB_isDW].  CHECK the Fast2Sum  *)

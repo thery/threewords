@@ -909,6 +909,75 @@ Proof. field. Qed.
 (*  that of [b12]; each is [O(u^2)] against [a] once [sqrtA_sq_le] turns      *)
 (*  [a^2 x0] into [1 + 13u].  The [x2] term is the one that distinguishes     *)
 (*  [x0 + x1] from the full [TWval x].                                        *)
+(* The decomposition, as a GENERIC identity over abstract reals.  [ring]      *)
+(* cannot use hypotheses, so the seven exactness/definition facts of the      *)
+(* nine head lines are put in SOLVED form and substituted with [->], in       *)
+(* dependency order; then [field] closes what is left.                        *)
+Lemma newton_form_id A b01 b11 b12 h02 h12 h01_2 h11_2 h01 h11 h1_1
+                     x0 x1 x2 eps1 eps eta :
+  h01 = A * x0 - h11 ->
+  h01_2 = A / 2 * h01 - h11_2 ->
+  h02 = 3 / 2 - h01_2 ->
+  h1_1 = h11 + A * x1 + eps1 ->
+  h12 = - (h11_2 + A / 2 * h1_1) - eps ->
+  b12 = b11 + A * h12 + eta ->
+  b01 = A * h02 - b11 ->
+  (b01 + b12) - A * (3 / 2 - (1 / 2) * (A * A) * (x0 + x1 + x2))
+    = (1 / 2) * (A * A * A) * x2 - (1 / 2) * (A * A) * eps1 - A * eps + eta.
+Proof. by move=> -> -> -> -> -> -> ->; field. Qed.
+
+(* [b] as a real number: the Fast2Sum is error-free, the ordering having      *)
+(* been established.  Mirrors [TWval_reciBW].                                 *)
+Lemma TWval_sqrtBW x0 x1 :
+  format x0 -> 0 < x0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
+  TWval (sqrtBW x0 x1) = sqrtB01 x0 + sqrtB12 x0 x1.
+Proof.
+move=> Fx0 Hx0 Hx1.
+have F01 : format (sqrtB01 x0) by apply: generic_format_round.
+have F12 : format (sqrtB12 x0 x1) by apply: generic_format_round.
+have Hord := sqrtB12_le_B01 Fx0 Hx0 Hx1.
+have Hc := @Fast2Sum_correct p Hp2 choice _ _ F01 F12 (fun _ => Hord).
+by rewrite /sqrtBW /TWval /sqrtB Rplus_0_r; exact: Hc.
+Qed.
+
+(* The [t]-bounds of the three head-line roundings, named so that both the    *)
+(* magnitude chain and the decomposition below can use them.                  *)
+Lemma sqrtH1_1_sum_le x0 x1 :
+  format x0 -> 0 < x0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
+  Rabs (sqrtH11_1 x0 + sqrtA x0 * x1) <= 3 * u * (sqrtA x0 * x0).
+Proof.
+move=> Fx0 Hx0 Hx1.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HA := sqrtA_gt0 Fx0 Hx0.
+have HP : 0 < sqrtA x0 * x0 by nra.
+have H11 := sqrtH11_1_le Fx0 Hx0.
+have Hax1 : Rabs (sqrtA x0 * x1) <= 2 * u * (sqrtA x0 * x0).
+  rewrite Rabs_mult (Rabs_pos_eq (sqrtA x0)); last lra.
+  have Hb : Rabs x1 <= 2 * u * x0.
+    case: Hx1 => [->|Hs]; first by rewrite Rabs_R0; nra.
+    have Ha0 : Rabs x0 = x0 by apply: Rabs_pos_eq; lra.
+    rewrite -Ha0.
+    by have := @ulp_2u p beta Hp2 x0; lra.
+  by nra.
+by apply: Rle_trans (Rabs_triang _ _) _; lra.
+Qed.
+
+Lemma sqrtB12_sum_le x0 x1 :
+  format x0 -> 0 < x0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
+  Rabs (sqrtB11 x0 + sqrtA x0 * sqrtH1_2 x0 x1) <= 4 * u * sqrtA x0.
+Proof.
+move=> Fx0 Hx0 Hx1.
+have Hu0 : 0 < u by apply: u_gt_0.
+have HA := sqrtA_gt0 Fx0 Hx0.
+have Hb11 := sqrtB11_le Fx0 Hx0.
+have Hh12 := sqrtH1_2_le Fx0 Hx0 Hx1.
+have Hmix : Rabs (sqrtA x0 * sqrtH1_2 x0 x1) <= sqrtA x0 * (3 * u).
+  rewrite Rabs_mult (Rabs_pos_eq (sqrtA x0)); last lra.
+  by apply: Rmult_le_compat_l; lra.
+by apply: Rle_trans (Rabs_triang _ _) _; lra.
+Qed.
+
 Lemma sqrtBW_newton_form x :
   isTW x -> 0 < tw0 x ->
   Rabs (TWval (sqrtBW (tw0 x) (tw1 x))

@@ -1572,51 +1572,86 @@ Qed.
 (* ===========================================================================*)
 (*  Correctness, part 2: the relative error (paper Theorem 11).               *)
 (*                                                                            *)
-(*  With [d1] the relative error of [i(1) = 3Prod(b, x)] (relative to [b x]), *)
-(*  [d2] that of the inner [3Prod(b', i(1))] and [d3] that of the final       *)
-(*  [y = 3Prod(i(1), i(2))], the SUPPLEMENTARY's global bound is              *)
+(*  THE TELESCOPING SPLIT, and where the cancellation lives.  With [b] the    *)
+(*  seed, [i1 = mul1 b x], [P = mul2 b' i1], [i2 = 3/2 - P] and [y] the       *)
+(*  final product,                                                            *)
 (*                                                                            *)
-(*      |y - sqrt x| <= (d1 (1.5 + 287u^2) + d2 (0.5 + 123u^2)                *)
-(*                      + d3 (1 + 162u^2) + 9916u^4) |sqrt x|                 *)
+(*    y - s = (y - i1 i2)                                    [A: d3]          *)
+(*          + (- i1 (P - b' i1))                             [B: d2]          *)
+(*          + (i1 - b X)((3/2 - (1/2)b^2 X) - (b/2) i1)      [C: d1]          *)
+(*          + (b X (3/2 - (1/2)b^2 X) - s)                   [D: residual]    *)
 (*                                                                            *)
-(*  and it is stated below in THAT shape, so the route can be followed        *)
-(*  literally first.  Its [1.5] is loose -- see the file header: the true     *)
-(*  first-order weight on [d1] is [1/2], the supplementary having triangle-   *)
-(*  inequalitied away the cancellation between the two occurrences of [i(1)]. *)
-(*  With our [d3 = 6u^3] the literal route gives [27u^3]/[42u^3] and the      *)
-(*  sharpened one [18.5u^3]/[26u^3]; only the latter reaches the published    *)
-(*  [24]/[39], so the cancellation has to be exploited, not skipped.          *)
-(*                                                                            *)
-(*  STEPS, and what each one already has:                                     *)
-(*                                                                            *)
-(*  (1) [b] is a double word and [|b sqrt x - 1| <= 81u^2 + 622u^3]:          *)
-(*      [sqrtB_isDW], [sqrtBW_x_err] above -- BOTH TO PROVE (Algorithm 13's   *)
-(*      twins are [reciB_isDW] and [reciBW_x_err], already proved, and the    *)
-(*      route is the same except for the seed).                               *)
-(*  (2) [i(2)] has head [1] and [|i(2) - 1| <= 40u^2]: [head_half] +          *)
-(*      [sub32TW_isTW].  The [40u^2] is what [ThreeProdOneTW_error] demands   *)
-(*      of its second argument, so it must come out as a named lemma.         *)
-(*  (3) the algebraic identity: with [s = sqrt x],                            *)
-(*        y - s = (y - i(1) i(2)) + i(1) (i(2) - (3/2 - b' i(1)))             *)
-(*                + (i(1) - b x)(3/2 - (1/2) b^2 x) + [(b x)(3/2 - (1/2)b^2x) *)
-(*                                                     - s]                   *)
-(*      whose last bracket is [-s e^2 (e + 3)/2] by [sqrt_newton_id], hence   *)
-(*      [<= 9916u^4 |s|] by [sqrt_newton_residual] -- the only [O(u^4)]       *)
-(*      contributor that is not a product's error.  KEEP THE SIGNS: it is in  *)
-(*      the second and third terms that [i(1)]'s error cancels, and dropping  *)
-(*      to absolute values too early is exactly what costs the factor three.  *)
-(*  (4) the final arithmetic on bare quantities, the analogue of              *)
-(*      [reci_error_assembly] / [div_error_assembly]; those take three resp.  *)
-(*      four error terms and this one needs three, so one of them should be   *)
-(*      reusable outright.                                                    *)
-(*  (5) [d1], [d2] = [ThreeProdDW_error] / [ThreeProdDWFast_error] and        *)
-(*      [d3] = [ThreeProdOneTW_error] -- ALL THREE ALREADY PROVED.  Unlike    *)
-(*      Theorems 9 and 10, Theorem 11 needs no new product bound.             *)
-(*                                                                            *)
-(*  The [u^4] terms are the paper's and are the ones at risk (Theorem 9's     *)
-(*  [1465u^4] became [1830u^4], Theorem 10's [1509u^4] became [2576u^4]).     *)
+(*  [C] is the whole point.  Its bracket is [~ 1 - 1/2 = 1/2], NOT [1] --     *)
+(*  that is the cancellation between the two occurrences of [i1], and it is   *)
+(*  what turns the supplementary's weight [3/2] on [d1] into [1/2].  Done     *)
+(*  termwise instead, Theorem 11 comes out at [29u^3]/[44u^3] and the         *)
+(*  published bound fails; through [C] it is [16.5u^3]/[24u^3] and holds.     *)
 (* ===========================================================================*)
+Lemma sqrt_error_split y i1 i2 b bp X P s :
+  bp = b / 2 -> i2 = 3 / 2 - P ->
+  y - s = (y - i1 * i2)
+          + (- (i1 * (P - bp * i1)))
+          + (i1 - b * X) * ((3 / 2 - (1 / 2) * (b * b) * X) - (b / 2) * i1)
+          + (b * X * (3 / 2 - (1 / 2) * (b * b) * X) - s).
+Proof. by move=> -> ->; field. Qed.
+
+(* The four ingredients the split needs, each generic in the multiplier.      *)
+
+(* [i1 = mul1 b x] is within [(1 + 130u^2)] of [sqrt x] in magnitude.         *)
+Lemma sqrtAux_i1_le mul1 d1 :
+  (forall b y, isDW b -> isTW y ->
+     Rabs (TWval (mul1 b y) - TWval b * TWval y)
+       <= d1 * Rabs (TWval b * TWval y)) ->
+  0 <= d1 -> d1 <= u * u ->
+  forall x, isTW x -> 0 < tw0 x ->
+    Rabs (TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x))
+      <= (1 + 130 * (u * u)) * sqrt (TWval x).
+Proof.
+Admitted.
+
+(* THE CANCELLATION, isolated: the bracket of [C] is [1/2], not [1].          *)
+Lemma sqrtAux_bracket_le mul1 d1 :
+  (forall b y, isDW b -> isTW y ->
+     Rabs (TWval (mul1 b y) - TWval b * TWval y)
+       <= d1 * Rabs (TWval b * TWval y)) ->
+  0 <= d1 -> d1 <= u * u ->
+  forall x, isTW x -> 0 < tw0 x ->
+    Rabs ((3 / 2 - (1 / 2)
+             * (TWval (sqrtBW (tw0 x) (tw1 x))
+                * TWval (sqrtBW (tw0 x) (tw1 x))) * TWval x)
+          - (TWval (sqrtBW (tw0 x) (tw1 x)) / 2)
+            * TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x))
+      <= 1 / 2 + 300 * (u * u).
+Proof.
+Admitted.
+
+(* [i2] has head [1] and is within [40u^2] of it -- what [mul3] demands.      *)
+Lemma sqrtAux_i2_near_1 mul1 mul2 d1 d2 :
+  (forall b y, isDW b -> isTW y ->
+     Rabs (TWval (mul1 b y) - TWval b * TWval y)
+       <= d1 * Rabs (TWval b * TWval y)) ->
+  (forall b y, isDW b -> isTW y ->
+     Rabs (TWval (mul2 b y) - TWval b * TWval y)
+       <= d2 * Rabs (TWval b * TWval y)) ->
+  (forall b y, isDW b -> isTW y -> isTW (mul1 b y)) ->
+  0 <= d1 -> d1 <= u * u -> 0 <= d2 -> d2 <= u * u ->
+  forall x, isTW x -> 0 < tw0 x ->
+    Rabs (TWval (sub32TW (mul2 (scaleTW (-1)%Z (sqrtBW (tw0 x) (tw1 x)))
+                            (mul1 (sqrtBW (tw0 x) (tw1 x)) x))) - 1)
+      <= 40 * (u * u).
+Proof.
+Admitted.
+
+(* [b X] against [sqrt x]: the seed bound, in the form the split consumes.    *)
+Lemma sqrtAux_bX_le x :
+  isTW x -> 0 < tw0 x ->
+  Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * TWval x)
+    <= (1 + 8 * u) * sqrt (TWval x).
+Proof.
+Admitted.
+
 Lemma ThreeSqRtAux_error mul1 mul2 mul3 d1 d2 d3 :
+  (forall b y, isDW b -> isTW y -> isTW (mul1 b y)) ->
   (forall b y, isDW b -> isTW y ->
      Rabs (TWval (mul1 b y) - TWval b * TWval y)
        <= d1 * Rabs (TWval b * TWval y)) ->
@@ -1628,11 +1663,12 @@ Lemma ThreeSqRtAux_error mul1 mul2 mul3 d1 d2 d3 :
      Rabs (TWval (mul3 a y) - TWval a * TWval y)
        <= d3 * Rabs (TWval a * TWval y)) ->
   head_half mul2 ->
-  0 <= d1 -> 0 <= d2 -> 0 <= d3 ->
+  0 <= d1 -> d1 <= u * u -> 0 <= d2 -> d2 <= u * u ->
+  0 <= d3 -> d3 <= u * u ->
   forall x, isTW x -> 0 < tw0 x ->
     Rabs (TWval (ThreeSqRtAux mul1 mul2 mul3 x) - sqrt (TWval x))
-      <= (d1 * (3 / 2 + 287 * (u * u)) + d2 * (1 / 2 + 123 * (u * u))
-          + d3 * (1 + 162 * (u * u)) + 9916 * (u * u * u * u))
+      <= (d1 * (1 / 2 + 300 * (u * u)) + d2 * (1 / 2 + 300 * (u * u))
+          + d3 * (1 + 300 * (u * u)) + 21700 * (u * u * u * u))
          * Rabs (sqrt (TWval x)).
 Proof.
 Admitted.

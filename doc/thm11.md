@@ -128,9 +128,38 @@ opposite signs, so its error half-cancels; the seed error `e` cancels outright
 `|d1 - (d1+d2)/2|` with the triangle inequality as `|d1| + |d1|/2 + |d2|/2`,
 discarding the cancellation.
 
+### And the `u⁴` term: the `u³` slack pays for it
+
+Our `d3` is worse at `u⁴` too — `1330` against the announced `263` — and that
+excess lands undiluted, at weight `1`.  So the honest totals are
+
+| | ours | published |
+|---|---|---|
+| acc | `18.5u³ + 11285u⁴` | `24u³ + 10260u⁴` |
+| fast | `26u³ + 11321u⁴` | `39u³ + 10333u⁴` |
+
+Neither pair is termwise smaller — but that is not what is being asked.  The
+published bound is implied as soon as
+
+    1025u^4 <= 5.5u^3   <=>   u <= 5.5/1025 = 1/187      (accurate)
+     988u^4 <=  13u^3   <=>   u <= 13/988  = 1/76        (fast)
+
+and Algorithm 15 requires `p >= 11`, i.e. `u <= 2^-11 = 1/2048`.  Both hold
+with a wide margin — the accurate one would already hold at `p >= 8`.
+
+**So Theorem 11 holds for us exactly as published.**  It is the first of
+Theorems 9–11 for which that is true: there the `u³` term was itself at or
+above the paper's, so there was no slack to trade.  Here the cancellation
+creates `5.5u³` of it, and at these precisions `5.5u³` is worth `~11000u⁴` —
+far more than the `1025u⁴` shortfall.  Note the corollary: the `δ₃` tightening
+of `doc/thm10.md` would improve Theorems 9 and 10, but buys Theorem 11
+nothing.
+
 **Consequence for the formalisation**: state Theorem 11 with the published
-constants and prove them *through the cancellation*.  Concretely, in step (3)
-of the assembly keep the signed decomposition
+constants and prove them *through the cancellation* — without it the `u³` term
+is `29`/`44` and there is no slack, so the published bound would fail on both
+terms at once.  Concretely, in step (3) of the assembly keep the signed
+decomposition
 
     y - s = (y - i(1) i(2)) + i(1) (i(2) - (3/2 - b' i(1)))
           + (i(1) - b x)(3/2 - (1/2) b^2 x)
@@ -154,10 +183,31 @@ have been combined — that is where the factor three lives.
    reaches `32u^3`).  If the ordering cannot be proved, use `Fast2SumS`; it
    costs no extra flop.
 4. **`sqrtBW_x_err`** — `81u^2 + 622u^3`, from the supplementary.
-5. **`head_half`** — `tw0 (mul b' i(1)) = 1/2`.  **Do not re-prove**: `b'` is
-   `scaleTW (-1) b`, the products commute with scaling (`ThreeProdDW_scale`),
-   and `head_one` is already proved for Algorithms 11 and 12, so this should
-   fall out of `head_one` plus `isTW_scale` / `TWval_scale`.
+5. **`head_half`** — `tw0 (mul b' i(1)) = 1/2`.  **Done**, as
+   `head_one_half : head_one mul -> head_half mul`, plus the two instances
+   `ThreeProdDW_head_half` / `ThreeProdDWFast_head_half`.  It was not
+   re-proved: `b'` is `scaleTW (-1) b`, the products commute with scaling
+   (`ThreeProdDW_scale`), so halving the first argument halves the head, and
+   the already-proved `head_one` does the work.  Needed two lines of new
+   `scaleTW` algebra in `ThreeProd.v` (`scaleTW_0`, `scaleTW_add`).
+
+   **But its threshold is too tight, and this is the next thing to fix.**
+   `head_one`'s hypothesis is `|b·y − 1| ≤ 35u²`, inherited verbatim.  At the
+   3SqRt call site the second factor is `i(1) = 3Prod(b,x)`, so the product is
+
+       b · i(1) ≈ b²x = (b √x)² = (1+e)²,   |e| ≤ 81u² + 622u³
+
+   giving `|b·i(1) − 1| ≤ 162u² + O(u³)` — nearly five times the threshold.
+   Algorithm 13 never meets this because there the second factor is `x` itself
+   and the product is `b·x`, **one** power of the seed error rather than two.
+
+   The bound itself is in no danger: the head argument only needs `|v − 1|`
+   small *compared to `u`* (the gap from `1` to its neighbours is `u` below and
+   `2u` above), and `162u² ≪ u` already at `p ≥ 9`.  What is needed is to make
+   the threshold of `head_eq_1` (`ThreeReci.v`, currently `36u²`) a parameter.
+   **Bumping the constant blindly does not work** — tried, `36 → 200`, and the
+   proof stops closing, because it balances that constant against its own
+   `200u²` slack term.  It has to be re-derived with the tolerance symbolic.
 6. **`ThreeSqRtAux_error`** — the assembly, generic in `d1, d2, d3`, stated in
    the supplementary's shape so the route can be followed literally first, then
    sharpened per Section 4.

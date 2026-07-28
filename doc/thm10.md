@@ -194,7 +194,8 @@ therefore about **one number**: what the extra `a₂` limb of the TW×TW variant
 costs over the DW×TW one.
 
 - paper: `+2u³`
-- ours: `+7u³` (`8u³` against `ThreeProdOne_error`'s `1u³`)
+- ours: `+5u³` (`6u³` against `ThreeProdOne_error`'s `1u³`; it was `+7u³`
+  before step 1 landed)
 
 That is a far sharper target than "8 versus 3", and it says where to look.
 Comparing the two listings, the TW variant differs by exactly one extra
@@ -211,14 +212,63 @@ rounding and a reordering:
 
 i.e. the `b′₁` addition moves into the `z`-chain and a final rounding for `a₂`
 is appended.  The paper budgets `2u³` for that one extra rounding plus the `a₂`
-term; our chain budgets `7u³`, via `η₃ = 2u³` (paper `1u³`) and
-`η₄ = u|s₃′+x₂| = 6u³` (paper `2u³`).  Both of our figures come from the two
-loose steps 1 and 3 above — the `ulp` chain of a P-nonoverlapping *triple* word
-— which is consistent with the numerical evidence that the paper is right.
+term; our chain budgets `5u³`, via `η₃ = 2u³` (paper `1u³`) and
+`η₄ = u|s₃′+x₂| = 4u³` (paper `2u³`) — the latter after step 1.  Both figures
+come from the `ulp` chain of a P-nonoverlapping *triple* word, i.e. from the
+steps 2 and 3 still open above, which is consistent with the numerical
+evidence that the paper is right.
 
-Nothing here refutes our `8u³`, which is a correct upper bound; it identifies
-the two `ulp`-chain lemmas as the whole of the gap, and confirms the tightening
-plan above is aimed at the right place.
+Nothing here refutes our `6u³`, which is a correct upper bound; it identifies
+the two remaining `ulp`-chain arguments as the whole of the gap, and confirms
+the tightening plan above is aimed at the right place.
+
+Note the claim is stronger than "one new term costs `2u³`".  *"Similar … with
+an **additional** `2u³`"* asserts both that the terms shared with Algorithm 17
+are **unchanged** and that the new `a₂` line costs `2u³`.  Our derivation
+disagrees with the **first** of those: the shared `η₃` — the rounding of
+`s₃′ = b′₁ + z₃` — costs `1u³` in Algorithm 17 but `2u³` here, because `b′₁`
+is bounded through `|x₁| ≤ 2u|x₀|` for a *triple* word against `|x₁| ≤ u|x₀|`
+for a double word.  The multiplier's weaker limb separation propagates into a
+term the paper carries over untouched.  Step 2 is exactly the question of
+whether that propagation is real or an artefact of our bound.
+
+### There is no derivation of `δ₂` or `δ₃` anywhere — all three sources checked
+
+Checked 2026-07-28, so that nobody goes looking again.  **Neither the old
+paper nor the appendix contains a proof of either constant.**  They give the
+same two sentences, and the chain bottoms out in a hand-wave.
+
+`δ₃`, Algorithm 20 — `old-triplewors.pdf` §8.5 and the appendix §2 carry the
+*identical* sentence (the old paper misspells "additionnal"):
+
+> The error analysis is similar to the one of 18 with an additionnal `2u³`,
+> and we get `|ȳ−āī|/|āī| ≤ (3u³+256u⁴)/((1−2u)(1−35u²)) ≤ 3u³+264u⁴`.
+
+`δ₂`, Algorithm 18 — the thing that is "similar to", `old-triplewors.pdf` §8.4:
+
+> Given the estimates on `ī`, basically all errors are neglectible, except the
+> one when computing `s₃`.  We get
+> `|ȳ−b̄ī|/|b̄ī| ≤ (u³+256u⁴)/((1−2u)(1−35u²))`.
+> Thus we can take `δ₂ = u³ + 260u⁴`.
+
+That is the whole justification: an assertion that everything but the `s₃`
+rounding is negligible, and a number.  `δ₃` is then "that, plus 2".
+
+**So the situation is not that we skipped a step the paper supplies.**  For
+`δ₂` and `δ₃` no proof exists in any of the three documents; we derived both
+independently and got `u³ + 620u⁴` and `6u³` where they assert `u³ + 260u⁴`
+and `3u³`.  Closing the gap means *inventing* the argument, not transcribing
+one — which is why steps 2 and 3 are research rather than formalisation work.
+
+Two discrepancies noticed while comparing the sources, both unexplained by
+them:
+
+- Old paper Theorem 14 is `24u³ + 1519u⁴` at `p ≥ 9`; paper3 Theorem 10 is
+  `24u³ + 1509u⁴` at `p ≥ 10`.  Both the `u⁴` term and the precision
+  requirement moved between versions.
+- Old paper `|b̄x̄ − 1| ≤ 34u² + 74u³` became `34u² + 126u³` in the appendix.
+  Our proof gives the appendix's value, so that one was a correction on their
+  side.
 
 **For 3Div itself** the paper's own tightness examples are the right seed: its
 Theorem 8 example

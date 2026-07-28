@@ -1597,6 +1597,36 @@ Proof. by move=> -> ->; field. Qed.
 
 (* The four ingredients the split needs, each generic in the multiplier.      *)
 
+(* [b X] against [sqrt x]: the seed bound, in the form the split consumes.    *)
+Lemma sqrtAux_bX_le x :
+  isTW x -> 0 < tw0 x ->
+  Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * TWval x)
+    <= (1 + 121 * (u * u)) * sqrt (TWval x).
+Proof.
+move=> Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HX0 : 0 < TWval x by apply: isTW_TWval_gt0.
+have Hs0 : 0 < sqrt (TWval x) by apply: sqrt_lt_R0.
+have HsX : sqrt (TWval x) * sqrt (TWval x) = TWval x by apply: sqrt_sqrt; lra.
+have Hseed := sqrtBW_x_err_crude Hx Hx0.
+set B := TWval (sqrtBW (tw0 x) (tw1 x)) in Hseed *.
+set s := sqrt (TWval x) in HsX Hs0 Hseed *.
+(* [b X = (b s) s], and [|b s - 1| <= 120u^2] is already proved.              *)
+have Hgen : forall r b, r * r = TWval x -> b * TWval x = (b * r) * r.
+  by move=> r b <-; ring.
+rewrite (Hgen s B HsX) Rabs_mult (Rabs_pos_eq s); last lra.
+have Hb := Rabs_le_inv _ _ Hseed.
+(* [120u^2 <= 1/2], factored so [lra] can see it.                             *)
+have Hhalf : 120 * (u * u) <= 1 / 2.
+  have -> : 120 * (u * u) = 120 * u * u by ring.
+  by nra.
+have HBs : Rabs (B * s) <= 1 + 121 * (u * u).
+  rewrite (Rabs_pos_eq (B * s)); last by lra.
+  by lra.
+by apply: Rmult_le_compat_r; lra.
+Qed.
+
 (* [i1 = mul1 b x] is within [(1 + 130u^2)] of [sqrt x] in magnitude.         *)
 Lemma sqrtAux_i1_le mul1 d1 :
   (forall b y, isDW b -> isTW y ->
@@ -1607,7 +1637,53 @@ Lemma sqrtAux_i1_le mul1 d1 :
     Rabs (TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x))
       <= (1 + 130 * (u * u)) * sqrt (TWval x).
 Proof.
-Admitted.
+move=> Herr1 Hd10 Hd1u x Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HX0 : 0 < TWval x by apply: isTW_TWval_gt0.
+have Hs0 : 0 < sqrt (TWval x) by apply: sqrt_lt_R0.
+have Fx0 : format (tw0 x) by case: x Hx {Hx0 HX0 Hs0} => x0 x1 x2 [].
+have Hx1s : tw1 x = 0 \/ Rabs (tw1 x) < ulp (tw0 x)
+  by case: x Hx {Hx0 HX0 Hs0 Fx0} => x0 x1 x2 [].
+have HDW : isDW (sqrtBW (tw0 x) (tw1 x)) by apply: sqrtB_isDW.
+have He := Herr1 _ _ HDW Hx.
+have HbX := sqrtAux_bX_le Hx Hx0.
+(* [|i1| <= |i1 - b X| + |b X| <= (1 + d1)|b X|]                              *)
+have -> : TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x)
+    = (TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x)
+       - TWval (sqrtBW (tw0 x) (tw1 x)) * TWval x)
+      + TWval (sqrtBW (tw0 x) (tw1 x)) * TWval x by ring.
+apply: Rle_trans (Rabs_triang _ _) _.
+have Hp := Rabs_pos (TWval (sqrtBW (tw0 x) (tw1 x)) * TWval x).
+have Hstep : d1 * Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * TWval x)
+             + Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * TWval x)
+    <= (u * u) * ((1 + 121 * (u * u)) * sqrt (TWval x))
+       + (1 + 121 * (u * u)) * sqrt (TWval x).
+  have H1 : d1 * Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * TWval x)
+      <= (u * u) * ((1 + 121 * (u * u)) * sqrt (TWval x)).
+    apply: Rle_trans (_ : (u * u)
+             * Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * TWval x) <= _).
+      by apply: Rmult_le_compat_r.
+    by apply: Rmult_le_compat_l; nra.
+  by lra.
+apply: Rle_trans (_ : d1 * Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * TWval x)
+                      + Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * TWval x) <= _);
+  first by lra.
+apply: Rle_trans Hstep _.
+(* [(1 + u^2)(1 + 121u^2) <= 1 + 130u^2]                                      *)
+have Hfac : (u * u) * ((1 + 121 * (u * u)) * sqrt (TWval x))
+            + (1 + 121 * (u * u)) * sqrt (TWval x)
+    = (1 + 122 * (u * u) + 121 * (u * u) * (u * u)) * sqrt (TWval x)
+  by ring.
+rewrite Hfac.
+apply: Rmult_le_compat_r; first lra.
+have Hu4 : 121 * (u * u) * (u * u) <= 8 * (u * u).
+  have -> : 121 * (u * u) * (u * u) = 121 * (u * u) * u * u by ring.
+  have Hs : 0 <= u * u by apply: Rle_0_sqr.
+  have Hc : 121 * (u * u) <= 8 by nra.
+  by nra.
+by lra.
+Qed.
 
 (* THE CANCELLATION, isolated: the bracket of [C] is [1/2], not [1].          *)
 Lemma sqrtAux_bracket_le mul1 d1 :
@@ -1642,36 +1718,6 @@ Lemma sqrtAux_i2_near_1 mul1 mul2 d1 d2 :
 Proof.
 Admitted.
 
-(* [b X] against [sqrt x]: the seed bound, in the form the split consumes.    *)
-Lemma sqrtAux_bX_le x :
-  isTW x -> 0 < tw0 x ->
-  Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * TWval x)
-    <= (1 + 8 * u) * sqrt (TWval x).
-Proof.
-move=> Hx Hx0.
-have Hu0 : 0 < u by apply: u_gt_0.
-have Hu2048 := u_le_2048.
-have HX0 : 0 < TWval x by apply: isTW_TWval_gt0.
-have Hs0 : 0 < sqrt (TWval x) by apply: sqrt_lt_R0.
-have HsX : sqrt (TWval x) * sqrt (TWval x) = TWval x by apply: sqrt_sqrt; lra.
-have Hseed := sqrtBW_x_err_crude Hx Hx0.
-set B := TWval (sqrtBW (tw0 x) (tw1 x)) in Hseed *.
-set s := sqrt (TWval x) in HsX Hs0 Hseed *.
-(* [b X = (b s) s], and [|b s - 1| <= 120u^2] is already proved.              *)
-have Hgen : forall r b, r * r = TWval x -> b * TWval x = (b * r) * r.
-  by move=> r b <-; ring.
-rewrite (Hgen s B HsX) Rabs_mult (Rabs_pos_eq s); last lra.
-have Hb := Rabs_le_inv _ _ Hseed.
-(* [120u^2 <= 8u] and [<= 1/2]: given to [lra] in factored form.              *)
-have Hlin : 120 * (u * u) <= 8 * u.
-  have -> : 120 * (u * u) = 120 * u * u by ring.
-  by nra.
-have Hhalf : 120 * (u * u) <= 1 / 2 by nra.
-have HBs : Rabs (B * s) <= 1 + 8 * u.
-  rewrite (Rabs_pos_eq (B * s)); last by lra.
-  by lra.
-by apply: Rmult_le_compat_r; lra.
-Qed.
 
 Lemma ThreeSqRtAux_error mul1 mul2 mul3 d1 d2 d3 :
   (forall b y, isDW b -> isTW y -> isTW (mul1 b y)) ->

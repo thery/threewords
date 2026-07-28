@@ -780,6 +780,79 @@ split => //.
 by right; rewrite dwhE dwlE; lra.
 Qed.
 
+(* ===========================================================================*)
+(*  Step 4, CRUDE.  The [isTW] half only needs a rough seed bound: its head   *)
+(*  argument squares it ([b i(1) = (b sqrt x)^2 (1+d)]) and then asks for     *)
+(*  [<= 200u^2], so any [E] with [2E + u^2 <= 200u^2] does.  [90u^2] leaves   *)
+(*  margin at both ends.                                                      *)
+(*                                                                            *)
+(*  This is deliberately SEPARATE from the sharp [sqrtBW_x_err] below.  The   *)
+(*  sharp constants [81] and [622] must both be exact -- [newton_residual_-   *)
+(*  const] is tight, [9915.5u^4] against the published [9916u^4] -- whereas   *)
+(*  here the Newton step alone gives [(3/2)(6u)^2 = 54u^2] from               *)
+(*  [sqrtA_bound], leaving [36u^2] of slack to absorb every rounding without  *)
+(*  accounting for any of them tightly.  Proving this one makes               *)
+(*  [ThreeSqRt_isTW] UNCONDITIONAL; the sharp one is needed only by the       *)
+(*  error assembly.                                                           *)
+(* ===========================================================================*)
+(* The seed-level twin of [sqrt_newton_id].  There the subject is the FINAL   *)
+(* product [(b x)(3/2 - (1/2)b^2 x)]; here it is the refined SEED             *)
+(* [a(3/2 - (1/2)a^2 x)], one factor of [x] lighter.  Same right-hand side,   *)
+(* and again a pure polynomial identity -- no division, no [sqrt].            *)
+Lemma sqrt_newton_seed s a :
+  a * (3 / 2 - (1 / 2) * (a * a) * (s * s)) * s - 1
+    = - ((a * s - 1) * (a * s - 1)) * (a * s - 1 + 3) / 2.
+Proof. field. Qed.
+
+(* [b] IS that refined seed, up to [10u^2 a].  All the rounding of the nine   *)
+(* head lines is collected here:                                              *)
+(*                                                                            *)
+(*   b - a(3/2 - (1/2)a^2 X)                                                  *)
+(*     = (1/2)a^3 x2 - (1/2)a^2 eps1 - a eps + eta                            *)
+(*                                                                            *)
+(*  where [eps1] is the rounding of [h1(1)], [eps] that of [h1(2)] and [eta]  *)
+(*  that of [b12]; each is [O(u^2)] against [a] once [sqrtA_sq_le] turns      *)
+(*  [a^2 x0] into [1 + 13u].  The [x2] term is the one that distinguishes     *)
+(*  [x0 + x1] from the full [TWval x].                                        *)
+Lemma sqrtBW_newton_form x :
+  isTW x -> 0 < tw0 x ->
+  Rabs (TWval (sqrtBW (tw0 x) (tw1 x))
+        - sqrtA (tw0 x)
+          * (3 / 2 - (1 / 2) * (sqrtA (tw0 x) * sqrtA (tw0 x)) * TWval x))
+    <= 10 * (u * u) * sqrtA (tw0 x).
+Proof.
+Admitted.
+
+Lemma sqrtBW_x_err_crude x :
+  isTW x -> 0 < tw0 x ->
+  Rabs (TWval (sqrtBW (tw0 x) (tw1 x)) * sqrt (TWval x) - 1) <= 90 * (u * u).
+Proof.
+(* MISSING PIECE, found while proving this: [sqrtA_bound] pins                *)
+(* [a * sqrt (tw0 x)] -- the HEAD -- but the Newton form needs                *)
+(* [a * sqrt (TWval x)], the full triple-word value.  They differ at the [u]  *)
+(* level, not [u^2]: [|x1| <= 2u|x0|] gives                                   *)
+(* [sqrt (TWval x) / sqrt (tw0 x) = 1 +- 1.1u], so                            *)
+(*                                                                            *)
+(*    a sqrt (TWval x) - 1  in  [0.9u, 7.1u]   (not [2u, 6u])                 *)
+(*                                                                            *)
+(* and the Newton residual is [(3/2)(7.1u)^2 ~ 78u^2], which no longer fits   *)
+(* under [90u^2] once the [10u^2] of [sqrtBW_newton_form] is added.           *)
+(*                                                                            *)
+(* TWO THINGS TO DO, in this order:                                           *)
+(*  1. a bridging lemma [sqrtA_bound_full : |a sqrt (TWval x) - 1| <= 8u],    *)
+(*     from [sqrtA_bound] plus [|x1 + x2| <= 2.1u|x0|] and monotonicity of    *)
+(*     [sqrt].  This is the only genuinely new [sqrt] reasoning left.         *)
+(*  2. raise this bound to [120u^2] and [head_half]'s threshold from [200]    *)
+(*     to [300] -- [head_eq_1_c] allows [c u <= 1/4], i.e. [c <= 512] at      *)
+(*     [p >= 11], so there is room.  Then [2*120 + 1 = 241 <= 300] and the    *)
+(*     margin is comfortable at both ends.                                    *)
+(*                                                                            *)
+(* Everything else for this lemma is already in place: [sqrt_newton_seed]     *)
+(* gives the residual in closed form, and [sqrtBW_newton_form] collects the   *)
+(* rounding.  The proof body that assumed the head bound has been removed     *)
+(* rather than left misleading.                                               *)
+Admitted.
+
 (* Step 4.  The seed double word against the true inverse square root, in the *)
 (* dimensionless form the assembly consumes.  The supplementary states it as  *)
 (* [|b - 1/sqrt x| <= (81u^2 + 622u^3)|1/sqrt x|]; Algorithm 13's analogue is *)
@@ -981,7 +1054,7 @@ have Key : Rabs (TWval (sqrtBW (tw0 x) (tw1 x))
   have HX0 : 0 < TWval x by apply: isTW_TWval_gt0.
   have HsX : sqrt (TWval x) * sqrt (TWval x) = TWval x
     by apply: sqrt_sqrt; lra.
-  have Hseed := sqrtBW_x_err Hx Hx0.
+  have Hseed := sqrtBW_x_err_crude Hx Hx0.
   have He1 := Herr1 _ _ HDW Hx.
   set B := TWval (sqrtBW (tw0 x) (tw1 x)) in Hseed He1 *.
   set I1 := TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x) in He1 *.
@@ -991,12 +1064,12 @@ have Key : Rabs (TWval (sqrtBW (tw0 x) (tw1 x))
       = ((B * s) * (B * s) - 1) + B * (I1 - B * TWval x).
     by rewrite -HsX; ring.
   have Ht := Rabs_le_inv _ _ Hseed.
-  have HBs : Rabs (B * s) <= 1 + (81 * (u * u) + 622 * (u * u * u)).
+  have HBs : Rabs (B * s) <= 1 + (90 * (u * u)).
     by have := Rabs_triang_inv (B * s) 1; rewrite Rabs_R1; lra.
   (* the squared seed term                                                    *)
   have Hsq : Rabs ((B * s) * (B * s) - 1)
-      <= (81 * (u * u) + 622 * (u * u * u))
-         * (2 + (81 * (u * u) + 622 * (u * u * u))).
+      <= (90 * (u * u))
+         * (2 + (90 * (u * u))).
     have -> : (B * s) * (B * s) - 1 = (B * s - 1) * ((B * s - 1) + 2)
       by ring.
     rewrite Rabs_mult.
@@ -1006,8 +1079,8 @@ have Key : Rabs (TWval (sqrtBW (tw0 x) (tw1 x))
     by lra.
   (* the [mul1] term, measured against the same [t^2]                         *)
   have Hmulterm : Rabs (B * (I1 - B * TWval x))
-      <= (u * u) * ((1 + (81 * (u * u) + 622 * (u * u * u)))
-                    * (1 + (81 * (u * u) + 622 * (u * u * u)))).
+      <= (u * u) * ((1 + (90 * (u * u)))
+                    * (1 + (90 * (u * u)))).
     rewrite Rabs_mult.
     have HBp := Rabs_pos B.
     have Hstep : Rabs B * Rabs (I1 - B * TWval x)

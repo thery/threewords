@@ -48,6 +48,15 @@
 (* [delta3] is still loose -- see doc/thm10.md) that route gives [27u^3] and  *)
 (* [42u^3], exactly as it does for Theorem 10.                                *)
 (*                                                                            *)
+(* AND [d3] IS NOT THE ONE ALGORITHM 14 USES.  Algorithm 20's error depends   *)
+(* on how close its head-[1] second argument really is to [1], and Algorithm  *)
+(* 15 cannot meet the [40u^2] Algorithm 14 hands over: [i(2) = 1 - e] with    *)
+(* [e] the SEED error, [100u^2] here and [81u^2] even in the paper.  So       *)
+(* ThreeProdOne.v's [ThreeProdOneTW_error_c] makes that tolerance a           *)
+(* parameter [c], [delta3 = 6u^3 + (31c + 10)u^4]; Algorithm 14 keeps         *)
+(* [c = 40] -- and with it the very same [1250] -- while Algorithm 15 runs at *)
+(* [c = 105], i.e. [3265u^4].  See [sqrtAux_i2_near_1].                       *)
+(*                                                                            *)
 (* BUT the weight [1.5] on [d1] is itself loose, and provably so.  Expanding  *)
 (* to first order -- [i(1)] occurs TWICE, once as a factor of [y] and once    *)
 (* inside [i(2)], with OPPOSITE signs -- gives                                *)
@@ -59,29 +68,33 @@
 (* bounding [|d1 - (d1 + d2)/2|] with the triangle inequality, discarding the *)
 (* cancellation.  Exploiting it gives [18.5u^3] and [26u^3].                  *)
 (*                                                                            *)
-(* AND THAT SLACK IS WHAT SAVES THE [u^4] TERM.  Our [d3] is also worse at    *)
-(* [u^4] -- [1250] against the announced [263] -- and that excess lands       *)
-(* undiluted (weight [1]), so the honest totals are [16.5u^3 + 11205u^4] and  *)
-(* [24u^3 + 11241u^4] against the published [24u^3 + 10260u^4] and            *)
+(* AND THAT SLACK IS WHAT SAVES THE [u^4] TERM.  Our [d3] is also far worse   *)
+(* at [u^4] -- [3265] against the announced [263] -- and that excess lands    *)
+(* undiluted (weight [1]), so the honest totals are [16.5u^3 + 18504u^4] and  *)
+(* [24u^3 + 18540u^4] against the published [24u^3 + 10260u^4] and            *)
 (* [39u^3 + 10333u^4].  Neither pair is termwise smaller.  But                *)
 (*                                                                            *)
-(*     945u^4 <= 7.5u^3   <=>   u <= 1/126                                    *)
+(*     8244u^4 <= 7.5u^3   <=>   u <= 1/1099                                  *)
 (*                                                                            *)
-(* and [u <= 2^-11], so the [u^3] slack absorbs the [u^4] excess with a wide  *)
-(* margin; likewise [908u^4 <= 15u^3] for the fast variant.  So THEOREM 11    *)
+(* and [u <= 2^-11 = 1/2048], so the [u^3] slack absorbs the [u^4] excess     *)
+(* with a factor-1.9 margin; likewise [8207u^4 <= 15u^3] for the fast         *)
+(* variant, which is wider still.  So THEOREM 11                              *)
 (* HOLDS FOR US EXACTLY AS PUBLISHED -- the                                   *)
 (* first of Theorems 9-11 for which that is true, and the reason to state it  *)
 (* below with the paper's own constants rather than corrected ones.  It costs *)
 (* nothing extra: the [delta3] tightening of doc/thm10.md would improve       *)
 (* Theorems 9 and 10, not this one.                                           *)
 (*                                                                            *)
-(* STATUS.  THE [isTW] HALF IS COMPLETE AND UNCONDITIONAL:                    *)
-(* [ThreeSqRt_isTW] and [ThreeSqRtFast_isTW] are [Qed], and                   *)
-(* [Print Assumptions] on either shows only the standard classical/reals      *)
-(* axioms that every result in this development carries.                      *)
+(* STATUS: COMPLETE -- all four theorems are PROVED, zero admits.             *)
+(* [ThreeSqRt_isTW], [ThreeSqRtFast_isTW], [ThreeSqRt_error] and              *)
+(* [ThreeSqRtFast_error] are [Qed], and [Print Assumptions] on any of them    *)
+(* shows only the standard classical/reals axioms that every result in this   *)
+(* development carries.  THEOREM 11 HOLDS WITH THE PAPER'S OWN CONSTANTS.     *)
 (*                                                                            *)
-(* THREE admits remain, all in the error half: the assembly                   *)
-(* [ThreeSqRtAux_error] and its two instantiations.                           *)
+(* The error half is [sqrt_error_core] -- pure algebra on reals: the          *)
+(* four-way split plus eight magnitude bounds, the analogue of ThreeDiv.v's   *)
+(* [div_error_core] -- with [ThreeSqRtAux_error] over it and the two          *)
+(* instantiations on top.                                                     *)
 (*                                                                            *)
 (* NOTE the sharp seed bound [81u^2 + 622u^3] the supplementary states is     *)
 (* NOT USED, and has been removed.  Two reasons.  It is out of reach of this  *)
@@ -92,7 +105,7 @@
 (* against the [12629u^4] that the crude [120u^2] costs.  So Theorem 11's     *)
 (* PUBLISHED constants are reachable from the crude bound alone.              *)
 (*                                                                            *)
-(* Order of attack in doc/thm11.md Section 5.                                 *)
+(* The proof, and where it departs from the paper, is doc/thm11.md.           *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -1807,7 +1820,92 @@ have Hmix : Rabs (B / 2 * (I1 - B * TWval x)) <= 59 * (u * u).
 by lra.
 Qed.
 
-(* [i2] has head [1] and is within [40u^2] of it -- what [mul3] demands.      *)
+(* [b i(1)] against [1]: the SEED ERROR SQUARED, and the hinge of everything  *)
+(* [i(2)] needs.  With [t = b sqrt x] we have [b i(1) = t^2 (1 + d1)], so     *)
+(* [|b i(1) - 1| <= |t^2 - 1| + O(u^2) <= 202u^2] out of                      *)
+(* [sqrtBW_x_err_crude]'s [100u^2].  This is exactly the [Key] step inside    *)
+(* [ThreeSqRtAux_isTW], but stated SHARPLY (there [300u^2] was ample) so that *)
+(* [sqrtAux_i2_near_1] can halve it and stay under the tolerance [mul3] asks. *)
+Lemma sqrtAux_b_i1_le mul1 d1 :
+  (forall b y, isDW b -> isTW y ->
+     Rabs (TWval (mul1 b y) - TWval b * TWval y)
+       <= d1 * Rabs (TWval b * TWval y)) ->
+  0 <= d1 -> d1 <= u * u ->
+  forall x, isTW x -> 0 < tw0 x ->
+    Rabs (TWval (sqrtBW (tw0 x) (tw1 x))
+          * TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x) - 1)
+      <= 202 * (u * u).
+Proof.
+move=> Herr1 Hd10 Hd1u x Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HX0 : 0 < TWval x by apply: isTW_TWval_gt0.
+have Hs0 : 0 < sqrt (TWval x) by apply: sqrt_lt_R0.
+have HsX : sqrt (TWval x) * sqrt (TWval x) = TWval x by apply: sqrt_sqrt; lra.
+have Fx0 : format (tw0 x) by case: x Hx {Hx0 HX0 Hs0 HsX} => x0 x1 x2 [].
+have Hx1s : tw1 x = 0 \/ Rabs (tw1 x) < ulp (tw0 x)
+  by case: x Hx {Hx0 HX0 Hs0 HsX Fx0} => x0 x1 x2 [].
+have HDW : isDW (sqrtBW (tw0 x) (tw1 x)) by apply: sqrtB_isDW.
+have He1 := Herr1 _ _ HDW Hx.
+have Hseed := sqrtBW_x_err_crude Hx Hx0.
+set B := TWval (sqrtBW (tw0 x) (tw1 x)) in He1 Hseed *.
+set I1 := TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x) in He1 *.
+set s := sqrt (TWval x) in HsX Hs0 Hseed.
+(* the weak form of [mul1]'s error, which is all this bound uses               *)
+have He1' : Rabs (I1 - B * TWval x) <= (u * u) * Rabs (B * TWval x).
+  apply: Rle_trans He1 _.
+  by apply: Rmult_le_compat_r; first by apply: Rabs_pos.
+have Ht := Rabs_le_inv _ _ Hseed.
+have HBs : Rabs (B * s) <= 1 + 100 * (u * u).
+  by have := Rabs_triang_inv (B * s) 1; rewrite Rabs_R1; lra.
+(* [B I1 - 1 = ((B s)^2 - 1) + B (I1 - B X)]                                  *)
+have Hsplit : B * I1 - 1 = ((B * s) * (B * s) - 1) + B * (I1 - B * TWval x)
+  by rewrite -HsX; ring.
+have Hsq : Rabs ((B * s) * (B * s) - 1)
+    <= (100 * (u * u)) * (2 + 100 * (u * u)).
+  have -> : (B * s) * (B * s) - 1 = (B * s - 1) * ((B * s - 1) + 2) by ring.
+  rewrite Rabs_mult.
+  apply: Rmult_le_compat => //; try apply: Rabs_pos.
+  apply: Rle_trans (Rabs_triang _ _) _.
+  have -> : Rabs 2 = 2 by rewrite Rabs_pos_eq; lra.
+  by lra.
+have Hmulterm : Rabs (B * (I1 - B * TWval x))
+    <= (u * u) * ((1 + 100 * (u * u)) * (1 + 100 * (u * u))).
+  rewrite Rabs_mult.
+  have HBp := Rabs_pos B.
+  have Hstep : Rabs B * Rabs (I1 - B * TWval x)
+      <= Rabs B * ((u * u) * Rabs (B * TWval x))
+    by apply: Rmult_le_compat_l.
+  apply: Rle_trans Hstep _.
+  have HBX : Rabs B * Rabs (B * TWval x) = Rabs (B * s) * Rabs (B * s).
+    by rewrite -!Rabs_mult -HsX; congr (Rabs _); ring.
+  have -> : Rabs B * ((u * u) * Rabs (B * TWval x))
+      = (u * u) * (Rabs B * Rabs (B * TWval x)) by ring.
+  rewrite HBX.
+  apply: Rmult_le_compat_l; first by nra.
+  by apply: Rmult_le_compat => //; apply: Rabs_pos.
+have Ht2 := Rabs_triang ((B * s) * (B * s) - 1) (B * (I1 - B * TWval x)).
+rewrite Hsplit.
+have L2 : u * u <= / 2048 * u by nra.
+have L3 : u * u * u <= / 2048 * (u * u) by nra.
+have L4 : u * u * u * u <= / 2048 * (u * u * u) by nra.
+have L5 : u * u * u * u * u <= / 2048 * (u * u * u * u) by nra.
+have L6 : u * u * u * u * u * u <= / 2048 * (u * u * u * u * u) by nra.
+by clear -Ht2 Hsq Hmulterm Hu0 Hu2048 L2 L3 L4 L5 L6; nra.
+Qed.
+
+(* [i(2)] has head [1] and is within [105u^2] of it -- what [mul3] demands.    *)
+(*                                                                            *)
+(* AND NOT [40u^2], which is what Algorithm 14 hands over and what            *)
+(* [ThreeProdOneTW_error] used to require.  Algorithm 14 reaches [40u^2]      *)
+(* because there [i = 2 - mul1 b x] and the seed bound [|b x - 1| <= 35u^2]   *)
+(* enters ONCE.  Here [i(2) = 3/2 - mul2 b' i(1)] with                        *)
+(* [b' i(1) ~ (1/2)(b sqrt x)^2], so what survives is the seed error ITSELF,  *)
+(* [100u^2] by [sqrtBW_x_err_crude] -- and even the paper's own sharp         *)
+(* [81u^2] would not fit inside [40].  The honest value is [101.01u^2]:       *)
+(* [202u^2] halved by [b' = b/2], plus [d2] on a factor of size [1/2].        *)
+(* This is why ThreeProdOne.v's [ThreeProdOneTW_error_c] had to make the      *)
+(* tolerance a parameter; [105] is its second instance, [40] the first.       *)
 Lemma sqrtAux_i2_near_1 mul1 mul2 d1 d2 :
   (forall b y, isDW b -> isTW y ->
      Rabs (TWval (mul1 b y) - TWval b * TWval y)
@@ -1820,13 +1918,231 @@ Lemma sqrtAux_i2_near_1 mul1 mul2 d1 d2 :
   forall x, isTW x -> 0 < tw0 x ->
     Rabs (TWval (sub32TW (mul2 (scaleTW (-1)%Z (sqrtBW (tw0 x) (tw1 x)))
                             (mul1 (sqrtBW (tw0 x) (tw1 x)) x))) - 1)
-      <= 40 * (u * u).
+      <= 105 * (u * u).
 Proof.
-Admitted.
+move=> Herr1 Herr2 Hmul1 Hd10 Hd1u Hd20 Hd2u x Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have Fx0 : format (tw0 x) by case: x Hx {Hx0} => x0 x1 x2 [].
+have Hx1s : tw1 x = 0 \/ Rabs (tw1 x) < ulp (tw0 x)
+  by case: x Hx {Hx0 Fx0} => x0 x1 x2 [].
+have HDW : isDW (sqrtBW (tw0 x) (tw1 x)) by apply: sqrtB_isDW.
+have Hi1 : isTW (mul1 (sqrtBW (tw0 x) (tw1 x)) x) by apply: Hmul1.
+have Hkey := sqrtAux_b_i1_le Herr1 Hd10 Hd1u Hx Hx0.
+have HDWs : isDW (scaleTW (-1)%Z (sqrtBW (tw0 x) (tw1 x)))
+  by apply: isDW_scale.
+have He2 := Herr2 _ _ HDWs Hi1.
+rewrite TWval_scale in He2.
+have Hpow : pow (-1) = / 2 by rewrite /= /Z.pow_pos /=; lra.
+rewrite Hpow in He2.
+rewrite TWval_sub32TW.
+set B := TWval (sqrtBW (tw0 x) (tw1 x)) in Hkey He2 *.
+set I1 := TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x) in Hkey He2 *.
+set P := TWval (mul2 (scaleTW (-1)%Z (sqrtBW (tw0 x) (tw1 x)))
+                  (mul1 (sqrtBW (tw0 x) (tw1 x)) x)) in He2 *.
+have H2 : Rabs (/ 2) = / 2 by rewrite Rabs_pos_eq; lra.
+(* [(B/2) I1 - 1/2] is HALF of [B I1 - 1]: the exact scaling [b' = b/2].      *)
+have Hhalf : Rabs (B * / 2 * I1 - / 2) <= 101 * (u * u).
+  have -> : B * / 2 * I1 - / 2 = (B * I1 - 1) * / 2 by field.
+  by rewrite Rabs_mult H2; lra.
+have Hub : Rabs (B * / 2 * I1) <= / 2 + 101 * (u * u).
+  by have := Rabs_triang_inv (B * / 2 * I1) (/ 2); rewrite H2; lra.
+have Herr : Rabs (P - B * / 2 * I1) <= (u * u) * (/ 2 + 101 * (u * u)).
+  apply: Rle_trans He2 _.
+  apply: Rle_trans (_ : (u * u) * Rabs (B * / 2 * I1) <= _).
+    by apply: Rmult_le_compat_r; first by apply: Rabs_pos.
+  by apply: Rmult_le_compat_l; first by apply: Rle_0_sqr.
+have -> : 3 / 2 - P - 1 = - ((P - B * / 2 * I1) + (B * / 2 * I1 - / 2))
+  by field.
+rewrite Rabs_Ropp.
+apply: Rle_trans (Rabs_triang _ _) _.
+have L3 : u * u * u <= / 2048 * (u * u) by nra.
+have L4 : u * u * u * u <= / 2048 * (u * u * u) by nra.
+nra.
+Qed.
 
+(* ===========================================================================*)
+(*  The assembly, as PURE ALGEBRA on reals -- the analogue of ThreeDiv.v's    *)
+(*  [div_error_core].  Every floating-point fact has already been discharged  *)
+(*  by the time this fires; what is left is the four-way split               *)
+(*  [sqrt_error_split] and eight magnitude bounds.                            *)
+(*                                                                            *)
+(*  The three weights [1/2], [1/2], [1] are the whole point (doc/thm11.md     *)
+(*  Section 4.1): [C]'s bracket is [1/2] and not [1], so [d1] is halved.      *)
+(*  The [400u^2] corrections are slack -- they cost [O(u^5)] at the call      *)
+(*  sites and are there only so that no step has to be tight.                 *)
+(* ===========================================================================*)
+(* The three coefficient facts [sqrt_error_core] needs, framed.  Each says   *)
+(* that a product of near-[1] factors stays inside the [400u^2] slack the     *)
+(* statement allows.  Framed because [nra] prices its work by the size of     *)
+(* the CONTEXT: inside the core proof it sees thirty hypotheses and fails.    *)
+Lemma sq_cA : (1 + 130 * (u * u)) * (1 + 105 * (u * u)) <= 1 + 400 * (u * u).
+Proof.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have L3 : u * u * u <= / 2048 * (u * u) by nra.
+have L4 : u * u * u * u <= / 2048 * (u * u * u) by nra.
+nra.
+Qed.
+
+Lemma sq_cB :
+  / 2 * ((1 + 130 * (u * u)) * (1 + 130 * (u * u)) * (1 + 100 * (u * u)))
+    <= 1 / 2 + 400 * (u * u).
+Proof.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have L3 : u * u * u <= / 2048 * (u * u) by nra.
+have L4 : u * u * u * u <= / 2048 * (u * u * u) by nra.
+have L5 : u * u * u * u * u <= / 2048 * (u * u * u * u) by nra.
+have L6 : u * u * u * u * u * u <= / 2048 * (u * u * u * u * u) by nra.
+nra.
+Qed.
+
+Lemma sq_cC :
+  (1 + 121 * (u * u)) * (1 / 2 + 300 * (u * u)) <= 1 / 2 + 400 * (u * u).
+Proof.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have L3 : u * u * u <= / 2048 * (u * u) by nra.
+have L4 : u * u * u * u <= / 2048 * (u * u * u) by nra.
+nra.
+Qed.
+
+Lemma sqrt_error_core B I1 P Y X s d1 d2 d3 :
+  0 < s -> s * s = X ->
+  0 <= d1 -> 0 <= d2 -> 0 <= d3 ->
+  Rabs (B * s - 1) <= 100 * (u * u) ->
+  Rabs I1 <= (1 + 130 * (u * u)) * s ->
+  Rabs (3 / 2 - P - 1) <= 105 * (u * u) ->
+  Rabs (Y - I1 * (3 / 2 - P)) <= d3 * Rabs (I1 * (3 / 2 - P)) ->
+  Rabs (P - B * / 2 * I1) <= d2 * Rabs (B * / 2 * I1) ->
+  Rabs (I1 - B * X) <= d1 * Rabs (B * X) ->
+  Rabs (B * X) <= (1 + 121 * (u * u)) * s ->
+  Rabs (3 / 2 - 1 / 2 * (B * B) * X - B / 2 * I1) <= 1 / 2 + 300 * (u * u) ->
+  Rabs (B * X * (3 / 2 - 1 / 2 * (B * B) * X) - s)
+    <= 15200 * (u * u * u * u) * s ->
+  Rabs (Y - s)
+    <= (d1 * (1 / 2 + 400 * (u * u)) + d2 * (1 / 2 + 400 * (u * u))
+        + d3 * (1 + 400 * (u * u)) + 15200 * (u * u * u * u)) * s.
+Proof.
+move=> Hs0 HsX Hd1 Hd2 Hd3 Hseed Hi1 Hi2 HA HB HC HbX Hbrk HD.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have L2 : u * u <= / 2048 * u by nra.
+have L3 : u * u * u <= / 2048 * (u * u) by nra.
+have L4 : u * u * u * u <= / 2048 * (u * u * u) by nra.
+have L5 : u * u * u * u * u <= / 2048 * (u * u * u * u) by nra.
+have Hu2p : 0 <= u * u by apply: Rle_0_sqr.
+have Hsp : Y - s = Y - I1 * (3 / 2 - P) + - (I1 * (P - B / 2 * I1))
+    + (I1 - B * X) * (3 / 2 - 1 / 2 * (B * B) * X - B / 2 * I1)
+    + (B * X * (3 / 2 - 1 / 2 * (B * B) * X) - s)
+  by apply: sqrt_error_split.
+(* [|3/2 - P| <= 1 + 105u^2] and [|B| s <= 1 + 100u^2]                        *)
+have Hi2u : Rabs (3 / 2 - P) <= 1 + 105 * (u * u).
+  by have := Rabs_triang_inv (3 / 2 - P) 1; rewrite Rabs_R1; lra.
+have Hsa : Rabs s = s by rewrite Rabs_pos_eq; lra.
+have HBu : Rabs B * s <= 1 + 100 * (u * u).
+  have -> : Rabs B * s = Rabs (B * s) by rewrite Rabs_mult Hsa.
+  by have := Rabs_triang_inv (B * s) 1; rewrite Rabs_R1; lra.
+have Hi1p := Rabs_pos I1.
+have HBp := Rabs_pos B.
+(* [A]: the last product.                                                     *)
+have HA' : Rabs (Y - I1 * (3 / 2 - P)) <= d3 * (1 + 400 * (u * u)) * s.
+  apply: Rle_trans HA _.
+  rewrite Rabs_mult.
+  have Hstep : Rabs I1 * Rabs (3 / 2 - P)
+      <= ((1 + 130 * (u * u)) * s) * (1 + 105 * (u * u))
+    by apply: Rmult_le_compat => //; apply: Rabs_pos.
+  have Hstep2 : d3 * (Rabs I1 * Rabs (3 / 2 - P))
+      <= d3 * (((1 + 130 * (u * u)) * s) * (1 + 105 * (u * u)))
+    by apply: Rmult_le_compat_l.
+  apply: Rle_trans Hstep2 _.
+  have Hd3s : 0 <= d3 * s by apply: Rmult_le_pos; lra.
+  have -> : d3 * ((1 + 130 * (u * u)) * s * (1 + 105 * (u * u)))
+      = (d3 * s) * ((1 + 130 * (u * u)) * (1 + 105 * (u * u))) by ring.
+  have -> : d3 * (1 + 400 * (u * u)) * s = (d3 * s) * (1 + 400 * (u * u))
+    by ring.
+  by apply: Rmult_le_compat_l; [exact: Hd3s | exact: sq_cA].
+(* [B]: the inner product, where [b' = b/2] supplies the [1/2].               *)
+have HB' : Rabs (- (I1 * (P - B / 2 * I1)))
+    <= d2 * (1 / 2 + 400 * (u * u)) * s.
+  rewrite Rabs_Ropp Rabs_mult.
+  have HBe : Rabs (P - B / 2 * I1) <= d2 * Rabs (B * / 2 * I1).
+    by have -> : B / 2 * I1 = B * / 2 * I1 by field.
+  have Hstep : Rabs I1 * Rabs (P - B / 2 * I1)
+      <= Rabs I1 * (d2 * Rabs (B * / 2 * I1))
+    by apply: Rmult_le_compat_l.
+  apply: Rle_trans Hstep _.
+  have Hcomb : Rabs I1 * (d2 * Rabs (B * / 2 * I1))
+      = d2 * / 2 * (Rabs I1 * Rabs I1 * Rabs B).
+    rewrite !Rabs_mult (Rabs_pos_eq (/ 2)); last lra.
+    by field.
+  rewrite Hcomb.
+  (* [|I1|^2 |B| = (|I1|/s)^2 s (|B| s)], written without dividing.           *)
+  have Hsq : Rabs I1 * Rabs I1 * Rabs B
+      <= ((1 + 130 * (u * u)) * (1 + 130 * (u * u))) * s
+         * (1 + 100 * (u * u)).
+    have Hstep2 : Rabs I1 * Rabs I1
+        <= ((1 + 130 * (u * u)) * s) * ((1 + 130 * (u * u)) * s)
+      by apply: Rmult_le_compat.
+    have Hstep3 : Rabs I1 * Rabs I1 * Rabs B
+        <= (((1 + 130 * (u * u)) * s) * ((1 + 130 * (u * u)) * s)) * Rabs B
+      by apply: Rmult_le_compat_r.
+    apply: Rle_trans Hstep3 _.
+    have Hstep4 : (((1 + 130 * (u * u)) * s) * ((1 + 130 * (u * u)) * s))
+                    * Rabs B
+        = ((1 + 130 * (u * u)) * (1 + 130 * (u * u))) * s * (Rabs B * s)
+      by ring.
+    rewrite Hstep4.
+    apply: Rmult_le_compat_l => //.
+    by apply: Rmult_le_pos; nra.
+  have Hd2p : 0 <= d2 * / 2 by lra.
+  have Hstep5 : d2 * / 2 * (Rabs I1 * Rabs I1 * Rabs B)
+      <= d2 * / 2 * (((1 + 130 * (u * u)) * (1 + 130 * (u * u))) * s
+                     * (1 + 100 * (u * u)))
+    by apply: Rmult_le_compat_l.
+  apply: Rle_trans Hstep5 _.
+  have Hd2s : 0 <= d2 * s by apply: Rmult_le_pos; lra.
+  have -> : d2 * / 2 * ((1 + 130 * (u * u)) * (1 + 130 * (u * u)) * s
+                        * (1 + 100 * (u * u)))
+      = (d2 * s) * (/ 2 * ((1 + 130 * (u * u)) * (1 + 130 * (u * u))
+                           * (1 + 100 * (u * u)))) by field.
+  have -> : d2 * (1 / 2 + 400 * (u * u)) * s
+      = (d2 * s) * (1 / 2 + 400 * (u * u)) by ring.
+  by apply: Rmult_le_compat_l; [exact: Hd2s | exact: sq_cB].
+(* [C]: THE CANCELLATION.  The bracket is [1/2], not [1].                     *)
+have HC' : Rabs ((I1 - B * X) * (3 / 2 - 1 / 2 * (B * B) * X - B / 2 * I1))
+    <= d1 * (1 / 2 + 400 * (u * u)) * s.
+  rewrite Rabs_mult.
+  have Hstep : Rabs (I1 - B * X)
+                 * Rabs (3 / 2 - 1 / 2 * (B * B) * X - B / 2 * I1)
+      <= (d1 * ((1 + 121 * (u * u)) * s)) * (1 / 2 + 300 * (u * u)).
+    apply: Rmult_le_compat => //; try apply: Rabs_pos.
+    apply: Rle_trans HC _.
+    by apply: Rmult_le_compat_l.
+  apply: Rle_trans Hstep _.
+  have Hd1s : 0 <= d1 * s by apply: Rmult_le_pos; lra.
+  have -> : d1 * ((1 + 121 * (u * u)) * s) * (1 / 2 + 300 * (u * u))
+      = (d1 * s) * ((1 + 121 * (u * u)) * (1 / 2 + 300 * (u * u))) by ring.
+  have -> : d1 * (1 / 2 + 400 * (u * u)) * s
+      = (d1 * s) * (1 / 2 + 400 * (u * u)) by ring.
+  by apply: Rmult_le_compat_l; [exact: Hd1s | exact: sq_cC].
+(* the four, added up.                                                        *)
+rewrite Hsp.
+have T3 := Rabs_triang ((Y - I1 * (3 / 2 - P))
+    + (- (I1 * (P - B / 2 * I1)))
+    + (I1 - B * X) * (3 / 2 - 1 / 2 * (B * B) * X - B / 2 * I1))
+  (B * X * (3 / 2 - 1 / 2 * (B * B) * X) - s).
+have T2 := Rabs_triang ((Y - I1 * (3 / 2 - P))
+    + (- (I1 * (P - B / 2 * I1))))
+  ((I1 - B * X) * (3 / 2 - 1 / 2 * (B * B) * X - B / 2 * I1)).
+have T1 := Rabs_triang (Y - I1 * (3 / 2 - P)) (- (I1 * (P - B / 2 * I1))).
+by lra.
+Qed.
 
 Lemma ThreeSqRtAux_error mul1 mul2 mul3 d1 d2 d3 :
   (forall b y, isDW b -> isTW y -> isTW (mul1 b y)) ->
+  (forall b y, isDW b -> isTW y -> isTW (mul2 b y)) ->
   (forall b y, isDW b -> isTW y ->
      Rabs (TWval (mul1 b y) - TWval b * TWval y)
        <= d1 * Rabs (TWval b * TWval y)) ->
@@ -1834,7 +2150,7 @@ Lemma ThreeSqRtAux_error mul1 mul2 mul3 d1 d2 d3 :
      Rabs (TWval (mul2 b y) - TWval b * TWval y)
        <= d2 * Rabs (TWval b * TWval y)) ->
   (forall a y, isTW a -> isTW y -> tw0 y = 1 ->
-     Rabs (TWval y - 1) <= 40 * (u * u) ->
+     Rabs (TWval y - 1) <= 105 * (u * u) ->
      Rabs (TWval (mul3 a y) - TWval a * TWval y)
        <= d3 * Rabs (TWval a * TWval y)) ->
   head_half mul2 ->
@@ -1842,11 +2158,63 @@ Lemma ThreeSqRtAux_error mul1 mul2 mul3 d1 d2 d3 :
   0 <= d3 -> d3 <= u * u ->
   forall x, isTW x -> 0 < tw0 x ->
     Rabs (TWval (ThreeSqRtAux mul1 mul2 mul3 x) - sqrt (TWval x))
-      <= (d1 * (1 / 2 + 300 * (u * u)) + d2 * (1 / 2 + 300 * (u * u))
-          + d3 * (1 + 300 * (u * u)) + 15200 * (u * u * u * u))
+      <= (d1 * (1 / 2 + 400 * (u * u)) + d2 * (1 / 2 + 400 * (u * u))
+          + d3 * (1 + 400 * (u * u)) + 15200 * (u * u * u * u))
          * Rabs (sqrt (TWval x)).
 Proof.
-Admitted.
+move=> Hmul1 Hmul2 Herr1 Herr2 Herr3 Hhead Hd10 Hd1u Hd20 Hd2u Hd30 Hd3u
+       x Hx Hx0.
+have Hu0 : 0 < u by apply: u_gt_0.
+have Hu2048 := u_le_2048.
+have HX0 : 0 < TWval x by apply: isTW_TWval_gt0.
+have Hs0 : 0 < sqrt (TWval x) by apply: sqrt_lt_R0.
+have HsX : sqrt (TWval x) * sqrt (TWval x) = TWval x by apply: sqrt_sqrt; lra.
+have Fx0 : format (tw0 x) by case: x Hx {Hx0 HX0 Hs0 HsX} => x0 x1 x2 [].
+have Hx1s : tw1 x = 0 \/ Rabs (tw1 x) < ulp (tw0 x)
+  by case: x Hx {Hx0 HX0 Hs0 HsX Fx0} => x0 x1 x2 [].
+have HDW : isDW (sqrtBW (tw0 x) (tw1 x)) by apply: sqrtB_isDW.
+have Hi1 : isTW (mul1 (sqrtBW (tw0 x) (tw1 x)) x) by apply: Hmul1.
+have Hu2p : 0 <= u * u by apply: Rle_0_sqr.
+(* [i(2)]'s head is [1]: the head property, at the [300u^2] the [head_half]  *)
+(* interface asks for -- ample, since [sqrtAux_b_i1_le] gives [202u^2].      *)
+have Hkey := sqrtAux_b_i1_le Herr1 Hd10 Hd1u Hx Hx0.
+have Hkey300 : Rabs (TWval (sqrtBW (tw0 x) (tw1 x))
+                     * TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x) - 1)
+    <= 300 * (u * u) by lra.
+have Hhalf := Hhead _ _ HDW Hi1 Hkey300.
+have HDWs : isDW (scaleTW (-1)%Z (sqrtBW (tw0 x) (tw1 x)))
+  by apply: isDW_scale.
+have Hi2TW : isTW (sub32TW (mul2 (scaleTW (-1)%Z (sqrtBW (tw0 x) (tw1 x)))
+                              (mul1 (sqrtBW (tw0 x) (tw1 x)) x))).
+  apply: sub32TW_isTW; last exact: Hhalf.
+  by apply: Hmul2.
+have Hi2h : tw0 (sub32TW (mul2 (scaleTW (-1)%Z (sqrtBW (tw0 x) (tw1 x)))
+                            (mul1 (sqrtBW (tw0 x) (tw1 x)) x))) = 1
+  by case: (mul2 _ _) Hhalf => t0 t1 t2 /= ->; field.
+(* the eight bounds [sqrt_error_core] consumes                               *)
+have Hi2v := sqrtAux_i2_near_1 Herr1 Herr2 Hmul1 Hd10 Hd1u Hd20 Hd2u Hx Hx0.
+have He3 := Herr3 _ _ Hi1 Hi2TW Hi2h Hi2v.
+have He1 := Herr1 _ _ HDW Hx.
+have He2 := Herr2 _ _ HDWs Hi1.
+rewrite TWval_scale in He2.
+have Hpow : pow (-1) = / 2 by rewrite /= /Z.pow_pos /=; lra.
+rewrite Hpow in He2.
+have Hi1le := sqrtAux_i1_le Herr1 Hd10 Hd1u Hx Hx0.
+have Hbrk := sqrtAux_bracket_le Herr1 Hd10 Hd1u Hx Hx0.
+have HbXle := sqrtAux_bX_le Hx Hx0.
+have Hresid := sqrt_newton_residual Hx Hx0.
+have Hseed := sqrtBW_x_err_crude Hx Hx0.
+rewrite TWval_sub32TW in He3 Hi2v.
+have Habs : Rabs (sqrt (TWval x)) = sqrt (TWval x)
+  by rewrite Rabs_pos_eq; lra.
+rewrite Habs in Hresid.
+rewrite /ThreeSqRtAux Habs.
+apply: (@sqrt_error_core (TWval (sqrtBW (tw0 x) (tw1 x)))
+          (TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x))
+          (TWval (mul2 (scaleTW (-1)%Z (sqrtBW (tw0 x) (tw1 x)))
+                    (mul1 (sqrtBW (tw0 x) (tw1 x)) x)))
+          _ (TWval x) (sqrt (TWval x)) d1 d2 d3) => //.
+Qed.
 
 (* Paper Theorem 11, accurate variant: [24u^3 + 10260u^4].                    *)
 Lemma ThreeSqRt_error x :
@@ -1862,19 +2230,35 @@ have Hu2 : u * u <= / 2048 * u by nra.
 have Hu3 : u * u * u <= / 2048 * (u * u) by nra.
 have Hu4 : u * u * u * u <= / 2048 * (u * u * u) by nra.
 have Hu5 : u * u * u * u * u <= / 2048 * (u * u * u * u) by nra.
+have Hu6 : u * u * u * u * u * u <= / 2048 * (u * u * u * u * u) by nra.
+(* the two ends of [ThreeProdOneTW_error_c]'s tolerance window; [105] is     *)
+(* what [sqrtAux_i2_near_1] delivers.                                        *)
+have H105a : (40 : R) <= 105 by lra.
+have H105b : (105 : R) <= 112 by lra.
 have Hd0 : 0 <= 105 / 10 * (u * u * u) + 39 * (u * u * u * u) by nra.
 have Hdu : 105 / 10 * (u * u * u) + 39 * (u * u * u * u) <= u * u by nra.
-have He0 : 0 <= 6 * (u * u * u) + 1250 * (u * u * u * u) by nra.
-have Heu : 6 * (u * u * u) + 1250 * (u * u * u * u) <= u * u by nra.
+have He0 : 0 <= 6 * (u * u * u) + 3265 * (u * u * u * u) by nra.
+have Heu : 6 * (u * u * u) + 3265 * (u * u * u * u) <= u * u by nra.
+(* [31 * 105 + 10 = 3265]: Algorithm 20's [delta3] at OUR tolerance.         *)
+have Hd3le : 6 * (u * u * u) + (31 * 105 + 10) * (u * u * u * u)
+    <= 6 * (u * u * u) + 3265 * (u * u * u * u) by lra.
 have Hgen := @ThreeSqRtAux_error ThreeProdDW ThreeProdDW ThreeProdOneTW
   (105 / 10 * (u * u * u) + 39 * (u * u * u * u))
   (105 / 10 * (u * u * u) + 39 * (u * u * u * u))
-  (6 * (u * u * u) + 1250 * (u * u * u * u))
-  (fun b y Hb Hy => @ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
-  (fun b y Hb Hy => @ThreeProdDW_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
-  (fun b y Hb Hy => @ThreeProdDW_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (6 * (u * u * u) + 3265 * (u * u * u * u))
+  (fun b y Hb Hy =>
+     @ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun b y Hb Hy =>
+     @ThreeProdDW_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun b y Hb Hy =>
+     @ThreeProdDW_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
+  (fun b y Hb Hy =>
+     @ThreeProdDW_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
   (fun a y Ha Hy Hy0 Hy1 =>
-     @ThreeProdOneTW_error p Hp2 Hp6 choice choice_sym a y Hc Ha Hy Hy0 Hy1)
+     Rle_trans _ _ _
+       (@ThreeProdOneTW_error_c p Hp2 Hp6 choice choice_sym 105 a y Hc
+          H105a H105b Ha Hy Hy0 Hy1)
+       (Rmult_le_compat_r _ _ _ (Rabs_pos _) Hd3le))
   (ThreeProdDW_head_half Hc)
   Hd0 Hdu Hd0 Hdu He0 Heu x Hx Hx0.
 rewrite /ThreeSqRt.
@@ -1897,14 +2281,24 @@ have Hu2 : u * u <= / 2048 * u by nra.
 have Hu3 : u * u * u <= / 2048 * (u * u) by nra.
 have Hu4 : u * u * u * u <= / 2048 * (u * u * u) by nra.
 have Hu5 : u * u * u * u * u <= / 2048 * (u * u * u * u) by nra.
+have Hu6 : u * u * u * u * u * u <= / 2048 * (u * u * u * u * u) by nra.
+(* the two ends of [ThreeProdOneTW_error_c]'s tolerance window; [105] is     *)
+(* what [sqrtAux_i2_near_1] delivers.                                        *)
+have H105a : (40 : R) <= 105 by lra.
+have H105b : (105 : R) <= 112 by lra.
 have Hd0 : 0 <= 18 * (u * u * u) + 75 * (u * u * u * u) by nra.
 have Hdu : 18 * (u * u * u) + 75 * (u * u * u * u) <= u * u by nra.
-have He0 : 0 <= 6 * (u * u * u) + 1250 * (u * u * u * u) by nra.
-have Heu : 6 * (u * u * u) + 1250 * (u * u * u * u) <= u * u by nra.
+have He0 : 0 <= 6 * (u * u * u) + 3265 * (u * u * u * u) by nra.
+have Heu : 6 * (u * u * u) + 3265 * (u * u * u * u) <= u * u by nra.
+(* [31 * 105 + 10 = 3265]: Algorithm 20's [delta3] at OUR tolerance.         *)
+have Hd3le : 6 * (u * u * u) + (31 * 105 + 10) * (u * u * u * u)
+    <= 6 * (u * u * u) + 3265 * (u * u * u * u) by lra.
 have Hgen := @ThreeSqRtAux_error ThreeProdDWFast ThreeProdDWFast ThreeProdOneTW
   (18 * (u * u * u) + 75 * (u * u * u * u))
   (18 * (u * u * u) + 75 * (u * u * u * u))
-  (6 * (u * u * u) + 1250 * (u * u * u * u))
+  (6 * (u * u * u) + 3265 * (u * u * u * u))
+  (fun b y Hb Hy =>
+     @ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
   (fun b y Hb Hy =>
      @ThreeProdDWFast_isTW p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
   (fun b y Hb Hy =>
@@ -1912,7 +2306,10 @@ have Hgen := @ThreeSqRtAux_error ThreeProdDWFast ThreeProdDWFast ThreeProdOneTW
   (fun b y Hb Hy =>
      @ThreeProdDWFast_error p Hp2 Hp6 choice choice_sym b y Hc Hb Hy)
   (fun a y Ha Hy Hy0 Hy1 =>
-     @ThreeProdOneTW_error p Hp2 Hp6 choice choice_sym a y Hc Ha Hy Hy0 Hy1)
+     Rle_trans _ _ _
+       (@ThreeProdOneTW_error_c p Hp2 Hp6 choice choice_sym 105 a y Hc
+          H105a H105b Ha Hy Hy0 Hy1)
+       (Rmult_le_compat_r _ _ _ (Rabs_pos _) Hd3le))
   (ThreeProdDWFast_head_half Hc)
   Hd0 Hdu Hd0 Hdu He0 Heu x Hx Hx0.
 rewrite /ThreeSqRtFast.

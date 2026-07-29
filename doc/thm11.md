@@ -14,10 +14,12 @@ because our *statement* is theirs verbatim.
 
 | | |
 |---|---|
-| `ThreeSqRt_isTW`, `ThreeSqRtFast_isTW` | **proved, unconditional** — `Print Assumptions` shows only the standard classical/reals axioms |
-| `ThreeSqRt_error`, `ThreeSqRtFast_error` | in progress |
+| `ThreeSqRt_isTW`, `ThreeSqRtFast_isTW` | **proved, unconditional** |
+| `ThreeSqRt_error`, `ThreeSqRtFast_error` | **proved, with the paper's own constants** |
 
-What remains is `ThreeSqRtAux_error` and four named helpers (§6).
+**Algorithm 15 is complete: zero admits.** Theorem 11 holds verbatim as
+published — `24u^3 + 10260u^4` and `39u^3 + 10333u^4` — despite every
+intermediate constant of ours being worse than the paper's.
 
 ## 1. The algorithm
 
@@ -128,7 +130,41 @@ the seed error, not two. `ThreeReci.v` therefore gained `head_eq_1_c` and
 `p >= 11`); `head_half` runs at `c = 300`. Bumping the literal does **not**
 work — the proof balances it against its own `200u^2` slack term.
 
-### 4.5 Our seed statement is two-sided, and that matters
+### 4.5 `40u^2` was unreachable, and that forced a change in ThreeProdOne.v
+
+`ThreeProdOneTW_error` (Algorithm 20) required its head-`1` second argument to
+satisfy `|y - 1| <= 40u^2`. That constant was chosen for **Algorithm 14**,
+where `i = 2 - mul1 b x` and the seed bound `|b x - 1| <= 35u^2` enters
+**once**. Algorithm 15 cannot meet it. Here
+
+    i(2) = 3/2 - mul2 b' i(1),   b' i(1) ~ (1/2)(b sqrt x)^2 = (1/2)(1 + e)^2
+
+so `i(2) = 1 - e` and what survives is the **seed error itself** — `100u^2` by
+`sqrtBW_x_err_crude`, and `81u^2` even by the paper's own sharp bound. Neither
+fits in `40`. The honest value is `101.01u^2`; we state `105u^2`.
+
+So `ThreeProdOne.v` gained `ThreeProdOneTW_error_c`, parametric in the
+tolerance `c` over `40 <= c <= 112`:
+
+    delta3(c) = 6u^3 + (31c + 10)u^4
+
+The `6u^3` head is `eta3 + eta4`, which see `b'1` and `x2` alone and never
+`y` — so it does **not** move with `c`; only the `u^4` coefficient does, and
+linearly. At `c = 40` that is exactly `1250`, the constant Algorithm 14
+already relies on, so `ThreeProdOneTW_error` is now a corollary with its
+statement unchanged and **`ThreeDiv.v` needed no edit at all** — Theorem 10's
+`27u^3 + 2500u^4` and `42u^3 + 2575u^4` are untouched. Algorithm 15 runs at
+`c = 105`, i.e. `3265u^4`.
+
+`40 <= c` is not cosmetic: at `c = 0` the conclusion would have to beat the
+`-18u^4` that the factor `(1 - 3u)` costs against the `6u^3` head, and
+`31c + 10` does not until `c ~ 15`.
+
+Lesson for the toolbox: **a shared lemma's numeric side condition is an
+interface.** Ours was fixed by the first caller and silently excluded the
+second.
+
+### 4.6 Our seed statement is two-sided, and that matters
 
     1 + 2u - 8u^2 <= a sqrt x0 <= 1 + 6u + 12u^2
 
@@ -143,29 +179,37 @@ and the algebra allows `6u`.)
 | | ours | published |
 |---|---|---|
 | `d1`, `d2` (Alg 11 / 12) | `10.5u^3+39u^4` / `18u^3+75u^4` | same |
-| `d3` (Alg 20) | `6u^3 + 1250u^4` | `3u^3 + 264u^4` |
-| seed `E` | `120u^2` | `81u^2 + 622u^3` |
-| residual `E^2(3+E)/2` | `21700u^4` | `9916u^4` |
-| **Thm 11, accurate** | `16.5u^3 + 22989u^4` | `24u^3 + 10260u^4` |
+| `d3` (Alg 20), at `c = 105` | `6u^3 + 3265u^4` | `3u^3 + 264u^4` |
+| seed `E` | `100u^2` | `81u^2 + 622u^3` |
+| residual `E^2(3+E)/2` | `15200u^4` | `9916u^4` |
+| **Thm 11, accurate** | `16.5u^3 + 18504u^4` | `24u^3 + 10260u^4` |
+| **Thm 11, fast** | `24u^3 + 18540u^4` | `39u^3 + 10333u^4` |
 
-and `22989 - 10260 = 12729u^4 <= 7.5u^3` for `u <= 1/1697`, i.e. from
-`p = 11`. **The published statement holds for us verbatim**, despite every
-intermediate constant being worse — the first place in this development where
-that happens.
+and `18504 - 10260 = 8244u^4 <= 7.5u^3` for `u <= 1/1099`, i.e. from
+`p = 11` with a factor-1.9 margin; the fast variant needs only
+`8207u^4 <= 15u^3`, `u <= 1/547`. **The published statement holds for us
+verbatim**, despite every intermediate constant being worse — the first place
+in this development where that happens, and it survived `d3` more than
+doubling at `u^4` when the tolerance had to be relaxed (§4.5).
 
-## 6. What remains, easiest first
+## 6. The error half, as built
 
-    sqrtAux_bX_le       |b X| <= (1 + 8u) sqrt x          <- easiest
-    sqrtAux_i1_le       |i1| <= (1 + 130u^2) sqrt x       <- sits on the above
-    sqrtAux_bracket_le  |bracket of C| <= 1/2 + 300u^2    <- the cancellation
-    sqrtAux_i2_near_1   |i2 - 1| <= 40u^2                 <- what mul3 demands
-    ThreeSqRtAux_error                                    <- the assembly
+    sqrtAux_bX_le       |b X| <= (1 + 121u^2) sqrt x
+    sqrtAux_i1_le       |i1| <= (1 + 130u^2) sqrt x       sits on the above
+    sqrtAux_bracket_le  |bracket of C| <= 1/2 + 300u^2    the cancellation
+    sqrtAux_b_i1_le     |b i1 - 1| <= 202u^2              the seed error SQUARED
+    sqrtAux_i2_near_1   |i2 - 1| <= 105u^2                what mul3 demands
+    sq_cA, sq_cB, sq_cC the three coefficient facts, framed for nra
+    sqrt_error_core     the four-way split, as PURE ALGEBRA on reals
+    ThreeSqRtAux_error  the assembly over it
 
-then the two instantiations, one-liners on the `ThreeDiv_error` pattern.
+then the two instantiations, on the `ThreeDiv_error` pattern.
 
-`sqrtAux_bX_le` is nearly immediate: `b X = (b s) s` and
-`|b s - 1| <= 120u^2` is `sqrtBW_x_err_crude`, so `(1 + 8u)` is very loose.
-`sqrtAux_i1_le` follows, `i1 = b X (1 + d1)` with `|d1| <= u^2`.
+`sqrt_error_core` is the analogue of ThreeDiv.v's `div_error_core`: by the
+time it fires every floating-point fact has been discharged, and what is left
+is `sqrt_error_split` plus eight magnitude bounds. Its weights are
+`(1/2, 1/2, 1)` — §4.1 — with `400u^2` corrections that cost `O(u^5)` at the
+call sites and exist only so that no single step has to be tight.
 
 ## 7. Reuse and traps
 

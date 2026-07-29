@@ -209,15 +209,6 @@ Lemma pairwise_ulp_lt l i : pairwise_ulp l -> (i.+2 < size l)%N ->
   nth 0 l i.+2 <> 0 -> Rabs (nth 0 l i.+2) < ulp (nth 0 l i).
 Proof. by move=> Pl Hi Hn0; case: (Pl i Hi). Qed.
 
-(* Peel the head: the third-term bound (guarded) plus the tail.               *)
-Lemma pairwise_ulp_cons a1 a2 a3 l :
-  pairwise_ulp [:: a1, a2, a3 & l] ->
-  (a3 = 0 \/ Rabs a3 < ulp a1) /\ pairwise_ulp [::a2, a3 & l].
-Proof.
-move=> a1a2a3lU; split; last by move=> n Hn; apply: (a1a2a3lU n.+1).
-by apply: (a1a2a3lU 0%N).
-Qed.
-
 (* Cons a head given its (guarded) bound against the third term.              *)
 Lemma pairwise_ulp_cons_inv a1 a2 a3 l :
   (a3 = 0 \/ Rabs a3 < ulp a1) ->
@@ -376,23 +367,6 @@ have [xe0|xne0] := Req_dec x 0.
 have E : forall v : R, (if Req_EM_T x 0 then v else x) = x.
   by move=> v; case: (Req_EM_T x 0) => [xe0|_] //; case: (xne0 xe0).
 by rewrite !E in Hrec *; apply: (IH x x) Hrec; apply: Rle_refl.
-Qed.
-
-(* Recover the immediate-successor bound (old guard form) from the recursive  *)
-(* definition: for a nonzero [nth i], the next term is [<= 1/2 uls (nth i)].  *)
-Lemma Fnonoverlap_aux_imm prev l i :
-  Fnonoverlap_aux prev l -> (i.+1 < size l)%N -> nth 0 l i <> 0 ->
-  Rabs (nth 0 l i.+1) <= / 2 * uls (nth 0 l i).
-Proof.
-elim: l prev i => [|x l IH] prev i //= [Hx Htl].
-case: i => [|i]; last by move=> Hi Hn0; apply: (IH _ i Htl).
-case: l IH Htl => [|y l'] IH //= Htl _ xn0.
-have E : (if Req_EM_T x 0 then prev else x) = x.
-  by case: (Req_EM_T x 0) => [xe0|_] //; case: (xn0 xe0).
-rewrite E /= in Htl; case: Htl => Hy _.
-have [ye0|yne0] := Req_dec y 0; last by apply: Hy.
-rewrite ye0 Rabs_R0; have : 0 < uls x by apply: uls_gt_0.
-lra.
 Qed.
 
 (* [Fnonoverlap_aux] never depends on the zeros in its list: it skips them.   *)

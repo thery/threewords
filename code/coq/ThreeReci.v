@@ -173,7 +173,7 @@ Definition reciB (x0 x1 : R) : dwR := Fast2Sum (reciB01 x0) (reciB12 x0 x1).
 Definition reciBW (x0 x1 : R) : twR :=
   TWR (dwh (reciB x0 x1)) (dwl (reciB x0 x1)) 0.
 
-(* The two products are kept SEPARATE: [mul1] computes [i = 2 - b x] and     *)
+(* The two products are kept SEPARATE: [mul1] computes [i = 2 - b x] and      *)
 (* [mul2] computes [y = b i].  The paper uses a SPECIALISED [mul2] (old       *)
 (* paper Algorithm 18), because [i] has head [1] and [O(u^2)] tail -- which   *)
 (* is what its [11.5u^3] and its 73-operation count are for.                  *)
@@ -392,13 +392,6 @@ have H := reciA_x0_err Fx0 Hx0.
 by split_Rabs; lra.
 Qed.
 
-Lemma reciA_neq_0 x0 : format x0 -> x0 <> 0 -> reciA x0 <> 0.
-Proof.
-move=> Fx0 Hx0 Ha.
-have Hu0 : 0 < u by apply: u_gt_0.
-by have := reciA_x0_bound Fx0 Hx0; rewrite Ha Rmult_0_l; lra.
-Qed.
-
 (* [h11] is EXACT: it is the error of the product [a x0] taken with respect   *)
 (* to [1 + 2u = RN(a x0)], and a product error is a float in FLX.             *)
 Lemma reciH11_exact x0 :
@@ -418,7 +411,7 @@ Proof.
 by move=> Fx0 Hx0; rewrite reciH11_exact //; apply: reciA_x0_err.
 Qed.
 
-(* [|a x1| <= 2u|a x0| <= 2u(1 + 3u)]: the second limb is at most an ulp of  *)
+(* [|a x1| <= 2u|a x0| <= 2u(1 + 3u)]: the second limb is at most an ulp of   *)
 (* the first, and [ulp x0 <= 2u|x0|].                                         *)
 Lemma reciA_x1_bound x0 x1 :
   format x0 -> x0 <> 0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
@@ -641,7 +634,7 @@ Qed.
 (* ===========================================================================*)
 (*  Section 8.2: how well the Newton double word approximates [1/x]           *)
 (*                                                                            *)
-(*  Everything is stated DIMENSIONLESSLY, as [|b*x - 1| <= C]: that is         *)
+(*  Everything is stated DIMENSIONLESSLY, as [|b*x - 1| <= C]: that is        *)
 (*  [|b - 1/x| <= C|1/x|], with no division to carry around.  The Newton step *)
 (*  is quadratic through the identity                                         *)
 (*        (a (2 - X a)) X - 1 = - (a X - 1)^2 ,                               *)
@@ -706,7 +699,7 @@ rewrite Rabs_mult.
 by nra.
 Qed.
 
-(* [a X] is within [O(u)] of [1] -- ASYMMETRICALLY, which is what bounds     *)
+(* [a X] is within [O(u)] of [1] -- ASYMMETRICALLY, which is what bounds      *)
 (* [|2 - a X|] below [1 + u + 6u^2] rather than [1 + 5u + 6u^2].              *)
 Lemma reciA_X_range x0 x1 :
   format x0 -> x0 <> 0 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
@@ -735,7 +728,7 @@ Lemma newton_id (a X : R) : (a * (2 - X * a)) * X - 1 = - (a * X - 1) ^ 2.
 Proof. by ring. Qed.
 
 (* [|b X - 1| <= 32u^2 + 112u^3] (paper: [32u^2 + 110u^3]; the extra [u^3]    *)
-(* absorbs the [158u^4 + 96u^5] the squaring leaves behind).                   *)
+(* absorbs the [158u^4 + 96u^5] the squaring leaves behind).                  *)
 Lemma reciB_X_err x0 x1 :
   format x0 -> 1 <= x0 < 2 -> (x1 = 0 \/ Rabs x1 < ulp x0) ->
   Rabs (TWval (reciBW x0 x1) * (x0 + x1) - 1)
@@ -757,7 +750,7 @@ have HaXa : Rabs (reciA x0 * (x0 + x1)) <= 1 + 5 * u + 6 * (u * u).
 set b := TWval (reciBW x0 x1).
 set a := reciA x0 in Ha Hnew HaXa HaX Hap.
 set X := x0 + x1 in Hnew HaXa HaX.
-(* The Newton identity turns the [O(u)] starting error into an [O(u^2)] one. *)
+(* The Newton identity turns the [O(u)] starting error into an [O(u^2)] one.  *)
 have Hid : b * X - 1 = - (a * X - 1) ^ 2 + (b - a * (2 - X * a)) * X
   by rewrite /b; ring.
 have HXb : Rabs ((b - a * (2 - X * a)) * X)
@@ -1141,7 +1134,7 @@ have Hulp0 : 0 <= ulp e0 by apply: ulp_ge_0.
 (* in this LINEAR form is what lets the [nra] calls stay scalar.              *)
 have Hcu2 : c * (u * u) <= / 4 * u by nra.
 (* [e0] is within [2u] of [1]: the tail is at most [u|e0| + 200u^2] (using    *)
-(* [ulp e0 <= 2u|e0|]), so [|e0 - 1| <= c u^2 + 200u^2 + u |e0|].            *)
+(* [ulp e0 <= 2u|e0|]), so [|e0 - 1| <= c u^2 + 200u^2 + u |e0|].             *)
 have Hd : Rabs (e0 - 1) <= c * (u * u) + (u * Rabs e0 + 200 * (u * u)).
   have H1 : Rabs (e0 - 1) <= Rabs (v - 1) + Rabs (v - e0).
     have -> : e0 - 1 = (v - 1) + - (v - e0) by ring.
@@ -1208,11 +1201,11 @@ Qed.
 (*  Old paper Section 8.3: [|e - 1| <= 35u^2] and [e] F-nonoverlapping give   *)
 (*  [|e0 - e| <= (1 - 2^-4) uls(e0)], so [|e0| >= 1 + 2u] would force         *)
 (*  [|e| >= 1 + 2^-3 u > 1 + 35u^2] -- excluded when [u < 1/280], i.e.        *)
-(*  [p >= 9].  This is Remark 9's precision constraint, and the ONLY admitted *)
-(*  step left in Algorithm 13's correctness.  It needs material internal to   *)
-(*  ThreeProdDW.v / ThreeProdDWFast.v (a [uls]-based bound on the tail of the *)
-(*  product's limbs, sharper than the [ulp] one [isTW] provides), and moves   *)
-(*  to those files once proved.                                               *)
+(*  [p >= 9].  This is Remark 9's precision constraint.  The step needs       *)
+(*  material internal to ThreeProdDW.v / ThreeProdDWFast.v -- a [uls]-based   *)
+(*  bound on the tail of the product's limbs, sharper than the [ulp] one      *)
+(*  [isTW] provides -- and it lives there, as [ThreeProdDW_head_gap] and its  *)
+(*  [Fast] twin.  What follows here is only the transfer to the call site.    *)
 (* ===========================================================================*)
 (* THE INTERFACE, normalised (proved in ThreeProdDW.v as                      *)
 (* [ThreeProdDW_head_gap_norm]): the leading limb of [3Prod_{2,3}(x, y)] is   *)
@@ -1330,7 +1323,7 @@ Qed.
 (* The last step, also generic: a multiplier that returns a triple word and   *)
 (* has the head gap above satisfies [head_one].  The relative [70u^2] turns   *)
 (* absolute here, because the product is within [35u^2] of [1].               *)
-(* Same, with the tolerance a parameter -- what Algorithm 15 needs, since it *)
+(* Same, with the tolerance a parameter -- what Algorithm 15 needs, since it  *)
 (* arrives at [~162u^2] rather than [35u^2].  See [head_eq_1_c].              *)
 Lemma head_one_gen_c c (mul : twR -> twR -> twR) :
   c * u <= / 4 ->
@@ -1369,8 +1362,8 @@ have Fe0 : format (tw0 (mul b y)).
   have HTW := HisTW _ _ Hb Hy.
   by case: (mul b y) HTW => e0 e1 e2 [].
 apply: (@head_eq_1_c c (tw0 (mul b y)) (TWval b * TWval y)) => //.
-(* the relative [70u^2] becomes absolute: the product is within [c u^2] of   *)
-(* [1], so its magnitude is at most [1 + c u^2].                            *)
+(* the relative [70u^2] becomes absolute: the product is within [c u^2] of    *)
+(* [1], so its magnitude is at most [1 + c u^2].                              *)
 have Hv : Rabs (TWval b * TWval y) <= 1 + c * (u * u).
   have := Rabs_triang_inv (TWval b * TWval y) 1.
   by rewrite Rabs_R1; clear -Hprod; lra.
@@ -1550,10 +1543,10 @@ have K2 : a * R0 * (dd1 * a) <= dd1 * (1 + 71 * (u * u)) * R0.
 by nra.
 Qed.
 
-(* [i = 2 - 3Prod(b, x)] is within [40u^2] of [1] -- which is exactly what     *)
-(* the sharp bound asks of its second argument.  Factored out of the assembly  *)
-(* below because Algorithm 14 needs the very same step ([doc/thm10.md], step   *)
-(* 2): it is pure arithmetic on [|b x - 1| <= 35u^2] and the multiplier's own  *)
+(* [i = 2 - 3Prod(b, x)] is within [40u^2] of [1] -- which is exactly what    *)
+(* the sharp bound asks of its second argument.  Factored out of the assembly *)
+(* below because Algorithm 14 needs the very same step ([doc/thm10.md], step  *)
+(* 2): it is pure arithmetic on [|b x - 1| <= 35u^2] and the multiplier's own *)
 (* relative error.                                                            *)
 Lemma sub2_near_one B X P d1 :
   Rabs (B * X - 1) <= 35 * (u * u) ->

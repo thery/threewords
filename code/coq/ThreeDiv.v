@@ -37,10 +37,10 @@
 (* [6u^3] rather than the announced [3u^3] on a triple word.  It was [8u^3]   *)
 (* until doc/thm10.md step 1; steps 2 and 3 would close the rest.             *)
 (*                                                                            *)
-(* STATUS: everything in this file is PROVED.  The two error bounds rest on   *)
-(* one admitted lemma, [ThreeProdOneTW_error] (Algorithm 20's [delta3]) in    *)
-(* ThreeProdOne.v -- the only genuinely new bound Theorem 10 needs.  The plan *)
-(* is in doc/thm10.md.                                                        *)
+(* STATUS: COMPLETE -- everything in this file is PROVED, zero admits.  The   *)
+(* two error bounds rest on [ThreeProdOneTW_error] (Algorithm 20's [delta3])  *)
+(* in ThreeProdOne.v, the only genuinely new bound Theorem 10 needs; the      *)
+(* three steps that would tighten it further are in doc/thm10.md.             *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.

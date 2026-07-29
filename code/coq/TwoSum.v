@@ -125,9 +125,6 @@ Proof. by rewrite /Fast2SumS; case: Rle_dec => Hab; apply: format_Fast2Sum. Qed.
 (* the error word [e] is at most half an ulp of the high word [s].            *)
 Definition magnitudeDWR (a : dwR) := let: DWR s e := a in Rabs e <= ulp s / 2.
 
-Definition Iplus a b := RND (a + b).
-Definition Iminus a b := RND (a - b).
-
 Theorem MKnuth  a b :
  format a  -> format b -> 
   let s  := RND (a + b) in

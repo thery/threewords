@@ -32,9 +32,20 @@
 (* error-free unconditionally.  Algorithm 18 keeps its 20 operations and      *)
 (* gains 2 tests -- and the paper's [delta2] then holds.                      *)
 (*                                                                            *)
-(* STATUS: Algorithm 18 is COMPLETE (zero admits).  Algorithm 20 -- its       *)
-(* [3,3] twin, which Theorem 10 (3Div) needs for its final product -- is      *)
-(* stated and ADMITTED (skeleton).                                            *)
+(* STATUS: COMPLETE -- Algorithms 18 and 20 are both PROVED, zero admits.     *)
+(*                                                                            *)
+(* Algorithm 20's error bound is stated TWICE.  [ThreeProdOneTW_error_c] is   *)
+(* the real one: its head-[1] second argument need only be within [c u^2] of  *)
+(* [1], for any [40 <= c <= 112], and it costs                                *)
+(*                                                                            *)
+(*     delta3(c) = 6u^3 + (31c + 10) u^4                                      *)
+(*                                                                            *)
+(* [ThreeProdOneTW_error] is its [c = 40] instance, [6u^3 + 1250u^4], which   *)
+(* is what Algorithm 14 (3Div) consumes.  The tolerance had to become a       *)
+(* parameter for Algorithm 15 (3SqRt), which can only offer [105u^2] -- see   *)
+(* [sqrtAux_i2_near_1] in ThreeSqRt.v and doc/thm11.md Section 4.5.  Only the *)
+(* [u^4] coefficient moves with [c]: the [6u^3] head is [eta3 + eta4], which  *)
+(* see [b'1] and [x2] alone and never the second argument.                    *)
 (* ---------------------------------------------------------------------------*)
 
 From Stdlib Require Import ZArith Reals Psatz.
@@ -998,13 +1009,13 @@ nra.
 Qed.
 
 (* THE SCALAR RESIDUE.  Divided by [u^4] the slack the conclusion leaves is   *)
-(*                                                                           *)
-(*   (2.65c - 14.1) - (99c + 30)u - (31c^2 - 8c)u^2 + (93c^2 + 30c)u^3       *)
-(*                                                                           *)
-(* and at [u <= 1/64] its first three terms come to                          *)
-(* [1.105c - 14.569 - 0.00757c^2], a CONCAVE quadratic, so its minimum on    *)
-(* [40 <= c <= 112] is at an endpoint: [17.5] at [c = 40], [14.3] at         *)
-(* [c = 112].  The [-14.1] is what the [-18u^4] of the factor [(1 - 3u)]     *)
+(*                                                                            *)
+(*   (2.65c - 14.1) - (99c + 30)u - (31c^2 - 8c)u^2 + (93c^2 + 30c)u^3        *)
+(*                                                                            *)
+(* and at [u <= 1/64] its first three terms come to                           *)
+(* [1.105c - 14.569 - 0.00757c^2], a CONCAVE quadratic, so its minimum on     *)
+(* [40 <= c <= 112] is at an endpoint: [17.5] at [c = 40], [14.3] at          *)
+(* [c = 112].  The [-14.1] is what the [-18u^4] of the factor [(1 - 3u)]      *)
 (* costs against the [6u^3] head -- and it is the whole reason the lemma      *)
 (* asks [40 <= c], since [31c + 10] does not cover it below [c ~ 15].         *)
 Lemma p20c_resid c : 40 <= c -> c <= 112 -> 0 < u -> u <= / 64 ->
@@ -1076,7 +1087,7 @@ have Hs : c * (u * u) <= 112 * (u * u) by nra.
 nra.
 Qed.
 
-(* THE NEAR-[1] TOLERANCE IS A PARAMETER, and it has to be.  Algorithm 14    *)
+(* THE NEAR-[1] TOLERANCE IS A PARAMETER, and it has to be.  Algorithm 14     *)
 (* hands over [40u^2] -- there [i = 2 - mul1 b x] and [sub2_near_one] gives   *)
 (* exactly that.  Algorithm 15 CANNOT: its [i(2) = 3/2 - 3Prod(b', i(1))]     *)
 (* sits at [1 - e] where [e = b sqrt x - 1] is the SEED error, already        *)
@@ -1161,7 +1172,8 @@ have Hval : TWval (let: DWR r1 r2 := Fast2SumS (p20e1 x0 x1 x2 y1 y2)
   have HsE : sumR (p20e x0 x1 x2 y1 y2)
       = p20e0 x0 x1 x2 y1 y2 + p20e1 x0 x1 x2 y1 y2 + p20e2 x0 x1 x2 y1 y2.
     rewrite /p20e0 /p20e1 /p20e2.
-    by case E3 : (p20e x0 x1 x2 y1 y2) Hsz => [|a [|b [|c' [|d l]]]] //= _; ring.
+    by case E3 : (p20e x0 x1 x2 y1 y2) Hsz
+       => [|a [|b [|c' [|d l]]]] //= _; ring.
   by move: Hsum; rewrite HsE /=; lra.
 rewrite Hval.
 have Hb : dwh (p18b x0 x1 y1) + dwl (p18b x0 x1 y1) = x1 + p18z01p x0 y1.

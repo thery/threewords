@@ -1,0 +1,289 @@
+% Sendable version of doc/discrepancies.md, typeset in the paper's notation.
+% Build:  scripts/make-discrepancies-pdf.sh   (pdflatex, twice)
+% KEEP IN SYNC with doc/discrepancies.md -- that is the repository-facing copy,
+% this one is what gets sent to the authors.
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{textcomp}
+\usepackage[margin=2.6cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage[colorlinks=true,linkcolor=black,urlcolor=blue]{hyperref}
+
+\renewcommand{\arraystretch}{1.2}
+
+% The paper's notation.
+\newcommand{\RN}{\mathrm{RN}}
+\newcommand{\ulp}{\mathrm{ulp}}
+\newcommand{\uls}{\mathrm{uls}}
+\newcommand{\ufp}{\mathrm{ufp}}
+\newcommand{\alg}[1]{\mathit{#1}}
+\newcommand{\Prodacc}[1]{\alg{3Prod}^{\mathrm{acc}}_{#1}}
+\newcommand{\Prodfast}[1]{\alg{3Prod}^{\mathrm{fast}}_{#1}}
+
+\title{Formal verification of \emph{Algorithms for triple-word arithmetic}\\[2pt]
+       \large verified results, and where they differ from the paper}
+\author{Laurent Théry\\\small Inria \quad\texttt{laurent.thery@inria.fr}}
+\date{29 July 2026}
+
+\begin{document}
+\maketitle
+
+\noindent
+This note summarises a complete machine-checked verification of the paper, and
+lists every point where the formal proof departs from the printed text. It uses
+the paper's own notation throughout; no knowledge of the proof assistant is
+needed to read it.
+
+Everything below has been checked by machine. Counterexamples are exact and
+reproducible; where a constant differs, both values are proved.
+
+\section{What has been verified}
+
+Algorithms 1--15, together with the appendix Algorithms 18 and 20, and
+Theorems 1--11. Radix~2, precision~$p$, round to nearest ties-to-even,
+$u = 2^{-p}$.
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+ & published & verified \\
+\midrule
+Thm~1, Cor.~1 ($\alg{VecSum}$)   & ---                       & as stated \\
+Thm~2 ($\alg{VSEB}$)             & ---                       & as stated \\
+Thm~3 (keep first $k$)           & $2u^k + 4.2u^{k+1}$       & as stated, for general $k$ \\
+Thm~4 ($\alg{ToTW}$)             & $p \geq 4$                & as stated \\
+Thm~5 ($\alg{RoundTW}$)          & $\alg{RoundTW}(\bar x) = \RN(\bar x)$
+                                 & as stated, \textbf{after correcting Alg.~7} (\S\ref{sec:roundtw}) \\
+Thm~6 ($\alg{TWSum}$)            & $p \geq 4$
+                                 & as stated (\textbf{its proof has a false step}, \S\ref{sec:thm6}) \\
+Thm~7 (Alg.~9)                   & $28u^3 + 107u^4$          & as stated \\
+Thm~8 (Alg.~11)                  & $10.5u^3 + 39u^4$
+                                 & as stated (\textbf{gap in the case analysis}, \S\ref{sec:thm8}) \\
+Thm~9 (Alg.~13)                  & $11.5u^3 + 1465u^4$       & $11.5u^3 + \mathbf{1830}u^4$ \\
+                                 & $19u^3 + 1502u^4$         & $19u^3 + \mathbf{1870}u^4$ \quad (\S\ref{sec:delta2}) \\
+Thm~10 (Alg.~14)                 & $24u^3 + 1509u^4$         & $\mathbf{27}u^3 + \mathbf{2500}u^4$ \\
+                                 & $39u^3 + 1582u^4$         & $\mathbf{42}u^3 + \mathbf{2575}u^4$ \quad (\S\ref{sec:delta3}) \\
+Thm~11 (Alg.~15)                 & $24u^3 + 10260u^4$        & \textbf{as stated} \\
+                                 & $39u^3 + 10333u^4$        & \textbf{as stated} \quad (\S\ref{sec:thm11}) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\medskip
+\noindent
+Two of the $u^3$ constants move (Theorem~10) and two of the $u^4$ constants
+move (Theorem~9). \textbf{Every other $u^3$ constant in the paper is confirmed
+exactly} --- including $11.5 = 10.5 + 1$ and $19 = 18 + 1$, and all of
+Theorem~11.
+
+Not formalised: Algorithms 16, 17, 19 (the sign-folded variants --- they save
+one operation each and change no bound).
+
+\section{Points that need a correction}
+
+\subsection{Algorithm 7 ($\alg{RoundTW}$): the inner test has the wrong
+polarity}\label{sec:roundtw}
+
+As printed, the first \textbf{if} returns $\RN(x_0+x_1)$ when
+\[
+  \RN(x_0 + 2x_1) \text{ is inexact}
+  \quad\textbf{or}\quad
+  \RN\!\left(-\left(\tfrac32 u - 2u^2\right)\!\cdot x_0\right) \neq x_1 .
+\]
+The second disjunct should be ``$=$'', not ``$\neq$''.
+
+At a genuine midpoint $x_1 = \pm\frac12\ulp(x_0)$, the quantity
+$\RN(-(\frac32 u - 2u^2)x_0)$ has magnitude $\approx \frac32 u|x_0|$ and, for
+positive $x_1$, the opposite sign --- so it never equals $x_1$, the printed
+test is true, and the algorithm returns $\RN(x_0+x_1)$, \textbf{ignoring $x_2$
+exactly when $x_2$ decides the rounding}. Conversely, the paper's own
+``special case'' $x_0 = 1+2u$, $x_1 = -\frac32 u$ is precisely where
+$\RN(-(\frac32 u - 2u^2)x_0) = x_1$, so the printed condition takes the
+directional branch there --- also the wrong way round.
+
+\paragraph{Counterexample (binary64).}
+$\bar x = (1, u, u^2)$ is a valid triple word, and $x_0 + x_1$ is exactly the
+midpoint of $[1,\, 1+2^{-52}]$.
+
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+$\RN(\bar x)$                    & $1 + 2^{-52}$ \\
+Algorithm 7 as printed           & $1$ \quad --- wrong \\
+Algorithm 7 with ``$=$''         & $1 + 2^{-52}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\noindent
+An exact sweep over random valid triple words fails on about $0.3\%$ of
+inputs (all of them midpoints) for $p = 4, 6, 8, 10$. Theorem~5 is true of the
+corrected algorithm, and the proof text then reads correctly as written.
+
+\subsection{Lemma 1: two missing hypotheses}
+
+Lemma~1 ($\frac12\ulp(x)$ divides $\RN(x+y)$, used in the proof of Theorem~7)
+needs $y$ to be a floating-point number and $x \neq 0$. It is false without
+them.
+
+\subsection{Theorem 6: an intermediate claim of the proof is
+false}\label{sec:thm6}
+
+The proof asserts that the output of $\alg{VecSum}$ is F-nonoverlapping. It is
+not:
+\[
+  (15,\; 15,\; \tfrac{15}{16},\; \tfrac{15}{16}) \quad\text{at } p = 4
+\]
+is a legal input whose $\alg{VecSum}$ output violates Definition~2.
+\textbf{Theorem~6 itself is true} --- $\alg{VSEB}$ repairs the defect --- but
+the argument has to go through $\alg{VSEB}$ rather than through
+$\alg{VecSum}$ alone.
+
+\subsection{Theorem 8: a gap in the case analysis}\label{sec:thm8}
+
+The case analysis splits on $\bar x\bar y \geq \frac32 - 5u$ and
+$\bar x\bar y < \frac32 - 6u$, leaving the interval between the two uncovered.
+Using the single threshold $\frac32 - 7u$ closes it, and the proof goes through
+unchanged. \textbf{The statement is unaffected.}
+
+\subsection{Section 8.3: the tail bound needs ulp, not uls}
+
+The argument that the leading limb of $\Prodacc{2,3}(\bar b, \bar x)$ equals
+$1$ bounds the tail using F-nonoverlapping, that is, using $\uls$. That is not
+enough:
+\[
+  (16,\; -8,\; -4,\; -2,\; -1)
+\]
+is F-nonoverlapping, sums to $1$, and has leading limb $16$. What the argument
+actually needs is the \textbf{$\ulp$-scale} separation of the two leading
+limbs --- which the $\alg{2Sum}$ structure of the inner $\alg{VecSum}$ does
+supply, so the conclusion $e_0 = 1$ stands. Only the justification has to
+change.
+
+\subsection{$\delta_2$ (Algorithm 18) is $u^3 + 620u^4$, not
+$u^3 + 260u^4$}\label{sec:delta2}
+
+Two distinct issues.
+
+\paragraph{(a) Remark 10 is false.}
+Algorithm~18 uses $\alg{Fast2Sum}(b_1, z_{01}^{+})$ without establishing the
+ordering, on the grounds that when the condition fails $b_1$ is negligible.
+But the condition fails exactly when $|b_1| < |z_{01}^{+}|$, and the worst case
+$|b_1| \approx \ulp(z_{01}^{+})$ loses $\approx u\,|z_{01}^{+}| \approx 41u^3$
+--- not $O(u^4)$. Legal binary64 inputs reach $\mathbf{32u^3}$, that is,
+$32$ times the announced $\delta_2$. The last line,
+$\alg{Fast2Sum}(e_1, e_2)$, has the same hole ($|e_1| < |e_2|$ is legal, and
+costs $\approx 3u^3$).
+
+\emph{This is repairable at no arithmetic cost}: sort the two arguments first.
+A $\alg{Fast2Sum}$ preceded by one test is error-free unconditionally, so
+Algorithm~18 keeps its 20 operations and gains 2 tests.
+
+\paragraph{(b) The $u^4$ term.}
+With the repair in place we prove $\delta_2 = u^3 + 620u^4$. The $u^3$ term is
+exactly the announced one; the $u^4$ term is not. Consequence for Theorem~9:
+
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+                & published            & verified \\
+\midrule
+accurate        & $11.5u^3 + 1465u^4$  & $11.5u^3 + 1830u^4$ \\
+fast            & $19u^3 + 1502u^4$    & $19u^3 + 1870u^4$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{The exponent range}
+
+All the results are proved with an unbounded exponent range --- the model the
+paper works in implicitly. This is worth stating in the text, because
+Theorem~1 and Corollary~1 are genuinely false near the underflow threshold.
+
+\section{One place where our bound is weaker, and we believe the paper is
+right}\label{sec:delta3}
+
+\subsection{$\delta_3$ (Algorithm 20) and Theorem 10}
+
+We can only prove $\delta_3 = 6u^3 + 1250u^4$ against the announced
+$3u^3 + 264u^4$, whence Theorem~10 at $27u^3 + 2500u^4$ and $42u^3 + 2575u^4$
+instead of $24u^3 + 1509u^4$ and $39u^3 + 1582u^4$.
+
+The reason is that a \emph{triple} word only gives $|x_1| < \ulp(x_0)$ and
+$|x_2| < \ulp(x_1)$, that is, twice a double word's separation, so the two
+neglected roundings cost $2u^3$ and $4u^3$ instead of $1u^3$ and $2u^3$. The
+announced $3u^3$ is what the double-word separations would give.
+
+\textbf{We do not claim this is an error.} A numerical search over legal inputs
+reaches only about $2.5u^3$, so $3u^3$ does look attained and the remaining
+factor of two is very likely slack in our proof, not in yours. We record it
+only so that the discrepancy is not mistaken for a disagreement.
+
+\subsection{A hypothesis that is implicit in Algorithm 20}
+
+Worth making explicit in the appendix: $\delta_3$ depends on \textbf{how close
+the second factor is to $1$}, not merely on its leading limb being $1$.
+Algorithm~14 supplies a second factor within $40u^2$ of $1$; Algorithm~15 can
+only supply one within $\approx 101u^2$, because there the seed error enters
+undamped (see \S\ref{sec:thm11}). Our bound is therefore stated as a function
+of that tolerance $c$:
+\[
+  \delta_3(c) = 6u^3 + (31c + 10)\,u^4
+  \qquad\text{for a second factor within } c\,u^2 \text{ of } 1 .
+\]
+The $u^3$ term does not depend on $c$ at all.
+
+\section{Theorem 11 (Algorithm 15)}\label{sec:thm11}
+
+\subsection{It holds exactly as published}
+
+$24u^3 + 10260u^4$ and $39u^3 + 10333u^4$ at $p \geq 11$, verified --- and this
+is the only theorem in the paper for which the printed constants survive
+despite \emph{every} intermediate constant of ours being worse ($\delta_3$
+above; and we could only reach $100u^2$ for the seed, where the supplementary
+material proves $81u^2 + 622u^3$).
+
+That is not luck. \textbf{Our proof takes a different route}, and has to. The
+supplementary material bounds $|\delta_1 - (\delta_1+\delta_2)/2|$ by the
+triangle inequality, which gives $\delta_1$ the weight $1.5$. That discards a
+real cancellation: $i^{(1)}$ occurs twice --- once as a factor of the result,
+once inside $i^{(2)}$ --- with opposite signs. Keeping it gives $\delta_1$ the
+weight $1/2$, and the total becomes
+\[
+  \left|y - \sqrt{\bar x}\right| \;\leq\;
+  \left(\tfrac12\delta_1 + \tfrac12\delta_2 + \delta_3 + 15200u^4\right)
+  \sqrt{\bar x},
+\]
+which is what leaves enough $u^3$ room to absorb our worse $u^4$ terms. Done
+termwise, with our $\delta_3$, Theorem~11 would come out at $29u^3$ / $44u^3$
+and the published bound would fail on both terms at once.
+
+This suggests that the weight $1.5$ on $\delta_1$ is simply loose, and that the
+true first-order sensitivity of Algorithm~15 to its first product is one half,
+not one and a half.
+
+\subsection{$p \geq 11$ is confirmed, and confirmed sharp}
+
+The supplementary material's $9916u^4$ residual is exactly $E^2(3+E)/2$
+evaluated at $E = 81u^2 + 622u^3$: that is $9915.5u^4$ at $p = 11$, and
+$9989.9u^4$ at $p = 10$, where it exceeds the stated value. So the precision
+requirement is real, the constant is what it is announced to be, and the two
+are consistent.
+
+\section{In one line}
+
+The published statements stand, with four amendments: \textbf{Algorithm 7's
+inner test must be inverted}, \textbf{Algorithm 18's two $\alg{Fast2Sum}$ calls
+must sort their arguments}, \textbf{$\delta_2$'s $u^4$ term is $620$, not
+$260$} (hence Theorem~9's $1830$ / $1870$), and \textbf{Lemma 1 needs two
+hypotheses}. Three further points (\S\ref{sec:thm6}, \S\ref{sec:thm8} and
+Section 8.3's tail bound) are gaps in proofs whose statements are correct.
+Theorem~11 holds verbatim.
+
+\end{document}

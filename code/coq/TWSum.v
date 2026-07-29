@@ -1237,13 +1237,6 @@ Local Notation errc := (2 * (u * u * u) + 42 / 10 * (u * u * u * u)).
 (*  DIRECT statement about [VSEB (VecSum ...)]: VSEB repairs the overlap that  *)
 (*  VecSum can leave behind.                                                   *)
 (* ===========================================================================*)
-(* Merging two triples and running VecSum yields exactly six terms, so the    *)
-(* [size <= p + 1] side condition of [vseb_Pnonoverlap] holds once [6 <= p].  *)
-Lemma size_vecSum_Merge x0 x1 x2 y0 y1 y2 :
-  (Z.of_nat
-     (size (vecSum (Merge [:: x0; x1; x2] [:: y0; y1; y2]))) <= p + 1)%Z.
-Proof. by rewrite size_vecSum size_Merge /=; lia. Qed.
-
 (* Paper Theorem 6 (the statement [TWSum] actually needs).  For at most SIX    *)
 (* magnitude-sorted, pairwise-ulp-separated floating-point inputs (with no     *)
 (* underflow: nonzero terms normal), running VecSum and then VSEB yields a     *)

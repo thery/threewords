@@ -113,25 +113,6 @@ Qed.
 (*  the two preconditions of Theorem 6 -- magnitude order and pairwise ulp.   *)
 (* ===========================================================================*)
 
-(* Merge propagates a common upper bound on the elements: if every element of *)
-(* [l1] and of [l2] is below [a], so is every element of the merge.  This is  *)
-(* the key tool for [pairwise_ulp] of the merge -- once the global maximum    *)
-(* (the larger head) is removed, all remaining elements are below ulp of the  *)
-(* head, hence so is the element two positions on.                            *)
-Lemma Merge_head_lt l1 l2 a :
-  {in l1, forall z, Rabs z < a} -> {in l2, forall z, Rabs z < a} ->
-  {in Merge l1 l2, forall z, Rabs z < a}.
-Proof.
-elim: l1 l2 a => /= [|a1 l1 IH1]; first by elim.
-elim => // a2 l2 IH2 a a1l1S a2l2S.
-case: Rle_bool_spec => [a2La1|a1La2] x.
-  rewrite inE => /orP[/eqP->|]; first by apply: a1l1S; rewrite !inE eqxx.
-  by apply: IH1 => [z zIl1|//]; apply: a1l1S; rewrite !inE zIl1 orbT.
-rewrite inE => /orP[/eqP->|]; first by apply: a2l2S; rewrite !inE eqxx.
-apply: IH2 => // z zIl2.
-by apply: a2l2S; rewrite !inE zIl2 orbT.
-Qed.
-
 (* Merge under a common dominating head [a]: if [a] tops both lists, it still *)
 (* tops the merge, and the merge stays magnitude-sorted.  (Helper for         *)
 (* [Merge_sorted_mag].)                                                       *)

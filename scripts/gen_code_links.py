@@ -79,7 +79,13 @@ COVERAGE = [
     ("15",    "3SqRt",     R("ThreeSqRtAux", "ThreeSqRt.v"),
      [("isTW", R("ThreeSqRt_isTW", "ThreeSqRt.v")),
       ("Thm 11 acc", R("ThreeSqRt_error", "ThreeSqRt.v")),
-      ("Thm 11 fast", R("ThreeSqRtFast_error", "ThreeSqRt.v"))], "skel"),
+      ("Thm 11 fast", R("ThreeSqRtFast_error", "ThreeSqRt.v"))], "done"),
+    ("18",    "3Prod (DW×TW, head-1)", R("ThreeProdOne", "ThreeProdOne.v"),
+     [("isTW", R("ThreeProdOne_isTW", "ThreeProdOne.v")),
+      ("δ₂", R("ThreeProdOne_error", "ThreeProdOne.v"))], "done"),
+    ("20",    "3Prod (TW×TW, head-1)", R("ThreeProdOneTW", "ThreeProdOne.v"),
+     [("isTW", R("ThreeProdOneTW_isTW", "ThreeProdOne.v")),
+      ("δ₃", R("ThreeProdOneTW_error_c", "ThreeProdOne.v"))], "done"),
 ]
 
 STATUS = {"done": "✅", "skel": "🚧", "no": "❌"}

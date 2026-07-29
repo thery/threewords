@@ -131,98 +131,10 @@ Local Notation vecSumAux_split := (@vecSumAux_split p choice).
 (*  most 3 of them", and the final [|e_4| = |e_3|] / [|e_5| <= uls(e_4)] step.*)
 (*  It is necessary: Theorem 6 is FALSE for 7 inputs (doc/thm6.md 3).         *)
 (* ===========================================================================*)
-(* Length-free variant of [vsebAux_head_lt_mass]: the block bound             *)
-(* [|head| < 2|eps|] from a mass bound WITHOUT the block-length hypothesis.    *)
-(* The length was only needed in the power-of-two ([uls eps = |eps|]) case of  *)
-(* [vsebAux_head_lt_mass], to keep [pred(2|eps|)] above the tail mass; the      *)
-(* stronger margin [(1 - 2u)] here supplies exactly that slack directly.  This *)
-(* matters because a VecSum output can emit over a long (mostly-zero) tail     *)
-(* whose length exceeds [p - 1] (e.g. at [p = 4], a size-6 output), so the     *)
-(* length bound is genuinely unavailable -- but the tail mass is tiny.         *)
-Lemma vsebAux_head_lt_massU eps l :
-  format eps -> {in l, forall z, format z} -> eps <> 0 ->
-  sumRabs l <= uls eps * (1 - 2 * u) ->
-  Rabs (nth 0 (vsebAux eps l) 0) < 2 * Rabs eps.
-Proof.
-move=> epsF lF epsn0 Hsum.
-have Hu0 : 0 < uls eps by apply: uls_gt_0.
-have Hae : uls eps <= Rabs eps by apply: uls_le_abs.
-have He0 : 0 < Rabs eps by apply: Rabs_pos_lt.
-have Hupos : 0 < u by rewrite /Fmore.u; have := bpow_gt_0 beta (1 - p); lra.
-have Hg : uls eps = pow (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps)))).
-  by rewrite /uls; case: Req_bool_spec => // eps0; case: (epsn0 eps0).
-set g := (cexp eps + Z.of_nat (trZ (Ztrunc (mant eps))))%Z.
-have HmB : (Z.abs (Ztrunc (mant eps)) < beta ^ p)%Z.
-  apply: lt_IZR; rewrite abs_IZR -scaled_mantissa_generic // IZR_Zpower;
-    last lia.
-  apply: Rlt_le_trans (_ : pow (mag beta eps - cexp eps) <= _)%R.
-    exact: scaled_mantissa_lt_bpow.
-  by apply: bpow_le; rewrite /cexp /FLX_exp; lia.
-have Heps : Rabs eps = IZR (Z.abs (Ztrunc (mant eps))) * pow (cexp eps).
-  by rewrite {1}epsF /F2R /= Rabs_mult -abs_IZR Rabs_pow.
-have Hcu : pow (cexp eps) <= uls eps.
-  by rewrite Hg; apply: bpow_le; rewrite /g;
-     have := Zle_0_nat (trZ (Ztrunc (mant eps))); lia.
-suff [B [FB HVB HBlt]] :
-    exists B, [/\ format B, Rabs eps + sumRabs l <= B & B < 2 * Rabs eps].
-  by apply: Rle_lt_trans (vsebAux_head_leB epsF lF FB HVB) HBlt.
-have [HM|HM] := Rle_lt_or_eq_dec _ _ Hae.
-- (* [uls eps < Rabs eps] (mantissa > 1): [B = |eps| + uls eps] is a float in *)
-  (* range, and [< 2|eps|] since [uls eps < |eps|].                           *)
-  exists (Rabs eps + uls eps).
-  have Huim : is_imul (uls eps) (pow g) by rewrite Hg; exists 1%Z;
-    rewrite Rmult_1_l.
-  have Heim : is_imul (Rabs eps) (pow g).
-    have Him : is_imul eps (pow g) by rewrite -Hg; exact: uls_imul epsF.
-    case: (Rle_lt_dec 0 eps) => He.
-      by rewrite Rabs_pos_eq.
-    by rewrite Rabs_left //; apply: is_imul_opp.
-  split.
-  + apply: (imul_format Hp2 (e := g) (b := Rabs eps + uls eps)) => //.
-    * by apply: is_imul_add.
-    * by rewrite Rabs_pos_eq; lra.
-    rewrite bpow_plus.
-    have Hub : Rabs eps <= (pow p - 1) * uls eps.
-      rewrite Heps.
-      apply: Rle_trans (_ : (pow p - 1) * pow (cexp eps) <= _).
-        apply: Rmult_le_compat_r; first by apply: bpow_ge_0.
-        have -> : pow p - 1 = IZR (beta ^ p - 1).
-          by rewrite minus_IZR IZR_Zpower //; lia.
-        by apply: IZR_le; lia.
-      apply: Rmult_le_compat_l; last exact: Hcu.
-      have h0p : (0 <= p)%Z by lia.
-      by rewrite -(pow0E beta); have := bpow_le beta 0 p h0p; lra.
-    have -> : pow g = uls eps by rewrite Hg.
-    nra.
-  + by nra.
-  + by lra.
-(* [uls eps = Rabs eps] (a power of two): [B = pred(2|eps|)].  Here the       *)
-(* [(1 - 2u)] margin -- not a block-length bound -- keeps [B] above the tail  *)
-(* mass, which is the whole point of this length-free variant.                *)
-have HgF : pow g = uls eps by rewrite Hg.
-have H3 : pow (g + 1) = 2 * pow g by rewrite bpow_plus bpow_1 /=; lra.
-have H2 : 2 * Rabs eps = pow (g + 1) by rewrite H3 -HM Hg.
-exists (pred beta fexp (2 * Rabs eps)); split.
-+ by apply: generic_format_pred; rewrite H2;
-     apply: generic_format_bpow; rewrite /FLX_exp; lia.
-+ rewrite H2 pred_bpow.
-  have Hpm : pow (fexp (g + 1)) = uls eps * (2 * u).
-    have Hueq : u = pow (- p).
-      rewrite /Fmore.u (_ : (- p = 1 + - p - 1)%Z); last lia.
-      by rewrite !bpow_plus bpow_1 /=; lra.
-    rewrite /fexp /FLX_exp -HgF Hueq.
-    rewrite (_ : (g + 1 - p = g + (1 - p))%Z); last lia.
-    rewrite bpow_plus; congr (_ * _).
-    rewrite (_ : (1 - p = 1 + - p)%Z); last lia.
-    by rewrite bpow_plus bpow_1 /=; lra.
-  rewrite -H2 Hpm; nra.
-+ by apply: pred_lt_id; rewrite H2; have := bpow_gt_0 beta (g + 1); lra.
-Qed.
-
-(* Paper core tool (doc/thm6.md 5.4): each VecSum error is at most half an     *)
+(* Paper core tool (doc/thm6.md 5.4): each VecSum error is at most half an    *)
 (* ulp of the running high word it is dropped from, [|e_{i+1}| <= 1/2 ulp(s_i)]*)
-(* -- directly [magnitude_TwoSum] on the step [2Sum(x_i, s_{i+1}) = (s_i,      *)
-(* e_{i+1})].  This is the draft's recurring [|e_i| <= 1/2 ulp(s_{i-1})].      *)
+(* -- directly [magnitude_TwoSum] on the step [2Sum(x_i, s_{i+1}) = (s_i,     *)
+(* e_{i+1})].  This is the draft's recurring [|e_i| <= 1/2 ulp(s_{i-1})].     *)
 Lemma vecSum_err_le_half_ulp_run (l : seq R) i :
   (i.+1 < size l)%N -> {in l, forall z, format z} ->
   Rabs (nth 0 (vecSum l) i.+1) <= / 2 * ulp ((vecSumAux (drop i l)).2).
@@ -251,15 +163,15 @@ Qed.
 
 (* ===========================================================================*)
 (*  Step *2 forcing (doc/thm6.md 5.2), scale-invariant: [uls(e_j)] is kept    *)
-(*  symbolic (as [pow k]) instead of the paper's WLOG [uls(e_j) = u], which is *)
+(*  symbolic (as [pow k]) instead of the paper's WLOG [uls(e_j) = u], which is*)
 (*  the FLX-legal reading of the WLOG rescaling.                              *)
 (* ===========================================================================*)
 
-(* An ulp lower bound forces a magnitude lower bound.  From                    *)
-(* [5/8 pow k <= 1/2 ulp s] we get [ulp s >= 2 pow k] (the next power of two   *)
-(* above [5/4 pow k]) and hence [|s| >= ufp s = 2^(p-1) ulp s >= pow(k+p)].    *)
-(* This is the draft's "[|e_i| <= 1/2 ulp(s_{i-1})] gives [|s_{i-1}| >= 1]"    *)
-(* (with [1 = 2^p uls(e_j)] after the [uls(e_j) = u] normalisation).           *)
+(* An ulp lower bound forces a magnitude lower bound.  From                   *)
+(* [5/8 pow k <= 1/2 ulp s] we get [ulp s >= 2 pow k] (the next power of two  *)
+(* above [5/4 pow k]) and hence [|s| >= ufp s = 2^(p-1) ulp s >= pow(k+p)].   *)
+(* This is the draft's "[|e_i| <= 1/2 ulp(s_{i-1})] gives [|s_{i-1}| >= 1]"   *)
+(* (with [1 = 2^p uls(e_j)] after the [uls(e_j) = u] normalisation).          *)
 (* The content, stated on the [ulp] itself: a running sum whose [ulp] is      *)
 (* strictly coarser than [pow k] has [|s| >= ufp s = 2^(p-1) ulp s >=         *)
 (* pow(k+p)].  Stating it this way is what lets the draft's own "similarly    *)
@@ -285,10 +197,10 @@ move=> H; apply: abs_ge_of_ulp_gt.
 by have := bpow_gt_0 beta k; lra.
 Qed.
 
-(* Dual of [abs_ge_of_ulp_lb]: a magnitude upper bound forces an ulp upper     *)
-(* bound.  [|x| < pow m] gives [mag x <= m], so [ulp x = pow(cexp x) =          *)
-(* pow(mag x - p) <= pow(m - p)].  Used for the draft's [|x_{i-2}| < 1] giving  *)
-(* [ulp(x_{i-2}) <= u], hence [|x_i| < u].                                     *)
+(* Dual of [abs_ge_of_ulp_lb]: a magnitude upper bound forces an ulp upper    *)
+(* bound.  [|x| < pow m] gives [mag x <= m], so [ulp x = pow(cexp x) =        *)
+(* pow(mag x - p) <= pow(m - p)].  Used for the draft's [|x_{i-2}| < 1] giving*)
+(* [ulp(x_{i-2}) <= u], hence [|x_i| < u].                                    *)
 Lemma ulp_le_of_abs_lt (x : R) (m : Z) :
   Rabs x < pow m -> ulp x <= pow (m - p).
 Proof.
@@ -298,7 +210,7 @@ rewrite ulp_neq_0 //; apply: bpow_le.
 have := mag_le_bpow beta x _ xn0 Hlt; rewrite /cexp /FLX_exp; lia.
 Qed.
 
-(* Same for [ufp]: [|x| < pow m] gives [ufp x = pow(mag x - 1) <= pow(m - 1)]. *)
+(* Same for [ufp]: [|x| < pow m] gives [ufp x = pow(mag x - 1) <= pow(m - 1)].*)
 Lemma ufp_le_of_abs_lt (x : R) (m : Z) :
   x <> 0 -> Rabs x < pow m -> ufp x <= pow (m - 1).
 Proof.
@@ -306,9 +218,9 @@ move=> xn0 Hlt; rewrite /ufp; apply: bpow_le.
 have := mag_le_bpow beta x _ xn0 Hlt; lia.
 Qed.
 
-(* A format number strictly below [pow m] is at most its predecessor           *)
-(* [pred(pow m) = pow m - pow(m - p)].  The draft's "[|x_{i-1}| <= 1 - u]"      *)
-(* ([1 = pow(k+p)], [u = pow k], so [1 - u = pow(k+p) - pow k]).                *)
+(* A format number strictly below [pow m] is at most its predecessor          *)
+(* [pred(pow m) = pow m - pow(m - p)].  The draft's "[|x_{i-1}| <= 1 - u]"    *)
+(* ([1 = pow(k+p)], [u = pow k], so [1 - u = pow(k+p) - pow k]).              *)
 Lemma abs_le_pred_of_lt (x : R) (m : Z) :
   format x -> Rabs x < pow m -> Rabs x <= pow m - pow (m - p).
 Proof.
@@ -349,9 +261,9 @@ Qed.
 
 (* Draft 5.2, first step: a violation forces the preceding running sum large. *)
 (* If a VecSum error [e_{i+1}] reaches [5/8 uls(e_j)] (with [uls(e_j) = pow k])*)
-(* then [|s_i| >= 2^p uls(e_j) = pow(k+p)] -- the draft's [|s_{i-1}| >= 1].     *)
-(* Combines [vecSum_err_le_half_ulp_run] ([|e_{i+1}| <= 1/2 ulp(s_i)]) with    *)
-(* [abs_ge_of_ulp_lb].                                                         *)
+(* then [|s_i| >= 2^p uls(e_j) = pow(k+p)] -- the draft's [|s_{i-1}| >= 1].   *)
+(* Combines [vecSum_err_le_half_ulp_run] ([|e_{i+1}| <= 1/2 ulp(s_i)]) with   *)
+(* [abs_ge_of_ulp_lb].                                                        *)
 Lemma vecSum_run_ge_of_violation (l : seq R) (i : nat) (k : Z) :
   (i.+1 < size l)%N -> {in l, forall z, format z} ->
   5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
@@ -362,10 +274,10 @@ apply: abs_ge_of_ulp_lb; apply: Rle_trans Hviol _.
 exact: vecSum_err_le_half_ulp_run.
 Qed.
 
-(* Draft 5.2, divisibility: since [|s_i| >= 2^p uls(e_j)], the running sum is  *)
-(* a multiple of [2 uls(e_j) = pow(k+1)] -- the draft's "[2u | s_{i-1}]" (with *)
-(* [uls(e_j) = u]).  A float of magnitude [>= pow(k+p)] lies on a grid at      *)
-(* least as coarse as [pow(k+1)] ([is_imul_bound_pow_format]).                 *)
+(* Draft 5.2, divisibility: since [|s_i| >= 2^p uls(e_j)], the running sum is *)
+(* a multiple of [2 uls(e_j) = pow(k+1)] -- the draft's "[2u | s_{i-1}]" (with*)
+(* [uls(e_j) = u]).  A float of magnitude [>= pow(k+p)] lies on a grid at     *)
+(* least as coarse as [pow(k+1)] ([is_imul_bound_pow_format]).                *)
 Lemma vecSum_run_imul_of_run_ge (l : seq R) (i : nat) (k : Z) :
   {in l, forall z, format z} ->
   pow (k + p) <= Rabs (vecSumAux (drop i l)).2 ->
@@ -403,11 +315,11 @@ have := vecSum_err_le_half_ulp_run Hi Hf.
 by lra.
 Qed.
 
-(* Draft 5.2, "[~(2u | x_{i'})] so [|x_{i'}| < 1]": a float off the            *)
-(* [2 uls(e_j) = pow(k+1)] grid has magnitude below [1 = 2^p uls(e_j) =        *)
-(* pow(k+p)].  Contrapositive of [is_imul_bound_pow_format]: a format number   *)
-(* of magnitude [>= pow(k+p)] has [cexp >= k+1], so it lies on the [pow(k+1)]  *)
-(* grid.                                                                       *)
+(* Draft 5.2, "[~(2u | x_{i'})] so [|x_{i'}| < 1]": a float off the           *)
+(* [2 uls(e_j) = pow(k+1)] grid has magnitude below [1 = 2^p uls(e_j) =       *)
+(* pow(k+p)].  Contrapositive of [is_imul_bound_pow_format]: a format number  *)
+(* of magnitude [>= pow(k+p)] has [cexp >= k+1], so it lies on the [pow(k+1)] *)
+(* grid.                                                                      *)
 Lemma abs_lt_of_not_imul (x : R) (k : Z) :
   format x -> ~ is_imul x (pow (k + 1)) -> Rabs x < pow (k + p).
 Proof.
@@ -417,8 +329,8 @@ apply: Hni; have := is_imul_bound_pow_format Hge Fx.
 by rewrite (_ : (k + 1 = k + p - p + 1)%Z); last lia.
 Qed.
 
-(* Chained magnitude isotony (draft's "by isotony"): on a [sorted_mag] list a  *)
-(* later entry has no larger magnitude than an earlier one.                    *)
+(* Chained magnitude isotony (draft's "by isotony"): on a [sorted_mag] list a *)
+(* later entry has no larger magnitude than an earlier one.                   *)
 Lemma sorted_mag_le_nth (l : seq R) (i j : nat) :
   sorted_mag l -> (i <= j)%N -> (j < size l)%N ->
   Rabs (nth 0 l j) <= Rabs (nth 0 l i).
@@ -431,8 +343,8 @@ by apply: IH => //; apply: ltn_trans (ltnSn j) Hj.
 Qed.
 
 (* Divisibility propagates from inputs to the VecSum output: if every input   *)
-(* lies on the grid [pow g], so does every output ([vecSumAux_imul] packaged   *)
-(* for [vecSum]).                                                              *)
+(* lies on the grid [pow g], so does every output ([vecSumAux_imul] packaged  *)
+(* for [vecSum]).                                                             *)
 Lemma vecSum_imul_forward (l : seq R) (g : Z) :
   {in l, forall z, format z} -> {in l, forall z, is_imul z (pow g)} ->
   {in vecSum l, forall z, is_imul z (pow g)}.
@@ -443,11 +355,11 @@ case E : (vecSumAux l) => [es s0]; rewrite E /= in H2 H1.
 by rewrite inE => /orP[/eqP->//|]; apply: H1.
 Qed.
 
-(* Draft 5.2, the propagation step: [2u | s_{i-1}] but [~ 2u | e_j] (j < i)    *)
-(* forces some INPUT [x_{i'}] off the grid, with [i' < t] when the offending   *)
-(* output sits in the prefix [j <= t] and the running sum [s_t] is on grid.    *)
-(* Via [vecSumAux_split]: [vecSum (take t l ++ [s_t])] is the [t+1]-prefix of  *)
-(* [vecSum l], and its inputs are [x_0..x_{t-1}] plus the (on-grid) [s_t].     *)
+(* Draft 5.2, the propagation step: [2u | s_{i-1}] but [~ 2u | e_j] (j < i)   *)
+(* forces some INPUT [x_{i'}] off the grid, with [i' < t] when the offending  *)
+(* output sits in the prefix [j <= t] and the running sum [s_t] is on grid.   *)
+(* Via [vecSumAux_split]: [vecSum (take t l ++ [s_t])] is the [t+1]-prefix of *)
+(* [vecSum l], and its inputs are [x_0..x_{t-1}] plus the (on-grid) [s_t].    *)
 Lemma vecSum_not_imul_prefix (l : seq R) (t j : nat) (g : Z) :
   (t < size l)%N -> {in l, forall z, format z} -> (j <= t)%N ->
   is_imul (vecSumAux (drop t l)).2 (pow g) ->
@@ -483,10 +395,10 @@ apply: Hnj; rewrite -Hnthj; apply: Him; apply: mem_nth.
 by rewrite size_vecSum HszL.
 Qed.
 
-(* Draft 5.2, "[exists i' <= i-2, ~(2u | x_{i'})]": at a violation, with a     *)
-(* reference error [e_j] ([j <= i]) whose [uls(e_j) = pow k] (so [e_j] is an   *)
-(* odd multiple of the grid, [~ 2u | e_j] by [not_imul_uls_succ]), some input  *)
-(* [x_{i'}] with [i' < i] is off the [2 uls(e_j) = pow(k+1)] grid.             *)
+(* Draft 5.2, "[exists i' <= i-2, ~(2u | x_{i'})]": at a violation, with a    *)
+(* reference error [e_j] ([j <= i]) whose [uls(e_j) = pow k] (so [e_j] is an  *)
+(* odd multiple of the grid, [~ 2u | e_j] by [not_imul_uls_succ]), some input *)
+(* [x_{i'}] with [i' < i] is off the [2 uls(e_j) = pow(k+1)] grid.            *)
 Lemma vecSum_exists_offgrid_input_of_imul (l : seq R) (i j : nat) (k : Z) :
   (i.+1 < size l)%N -> {in l, forall z, format z} -> (j <= i)%N ->
   nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
@@ -505,21 +417,10 @@ have Hnej : ~ is_imul (nth 0 (vecSum l) j) (pow (k + 1))
 exact: (vecSum_not_imul_prefix Hilt Hf Hji Him Hnej).
 Qed.
 
-Lemma vecSum_exists_offgrid_input (l : seq R) (i j : nat) (k : Z) :
-  (i.+1 < size l)%N -> {in l, forall z, format z} -> (j <= i)%N ->
-  nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
-  5 / 8 * pow k <= Rabs (nth 0 (vecSum l) i.+1) ->
-  exists2 i', (i' < i)%N & ~ is_imul (nth 0 l i') (pow (k + 1)).
-Proof.
-move=> Hi Hf Hji Hej0 Huls Hviol.
-apply: (vecSum_exists_offgrid_input_of_imul Hi Hf Hji Hej0 Huls).
-exact: vecSum_run_imul_of_violation Hi Hf Hviol.
-Qed.
-
-(* Draft 5.2, combining the previous two: at a violation, some input [x_{i'}]  *)
-(* ([i' < i]) is off the [pow(k+1)] grid, hence [|x_{i'}| < 1 = pow(k+p)], and *)
-(* by [sorted_mag] isotony EVERY later input [x_m] ([m >= i']) satisfies       *)
-(* [|x_m| < 1].  (The draft's "[|x_{i'}| < 1] so by isotony [|x_{i-2}| < 1]".) *)
+(* Draft 5.2, combining the previous two: at a violation, some input [x_{i'}] *)
+(* ([i' < i]) is off the [pow(k+1)] grid, hence [|x_{i'}| < 1 = pow(k+p)], and*)
+(* by [sorted_mag] isotony EVERY later input [x_m] ([m >= i']) satisfies      *)
+(* [|x_m| < 1].  (The draft's "[|x_{i'}| < 1] so by isotony [|x_{i-2}| < 1]".)*)
 Lemma vecSum_inputs_lt_of_imul (l : seq R) (i j : nat) (k : Z) :
   (i.+1 < size l)%N -> {in l, forall z, format z} -> sorted_mag l ->
   (j <= i)%N -> nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
@@ -548,8 +449,8 @@ apply: (vecSum_inputs_lt_of_imul Hi Hf Hsort Hji Hej0 Huls).
 exact: vecSum_run_imul_of_violation Hi Hf Hviol.
 Qed.
 
-(* Draft 5.2, "[|x_{i-1}| <= 1 - u]": each earlier input, being format and     *)
-(* [< 1 = pow(k+p)], is [<= 1 - u = pow(k+p) - pow k].                         *)
+(* Draft 5.2, "[|x_{i-1}| <= 1 - u]": each earlier input, being format and    *)
+(* [< 1 = pow(k+p)], is [<= 1 - u = pow(k+p) - pow k].                        *)
 Lemma vecSum_inputs_le_1mu_of_violation (l : seq R) (i j : nat) (k : Z) :
   (i.+1 < size l)%N -> {in l, forall z, format z} -> sorted_mag l ->
   (j <= i)%N -> nth 0 (vecSum l) j <> 0 -> uls (nth 0 (vecSum l) j) = pow k ->
@@ -567,9 +468,9 @@ have := abs_le_pred_of_lt Fm (Hlt m Hm Hmsz).
 by rewrite (_ : (k + p - p = k)%Z); last lia.
 Qed.
 
-(* Draft 5.2, "[|x_i| < u]": with [|x_m| < 1] for the earlier inputs           *)
-(* ([m >= i']) we get [ulp(x_m) <= u = pow k] ([ulp_le_of_abs_lt]), so          *)
-(* [pairwise_ulp] ([|x_{m+2}| < ulp(x_m)]) yields [|x_{m+2}| < u].              *)
+(* Draft 5.2, "[|x_i| < u]": with [|x_m| < 1] for the earlier inputs          *)
+(* ([m >= i']) we get [ulp(x_m) <= u = pow k] ([ulp_le_of_abs_lt]), so        *)
+(* [pairwise_ulp] ([|x_{m+2}| < ulp(x_m)]) yields [|x_{m+2}| < u].            *)
 Lemma vecSum_inputs_lt_u_of_imul (l : seq R) (i j : nat) (k : Z) :
   (i.+1 < size l)%N -> {in l, forall z, format z} ->
   sorted_mag l -> pairwise_ulp l -> (j <= i)%N ->
@@ -604,9 +505,9 @@ apply: (vecSum_inputs_lt_u_of_imul Hi Hf Hsort Hpair Hji Hej0 Huls).
 exact: vecSum_run_imul_of_violation Hi Hf Hviol.
 Qed.
 
-(* Draft 5.2, "[|s_i| <= 2u]": with [|x_i| < u] and the *1 running-sum bound   *)
-(* [|s_i| <= 4 ufp(x_i)] we get [|s_i| <= 4 ufp(x_i) <= 4 pow(k-1) = pow(k+1)  *)
-(* = 2u].                                                                      *)
+(* Draft 5.2, "[|s_i| <= 2u]": with [|x_i| < u] and the *1 running-sum bound  *)
+(* [|s_i| <= 4 ufp(x_i)] we get [|s_i| <= 4 ufp(x_i) <= 4 pow(k-1) = pow(k+1) *)
+(* = 2u].                                                                     *)
 Lemma vecSum_run_le_2u_of_violation (l : seq R) (i j : nat) (k : Z) :
   ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
   (forall m, (m < size l)%N -> nth 0 l m <> 0) ->
@@ -632,10 +533,10 @@ have -> : pow (k + 1) = 4 * pow (k - 1).
 by apply: Rmult_le_compat_l; [lra | exact: Hufp].
 Qed.
 
-(* Draft 5.2, "at the right of i": "[|x_i| < u] so [forall i' >= i+1,          *)
-(* |e_{i'}| <= u^2]".  Each later error [e = dwl(2Sum(x, s))] with a small      *)
-(* input [|x| < u = pow k] has [|e| <= 2u ufp(x) <= 2u pow(k-1) = pow(k-p) =    *)
-(* u^2] ([vecSum_err_ufp] + [ufp_le_of_abs_lt]).  This is the block-mass        *)
+(* Draft 5.2, "at the right of i": "[|x_i| < u] so [forall i' >= i+1,         *)
+(* |e_{i'}| <= u^2]".  Each later error [e = dwl(2Sum(x, s))] with a small    *)
+(* input [|x| < u = pow k] has [|e| <= 2u ufp(x) <= 2u pow(k-1) = pow(k-p) =  *)
+(* u^2] ([vecSum_err_ufp] + [ufp_le_of_abs_lt]).  This is the block-mass      *)
 (* content feeding the block bound; it does NOT need the pinning.             *)
 Lemma vecSum_tail_err_le_u2_of_imul (l : seq R) (i j : nat) (k : Z) :
   ties_to_even choice -> (i.+1 < size l)%N -> {in l, forall z, format z} ->
@@ -680,26 +581,26 @@ exact: vecSum_run_imul_of_violation Hi Hf Hviol.
 Qed.
 
 (* ===========================================================================*)
-(*  Draft 5.2, the "close to equality" PINNING (the draft's only gap -- it     *)
-(*  says "by an easy case study" without detail).  Written top-down: the pure  *)
-(*  interval/divisibility core [interval_pin] is isolated (and, for now,        *)
-(*  admitted), and [vecSum_pinning_of_violation] gathers the bounds -- all      *)
-(*  proved by the *2 lemmas above -- and applies it.                           *)
+(*  Draft 5.2, the "close to equality" PINNING (the draft's only gap -- it    *)
+(*  says "by an easy case study" without detail).  Written top-down: the pure *)
+(*  interval/divisibility core [interval_pin] is isolated (and, for now,      *)
+(*  admitted), and [vecSum_pinning_of_violation] gathers the bounds -- all    *)
+(*  proved by the *2 lemmas above -- and applies it.                          *)
 (*                                                                            *)
-(*  Notation ([K] plays [uls(e_j)]'s exponent, so [pow K = u], [pow(K+p) = 1], *)
-(*  [pow(K+1) = 2u], [pow(K-p) = u^2]): with [a = s_i], [b = e_{i+1}],          *)
-(*  [c = x_i], [d = s_{i+1}] and the exact 2Sum identity [a + b = c + d],       *)
-(*   - [a] is a multiple of [2u] with [|a| >= 1] and [|a+b| <= 1+u], so [a] is  *)
-(*     pinned to [|a| = 1];                                                     *)
-(*   - [c] is a float trapped in [(1 - 11/8 u, 1 - u]], so [|c| = 1 - u];       *)
-(*   - hence [|d| = u + |b|] and [2u^2 | b].                                    *)
+(*  Notation ([K] plays [uls(e_j)]'s exponent, so [pow K = u], [pow(K+p) = 1],*)
+(*  [pow(K+1) = 2u], [pow(K-p) = u^2]): with [a = s_i], [b = e_{i+1}],        *)
+(*  [c = x_i], [d = s_{i+1}] and the exact 2Sum identity [a + b = c + d],     *)
+(*   - [a] is a multiple of [2u] with [|a| >= 1] and [|a+b| <= 1+u], so [a] is*)
+(*     pinned to [|a| = 1];                                                   *)
+(*   - [c] is a float trapped in [(1 - 11/8 u, 1 - u]], so [|c| = 1 - u];     *)
+(*   - hence [|d| = u + |b|] and [2u^2 | b].                                  *)
 (* ===========================================================================*)
-(* Conclusion 1 -- [|a| = 1] -- the tie-exclusion, PROVED.  [a] is a multiple  *)
-(* of [2u] with [1 <= |a|], and [|a| <= 1 + u + 1/2 ulp a] pins [mag a] (using  *)
-(* [p >= 4]), so [ulp a = 2u] and [|a| <= 1 + 2u]: [|a| in {1, 1+2u}].  The     *)
-(* boundary [1+2u] is excluded because there [c+d = +-(1 + u)] is exactly the   *)
-(* midpoint [pow(K+p) + pow((K+p)-p)], which round-to-nearest-EVEN sends to     *)
-(* [pow(K+p)] ([RN_midpoint_even]), not to [1+2u].                             *)
+(* Conclusion 1 -- [|a| = 1] -- the tie-exclusion, PROVED.  [a] is a multiple *)
+(* of [2u] with [1 <= |a|], and [|a| <= 1 + u + 1/2 ulp a] pins [mag a] (using*)
+(* [p >= 4]), so [ulp a = 2u] and [|a| <= 1 + 2u]: [|a| in {1, 1+2u}].  The   *)
+(* boundary [1+2u] is excluded because there [c+d = +-(1 + u)] is exactly the *)
+(* midpoint [pow(K+p) + pow((K+p)-p)], which round-to-nearest-EVEN sends to   *)
+(* [pow(K+p)] ([RN_midpoint_even]), not to [1+2u].                            *)
 Lemma interval_pin_abs (a b c d : R) (K : Z) :
   ties_to_even choice ->
   format c -> a = RND (c + d) ->
@@ -786,12 +687,12 @@ have Haval : a = - pow (K + p)
 move: Haneg Haval; lra.
 Qed.
 
-(* Conclusion 2 -- [|c| = 1 - u] -- and the extra [|d| >= u], given [|a| = 1]. *)
-(* The rounding fact [a = RN(c+d)] makes [a] a NEAREST float to [c+d], so with *)
+(* Conclusion 2 -- [|c| = 1 - u] -- and the extra [|d| >= u], given [|a| = 1].*)
+(* The rounding fact [a = RN(c+d)] makes [a] a NEAREST float to [c+d], so with*)
 (* [g = 1 - u] we get [-b <= u/2], hence (with the violation) [b in [5/8u, u]]; *)
 (* then [c] is a multiple of [u] trapped in [(1 - 11/8 u, 1 - u]], so [c = 1-u],*)
-(* and [d = b + u >= 13/8 u >= u].  ([2u^2 | e_i] is NOT provable here -- it     *)
-(* needs the 2Sum structure -- so it moves to [vecSum_pinning_of_violation].)   *)
+(* and [d = b + u >= 13/8 u >= u].  ([2u^2 | e_i] is NOT provable here -- it  *)
+(* needs the 2Sum structure -- so it moves to [vecSum_pinning_of_violation].) *)
 Lemma interval_pin_rest (a b c d : R) (K : Z) :
   ties_to_even choice ->
   format c -> a = RND (c + d) ->
@@ -970,10 +871,10 @@ have Ha_rnd : (vecSumAux (drop i l)).2 =
 have [HRs HRc HDd HDB] :=
   interval_pin Heven Fc Ha_rnd Ha_imul Ha_ge Hc_le Hd_le Hid Hviol Hb_hi.
 split=> //.
-(* [2u^2 | e_{i+1}]: the 2Sum error is a multiple of                           *)
-(* [pow(min(cexp x_i, cexp s_{i+1}))], and both cexps are [>= k - p + 1]        *)
-(* -- [cexp x_i = k] (from [|x_i| = 1 - u]) and [cexp s_{i+1} >= k-p+1] (from   *)
-(* [|s_{i+1}| >= u]).                                                          *)
+(* [2u^2 | e_{i+1}]: the 2Sum error is a multiple of                          *)
+(* [pow(min(cexp x_i, cexp s_{i+1}))], and both cexps are [>= k - p + 1]      *)
+(* -- [cexp x_i = k] (from [|x_i| = 1 - u]) and [cexp s_{i+1} >= k-p+1] (from *)
+(* [|s_{i+1}| >= u]).                                                         *)
 have Hmx : mag beta (nth 0 l i) = (k + p)%Z :> Z.
   apply: mag_unique; rewrite HRc; split; last by have := bpow_gt_0 beta k; lra.
   have -> : pow (k + p) = 2 * pow (k + p - 1)
@@ -1214,16 +1115,6 @@ Lemma vecSum_run_rnd (l : seq R) (i : nat) :
   (vecSumAux (drop i l)).2 =
     RND (nth 0 l i + (vecSumAux (drop i.+1 l)).2).
 Proof. by move=> Hi; rewrite (vecSum_run_dwh Hi) TwoSum_hi. Qed.
-
-(* A running sum past the end of the list is [0]; contrapositive: a           *)
-(* nonzero running sum pins its index inside the list.  This is how the       *)
-(* draft's "[s_{i+2} <> 0]" turns into "in particular [i <= 3]".              *)
-Lemma vecSum_run_nz_lt_size (l : seq R) (i : nat) :
-  (vecSumAux (drop i l)).2 <> 0 -> (i < size l)%N.
-Proof.
-move=> Hnz; case: (leqP (size l) i) => [Hle|//].
-by case: Hnz; rewrite (drop_oversize Hle).
-Qed.
 
 (* At the last index the running sum IS the input.                            *)
 Lemma vecSum_run_last (l : seq R) (i : nat) :
@@ -2004,18 +1895,6 @@ have := magnitude_TwoSum Feps Fe.
 by case: (TwoSum eps e) => r et /=; lra.
 Qed.
 
-(* Draft 5.3 opening, combined: "[ulp(y_j) >= 2|eps_{i_0}| >= 2u]".           *)
-Lemma vseb_emit_ulp_ge_uls (eps e : R) :
-  format eps -> format e -> eps <> 0 -> e <> 0 ->
-  uls e <= uls eps -> dwl (TwoSum eps e) <> 0 ->
-  2 * uls e <= ulp (dwh (TwoSum eps e)).
-Proof.
-move=> Feps Fe epsn0 en0 Hle Hn0.
-have H1 := vseb_emit_abs_ge Feps Fe epsn0 en0 Hle Hn0.
-have H2 := vseb_emit_ulp_ge Feps Fe.
-by lra.
-Qed.
-
 
 (* [p >= 4] in the form the constant bounds need it: 13, 5 and 3 all fit      *)
 (* in [p] bits because [2^p >= 16].                                           *)
@@ -2068,46 +1947,6 @@ by apply: Rle_trans He _; apply: Rmult_le_compat_l.
 Qed.
 
 (* ---- the draft's five constants, instantiated ---------------------------*)
-
-(* "|eps_{i_0}| + |e_{i_1}| <= (1 + 5/8)|eps_{i_0}|, so                       *)
-(* |r_{i_1-1}| <= 13/16 ulp(y_j)"  (case 0 < e_{i_1} < 5/8 u).                *)
-Lemma vseb_next_13_16 (yj eps e t : R) :
-  t <= Rabs eps -> 2 * Rabs eps <= ulp yj -> Rabs e <= 5 / 8 * t ->
-  Rabs (RND (eps + e)) <= 13 / 16 * ulp yj.
-Proof.
-move=> Ht Hulp He.
-have -> : 13 / 16 * ulp yj = (1 + 5 / 8) / 2 * ulp yj by lra.
-apply: vseb_next_le_uls Ht Hulp He _; first by lra.
-have -> : (1 + 5 / 8) / 2 * ulp yj = IZR 13 * pow (- 4) * ulp yj.
-  by rewrite /= /Z.pow_pos /=; lra.
-by apply: format_frac_ulp; move: pow2_ge_16; rewrite /=; lia.
-Qed.
-
-(* "Case |e_{i_1}| = 1/2 u ... |r_{i_1-1}| <= 3/4 ulp(y_j)".                  *)
-Lemma vseb_next_3_4 (yj eps e t : R) :
-  t <= Rabs eps -> 2 * Rabs eps <= ulp yj -> Rabs e <= / 2 * t ->
-  Rabs (RND (eps + e)) <= 3 / 4 * ulp yj.
-Proof.
-move=> Ht Hulp He.
-have -> : 3 / 4 * ulp yj = (1 + / 2) / 2 * ulp yj by lra.
-apply: vseb_next_le_uls Ht Hulp He _; first by lra.
-have -> : (1 + / 2) / 2 * ulp yj = IZR 3 * pow (- 2) * ulp yj.
-  by rewrite /= /Z.pow_pos /=; lra.
-by apply: format_frac_ulp; move: pow2_ge_16; rewrite /=; lia.
-Qed.
-
-(* "Case |e_{i_1}| = 1/4 u.  Then |r_{i_1-1}| <= 5/8 ulp(y_j)".               *)
-Lemma vseb_next_5_8 (yj eps e t : R) :
-  t <= Rabs eps -> 2 * Rabs eps <= ulp yj -> Rabs e <= / 4 * t ->
-  Rabs (RND (eps + e)) <= 5 / 8 * ulp yj.
-Proof.
-move=> Ht Hulp He.
-have -> : 5 / 8 * ulp yj = (1 + / 4) / 2 * ulp yj by lra.
-apply: vseb_next_le_uls Ht Hulp He _; first by lra.
-have -> : (1 + / 4) / 2 * ulp yj = IZR 5 * pow (- 3) * ulp yj.
-  by rewrite /= /Z.pow_pos /=; lra.
-by apply: format_frac_ulp; move: pow2_ge_16; rewrite /=; lia.
-Qed.
 
 
 (* [1 - k u] times an [ulp] is a float ([= (2^p - k) * pow(-p) * ulp]);       *)
@@ -2358,22 +2197,6 @@ have Hu16 := u_le_inv16.
 apply: vseb_subcase_lt Feps Fe Hl Ht0 Ht Hulp _ He Hsz _ Hall _; try lra.
 Qed.
 
-(* Draft 5.3, sub-case [|e_{i_1}| = 1/2 u]: same tail bound, one notch        *)
-(* tighter on the head pair.                                                  *)
-Lemma vseb_subcase_half (yj eps e : R) (l : seq R) (t : R) :
-  format eps -> format e -> {in l, forall z, format z} ->
-  0 < t -> t <= Rabs eps -> 2 * Rabs eps <= ulp yj ->
-  Rabs e <= / 2 * t ->
-  (size l <= 3)%N ->
-  (forall z, z \in l -> Rabs z <= / 2 * u * ulp yj) ->
-  Rabs (nth 0 (vsebAux eps (e :: l)) 0) < ulp yj.
-Proof.
-move=> Feps Fe Hl Ht0 Ht Hulp He Hsz Hall.
-have Hu0 : 0 < u by apply: u_gt_0.
-have Hu16 := u_le_inv16.
-apply: vseb_subcase_lt Feps Fe Hl Ht0 Ht Hulp _ He Hsz _ Hall _; try lra.
-Qed.
-
 (* Draft 5.3, sub-case [1/2 u > |e_{i_1}|] and [|e_{i_1}| <> 1/4 u]: there    *)
 (* [uls(e_{i_1}) <= 1/8 u], so the tail errors are [<= 1/8 u <= 1/16          *)
 (* ulp(y_j)].  The count is exactly [3/4 + 3/16 = 15/16 <= 1 - u], tight      *)
@@ -2503,41 +2326,6 @@ move=> Heven Hfmt Hnz Hsort Hpair Him Hm Hni Hnm.
 have HfV : {in vecSum l, forall z, format z} by apply: format_vecSum.
 apply: Rle_trans (uls_le_abs _ Hnm) _; first by apply/HfV/mem_nth.
 exact: vecSum_tail_le_uls Heven Hfmt Hnz Hsort Hpair Him Hm Hni.
-Qed.
-
-(* An emit carries the domination forward: if every error still to come       *)
-(* is no coarser than the one just consumed, then it is no coarser than       *)
-(* the new remainder either, because the 2Sum error inherits the [uls] of     *)
-(* what it came from ([TwoSum_err_uls_ge]).  This is what keeps               *)
-(* [vseb_emit_abs_ge]'s hypothesis available at every emit of the walk,       *)
-(* hence the [t <= |eps|] that all the 5.3 case lemmas need.                  *)
-Lemma vseb_emit_dom (eps e : R) (l : seq R) :
-  format eps -> format e -> eps <> 0 -> e <> 0 ->
-  uls e <= uls eps ->
-  (forall z, z \in l -> z <> 0 -> uls z <= uls e) ->
-  dwl (TwoSum eps e) <> 0 ->
-  forall z, z \in l -> z <> 0 -> uls z <= uls (dwl (TwoSum eps e)).
-Proof.
-move=> Feps Fe epsn0 en0 Hle Hdom Hn0 z zl zn0.
-apply: Rle_trans (Hdom z zl zn0) _.
-exact: TwoSum_err_uls_ge Feps Fe epsn0 en0 Hle Hn0.
-Qed.
-(* A MERGE step costs nothing.  If the whole remaining block fits under       *)
-(* [(1-2u)|eps|] then, after absorbing the next term [a] exactly into the     *)
-(* remainder, what is left still fits under [(1-2u)|eps + a|]: the            *)
-(* remainder loses at most [|a|] while the block loses exactly [|a|].         *)
-(* So all the content of the draft's block estimate sits at the EMITS.        *)
-Lemma mass_merge_step (eps a : R) (tail : seq R) :
-  Rabs a + sumRabs tail <= (1 - 2 * u) * Rabs eps ->
-  sumRabs tail <= (1 - 2 * u) * Rabs (eps + a).
-Proof.
-move=> Hmass.
-have Hu0 : 0 < u by apply: u_gt_0.
-have Hu16 := u_le_inv16.
-have Htri : Rabs eps - Rabs a <= Rabs (eps + a).
-  by have := Rabs_triang_inv eps (- a); rewrite Rabs_Ropp; split_Rabs; lra.
-have Ha : 0 <= Rabs a by apply: Rabs_pos.
-by nra.
 Qed.
 
 (* Discharging one [vsebBlock] obligation from a MASS bound.  The draft's     *)
@@ -2915,7 +2703,7 @@ have Htail' : forall z, z \in drop q.+1 (vecSum l) -> Rabs z <= pow (K - p).
 have Fq : format (nth 0 (vecSum l) q) by apply: HfV; apply: mem_nth.
 have Ftail : {in drop q.+1 (vecSum l), forall z, format z}
   by move=> z /mem_drop; apply: HfV.
-(* "we are adding at most 3 of them" -- this is where [size l <= 6] is paid  *)
+(* "we are adding at most 3 of them" -- this is where [size l <= 6] is paid   *)
 have Hszt : (size (drop q.+1 (vecSum l)) <= 3)%N.
   rewrite size_drop Hszl leq_subLR.
   apply: leq_trans Hsz6 _.
@@ -2978,14 +2766,14 @@ have Herr' : Rabs (m - IZR (rnd m)) * pow c = / 2 * pow K.
   rewrite -Herr -{1}Hv HR -(Rabs_pos_eq (pow c) (Rlt_le _ _ Hpc)) -Rabs_mult.
   by rewrite (Rabs_pos_eq (pow c) (Rlt_le _ _ Hpc)); congr Rabs; ring.
 case: (Req_EM_T (m - IZR (Zfloor m)) (/ 2)) => [Htie|Hntie]; last first.
-  (* not a tie: the error is STRICTLY under half a unit, so [K < c] and the  *)
-  (* result already sits on the [pow c] grid                                 *)
+  (* not a tie: the error is STRICTLY under half a unit, so [K < c] and the   *)
+  (* result already sits on the [pow c] grid                                  *)
   have Hlt := Znearest_N_strict choice m Hntie.
   have HKc : pow K < pow c by nra.
   have HKc' : (K + 1 <= c)%Z by have := lt_bpow beta _ _ HKc; lia.
   apply: (is_imul_pow_le _ HKc').
   by exists (rnd m); rewrite HR.
-(* a tie: ties-to-even returns [Zfloor] when even and [Zfloor + 1] when odd  *)
+(* a tie: ties-to-even returns [Zfloor] when even and [Zfloor + 1] when odd   *)
 have Hnint : IZR (Zfloor m) <> m by lra.
 have Hceil : Zceil m = (Zfloor m + 1)%Z by apply: Zceil_floor_neq.
 have Hrnd : rnd m = (if choice (Zfloor m) then Zceil m else Zfloor m)
@@ -3521,14 +3309,14 @@ apply: (vseb_head_lt_of_merge_mass (B := pow K)) => //; last by lra.
 by rewrite Hup in Hmass; nra.
 Qed.
 
-(* Draft 5.3, case [i_1 <= 3] (with [e_{i_1} >= 5/8 u]).  Splits on 5.2's    *)
-(* "at the left of [i]": in the [x_{i_1-2} = -1+u] case [e_{i_1-1} = 0]      *)
-(* forces [i_1 = 3] and then [|y_j| = |s_0| >= 1/2 u^{-1}], so               *)
-(* [ulp(y_j) >= 1] while [|y_{j+1}| < 1]; in the [x_{i_1-2} = 1-u] case all  *)
-(* the [e_i], [i <= i_1-2], are divisible by 1, which pins                   *)
-(* [eps_{i_0} = -u] and gives the CANCELLATION                               *)
-(* [|eps_{i_0} + e_{i_1}| <= 3/8 u] ([vsebAux_head_leB_merge] is built for   *)
-(* it), after which the at most 3 remaining errors are [<= u^2].             *)
+(* Draft 5.3, case [i_1 <= 3] (with [e_{i_1} >= 5/8 u]).  Splits on 5.2's     *)
+(* "at the left of [i]": in the [x_{i_1-2} = -1+u] case [e_{i_1-1} = 0]       *)
+(* forces [i_1 = 3] and then [|y_j| = |s_0| >= 1/2 u^{-1}], so                *)
+(* [ulp(y_j) >= 1] while [|y_{j+1}| < 1]; in the [x_{i_1-2} = 1-u] case all   *)
+(* the [e_i], [i <= i_1-2], are divisible by 1, which pins                    *)
+(* [eps_{i_0} = -u] and gives the CANCELLATION                                *)
+(* [|eps_{i_0} + e_{i_1}| <= 3/8 u] ([vsebAux_head_leB_merge] is built for    *)
+(* it), after which the at most 3 remaining errors are [<= u^2].              *)
 Lemma vseb_emit_viol_le3 (l : seq R) (k q : nat) (eps r et : R) (K : Z) :
   ties_to_even choice ->
   (size l <= 6)%N ->
@@ -3716,7 +3504,7 @@ have Hpin : forall x : R, format x -> Rabs x <= pow k - pow (k - p) ->
     by lia.
   by case: Hzi => Hzi; [left|right]; rewrite Habsz Hzi !minus_IZR; nra.
 (* the rounded sum lies in [[u, 2u)], so the grid there is [2u^2] and the     *)
-(* rounding error is at most [u^2]                                           *)
+(* rounding error is at most [u^2]                                            *)
 have Hsn0 : RND (a + b) <> 0
   by move=> H0; move: Hs; rewrite H0 Rabs_R0; lra.
 have Hmags : mag beta (RND (a + b)) = (k + 1)%Z :> Z.
@@ -3809,7 +3597,7 @@ have Hszl : size (vecSum l) = size l
   by rewrite size_vecSum prednK //; apply: ltn_trans Hi.
 case: (ltnP m (size (vecSum l))) => [Hmsz|Hge]; last by rewrite nth_default.
 have Hmlt : (m < size l)%N by rewrite -Hszl.
-(* [i >= 3] and [size l <= 6] leave exactly one live configuration           *)
+(* [i >= 3] and [size l <= 6] leave exactly one live configuration            *)
 have Hm5 : m = 5%N.
   have H1 : (5 <= m)%N by apply: leq_trans Hm; rewrite !ltnS.
   have H2 : (m <= 5)%N by rewrite -ltnS; apply: leq_trans Hmlt _.
@@ -3820,7 +3608,7 @@ have Hieq : i = 3%N.
 have Hsz : size l = 6%N.
   by apply/eqP; rewrite eqn_leq Hsz6 /=; move: Hmlt; rewrite Hm5.
 rewrite Hm5.
-(* the running sum is [RND(x_4 + x_5)] and [e_5] is its error                *)
+(* the running sum is [RND(x_4 + x_5)] and [e_5] is its error                 *)
 have H5sz : (4.+1 < size l)%N by rewrite Hsz.
 have Hrnd := vecSum_run_rnd H5sz.
 have Hlast : (vecSumAux (drop 5 l)).2 = nth 0 l 5
@@ -3830,7 +3618,7 @@ have F4 : format (nth 0 l 4) by apply: Hf; apply: mem_nth; rewrite Hsz.
 have F5 : format (nth 0 l 5) by apply: Hf; apply: mem_nth; rewrite Hsz.
 have Hstep := vecSum_run_step H5sz Hf.
 rewrite Hlast in Hstep.
-(* [Heq] picks 5.2's case 2, which pins [|s_3| = 2u - 2u^2]                  *)
+(* [Heq] picks 5.2's case 2, which pins [|s_3| = 2u - 2u^2]                   *)
 have Hcases := vecSum_right_of_i_cases Heven Hi Hf Hnz Hsort Hpair Hji Hej0
                                        Huls Hviol.
 rewrite Hieq in Hcases.
@@ -3841,7 +3629,7 @@ have Hs : Rabs (RND (nth 0 l 4 + nth 0 l 5)) = 2 * pow k - pow (k - p + 1).
   - by move: Heq He; have := bpow_gt_0 beta (k - p + 1); lra.
   - by move: Heq He; lra.
   by [].
-(* the draft's [x_{i+1} <= u - u^2] for both inputs                          *)
+(* the draft's [x_{i+1} <= u - u^2] for both inputs                           *)
 have [i' Hi'i Hxlt] :=
   vecSum_inputs_lt_u_of_violation Hi Hf Hsort Hpair Hji Hej0 Huls Hviol.
 rewrite Hieq in Hi'i.
@@ -3855,13 +3643,13 @@ have Hexact := pair_pin_1m2u Heven F4 F5 Ha4 Ha5 Hs.
 by move: Hstep; rewrite Hrnd Hexact; lra.
 Qed.
 
-(* Draft 5.3, case [i_1 >= 4] (with [e_{i_1} >= 5/8 u]): "in particular      *)
-(* there is no need to consider beyond [r_{i_1}]".  5.2's                    *)
-(* [vecSum_right_of_i_count] kills the [|e_{i_1}| = u] case here (it forces  *)
-(* [i <= 3]); [|e_{i_1}| = u - 2u^2] needs 5.2's OTHER counting -- "either   *)
-(* there is no more non-zero [e_{i'}] or [i <= 3]" -- and then               *)
-(* [vseb_next_lt_of_1mu]; [|e_{i_1}| <= u - 4u^2] uses the stronger          *)
-(* [vseb_next_1m2u] estimate plus one more error [<= u^2].                   *)
+(* Draft 5.3, case [i_1 >= 4] (with [e_{i_1} >= 5/8 u]): "in particular       *)
+(* there is no need to consider beyond [r_{i_1}]".  5.2's                     *)
+(* [vecSum_right_of_i_count] kills the [|e_{i_1}| = u] case here (it forces   *)
+(* [i <= 3]); [|e_{i_1}| = u - 2u^2] needs 5.2's OTHER counting -- "either    *)
+(* there is no more non-zero [e_{i'}] or [i <= 3]" -- and then                *)
+(* [vseb_next_lt_of_1mu]; [|e_{i_1}| <= u - 4u^2] uses the stronger           *)
+(* [vseb_next_1m2u] estimate plus one more error [<= u^2].                    *)
 Lemma vseb_emit_viol_ge4 (l : seq R) (k q : nat) (r et : R) (K : Z) :
   ties_to_even choice ->
   (size l <= 6)%N ->
@@ -3898,7 +3686,7 @@ have Hp0 : pow (K - p) = u * pow K
 have Hp1 : pow (K - p + 1) = 2 * u * pow K.
   have -> : (K - p + 1 = 1 + (K - p))%Z by lia.
   by rewrite bpow_plus bpow_1 Hp0 /=; lra.
-(* [i_1 >= 4] with [size l <= 6]: at most ONE error is left after [e_{i_1}]  *)
+(* [i_1 >= 4] with [size l <= 6]: at most ONE error is left after [e_{i_1}]   *)
 (* -- the draft's "no need to consider beyond [r_{i_1}]".                     *)
 have Hszt : (size (drop q.+1 (vecSum l)) <= 1)%N.
   rewrite size_drop Hszl leq_subLR.
@@ -3913,12 +3701,12 @@ have Frnd : format (RND (et + nth 0 (vecSum l) q))
   by apply: generic_format_round.
 case: (vsebAux_head_step et (nth 0 (vecSum l) q) (drop q.+1 (vecSum l)))
       => [Hhd|[Hex Hhd]]; rewrite Hhd.
-  (* INEXACT step: the head is [RND(eps + e_{i_1})], whatever follows        *)
+  (* INEXACT step: the head is [RND(eps + e_{i_1})], whatever follows         *)
   have Hcases := vecSum_right_of_i_cases Heven Hqsz Hfmt Hnz Hsort Hpair Hkq'
                                          en0 HK Hviol'.
   rewrite Hpred in Hcases.
   case: Hcases => [[Heq _]|[Heq _]|Hle].
-  - (* [|e_{i_1}| = u] is excluded here: 5.2's counting forces [i <= 3]      *)
+  - (* [|e_{i_1}| = u] is excluded here: 5.2's counting forces [i <= 3]       *)
     have := vecSum_right_of_i_count Heven Hsz6 Hqsz Hfmt Hnz Hsort Hpair Hkq'
                                     en0 HK Hviol'.
     by rewrite Hpred => /(_ Heq); rewrite leqNgt Hi3.
@@ -3928,7 +3716,7 @@ case: (vsebAux_head_step et (nth 0 (vecSum l) q) (drop q.+1 (vecSum l)))
   have Hb : Rabs (nth 0 (vecSum l) q) <= (1 - 4 * u) * pow K
     by move: Hle; rewrite Hp1; lra.
   by have := H _ Hb; nra.
-(* EXACT step: the walk carries on from [eps + e_{i_1}], with one term left  *)
+(* EXACT step: the walk carries on from [eps + e_{i_1}], with one term left   *)
 rewrite (Hmerge _ _ Frnd Hszt) nth_drop addn0.
 have Htl : Rabs (nth 0 (vecSum l) (q.+1 + 0)) <= / 2 * u * ulp r.
   rewrite addn0.
@@ -3953,8 +3741,8 @@ case: Hcases => [[Heq _]|[Heq _]|Hle].
 - have := vecSum_right_of_i_count Heven Hsz6 Hqsz Hfmt Hnz Hsort Hpair Hkq'
                                   en0 HK Hviol'.
   by rewrite Hpred => /(_ Heq); rewrite leqNgt Hi3.
-- (* [|e_{i_1}| = u - 2u^2]: the draft's OTHER counting says nothing         *)
-  (* non-zero is left, and then the merged word IS the emitted head          *)
+- (* [|e_{i_1}| = u - 2u^2]: the draft's OTHER counting says nothing          *)
+  (* non-zero is left, and then the merged word IS the emitted head           *)
   have Heq' : Rabs (nth 0 (vecSum l) q.-1.+1) = pow K - pow (K - p + 1)
     by rewrite Hpred.
   have Hz : nth 0 (vecSum l) q.+1 = 0.
@@ -4007,7 +3795,7 @@ have Hpred : (q.-1.+1 = q)%N by rewrite prednK //; apply: ltnW.
 have Hqsz : (q.-1.+1 < size l)%N by rewrite Hpred -Hszl.
 rewrite (drop_nth 0 Hq).
 case: (Rle_lt_dec (5 / 8 * pow K) (Rabs (nth 0 (vecSum l) q))) => [Hviol|Hlt].
-  (* the draft's *2 violation; split on [i_1 <= 3] vs [i_1 >= 4]             *)
+  (* the draft's *2 violation; split on [i_1 <= 3] vs [i_1 >= 4]              *)
   case: (leqP q 3) => [Hq3|Hq4].
     by apply: (vseb_emit_viol_le3 Heven Hsz6 Hfmt Hnz Hsort Hpair Feps HE Hhd
                                   epsn0 Hgrid Fet Hk Hkq Hq3 Hq en0 Hqn0 HK Ht
@@ -4016,9 +3804,9 @@ case: (Rle_lt_dec (5 / 8 * pow K) (Rabs (nth 0 (vecSum l) q))) => [Hviol|Hlt].
                                 Hq4 Hq en0 Hqn0 HK Ht Hulp Hviol).
 case: (Rlt_le_dec (Rabs (nth 0 (vecSum l) q)) (/ 2 * pow K)) => [Hlt2|Hge2];
     last first.
-  (* [1/2 u <= |e_{i_1}| < 5/8 u]: both draft sub-cases at once, via the *2  *)
-  (* divisibility -- from the ulp when [> 1/2 u], from ties-to-even when     *)
-  (* [= 1/2 u].                                                              *)
+  (* [1/2 u <= |e_{i_1}| < 5/8 u]: both draft sub-cases at once, via the *2   *)
+  (* divisibility -- from the ulp when [> 1/2 u], from ties-to-even when      *)
+  (* [= 1/2 u].                                                               *)
   apply: (vseb_emit_of_imul Heven Hsz6 Hfmt Hnz Hsort Hpair Fet Hk Hkq Hq en0
                             HK Ht Hulp _ (Rlt_le _ _ Hlt)).
   case: (Rle_lt_or_eq_dec _ _ Hge2) => [Hgt|Heq].
@@ -4027,7 +3815,7 @@ case: (Rlt_le_dec (Rabs (nth 0 (vecSum l) q)) (/ 2 * pow K)) => [Hlt2|Hge2];
 have Fq : format (nth 0 (vecSum l) q) by apply: HfV; apply: mem_nth.
 have Ftail : {in drop q.+1 (vecSum l), forall z, format z}
   by move=> z /mem_drop; apply: HfV.
-(* "we are adding at most 3 of them" -- where [size l <= 6] is paid          *)
+(* "we are adding at most 3 of them" -- where [size l <= 6] is paid           *)
 have Hszt : (size (drop q.+1 (vecSum l)) <= 3)%N.
   rewrite size_drop Hszl leq_subLR.
   apply: leq_trans Hsz6 _.
@@ -4080,7 +3868,7 @@ have Ht : uls (nth 0 (vecSum l) k) <= Rabs et.
   by rewrite E /=; apply.
 have [K HK] := uls_pow en0.
 case: (seq_first_nonzero (leq_subr k.+1 (size (vecSum l)))) => [Hall|].
-  (* nothing non-zero is left: the walk emits the remainder itself *)
+  (* nothing non-zero is left: the walk emits the remainder itself            *)
   apply: vsebBlock_obligation_zeros => // z.
   move=> /(nthP 0)[m Hm <-].
   rewrite nth_drop; apply: Hall; first exact: leq_addr.
@@ -4266,8 +4054,8 @@ by apply: Hdown; apply: leq_subr.
 Qed.
 
 (* [vecSumAux] on a list with a trailing zero: the deepest step is            *)
-(* [2Sum(x_{n-1}, 0) = (x_{n-1}, 0)] (exact, since [x_{n-1}] is a float), so   *)
-(* the running sum is unchanged and the emitted error is a trailing zero.      *)
+(* [2Sum(x_{n-1}, 0) = (x_{n-1}, 0)] (exact, since [x_{n-1}] is a float), so  *)
+(* the running sum is unchanged and the emitted error is a trailing zero.     *)
 Lemma vecSumAux_rcons0 (m : seq R) :
   (0 < size m)%N -> {in m, forall z, format z} ->
   vecSumAux (rcons m 0) =
@@ -4301,8 +4089,8 @@ by case: (vecSumAux m) => es s /=.
 Qed.
 
 (* VSEB absorbs a trailing zero at the [vsebAux] level: the terminal step is  *)
-(* [2Sum(_, 0) = (_, 0)], whose zero error either is dropped (output           *)
-(* unchanged) or, at the very last position, emitted as a trailing zero.       *)
+(* [2Sum(_, 0) = (_, 0)], whose zero error either is dropped (output          *)
+(* unchanged) or, at the very last position, emitted as a trailing zero.      *)
 Lemma vsebAux_rcons0 (l : seq R) (eps : R) :
   format eps -> {in l, forall z, format z} ->
   vsebAux eps (rcons l 0) = vsebAux eps l \/

@@ -917,44 +917,6 @@ apply: (vecSum_Fnonoverlap_core Hk).
 exact: VecSum_run_bound Hk.
 Qed.
 
-(* The key separation step of Theorem 1.  When [2Sum a s] produces a NONZERO  *)
-(* low word [ei1], the head of the already-normalised tail [es] stays below   *)
-(* [1/2 uls ei1].  Given that [s] is on a finer grid than [a] ([uls s <=      *)
-(* uls a]), the low word carries [s]'s rightmost bit, so [uls s <= uls ei1]   *)
-(* ([TwoSum_err_uls_ge]); combine with [Fnonoverlap (s :: es)] at index 0     *)
-(* ([Rabs (nth 0 es 0) <= 1/2 uls s]).  The operands are nonzero because a    *)
-(* zero operand would round exactly and leave [ei1 = 0].  The exponent        *)
-(* premise [uls s <= uls a] is the remaining content, discharged by the       *)
-(* paper's [k_i] argument at the call site.                                   *)
-Lemma Fnonoverlap_head a s es :
-  format a -> format s -> uls s <= uls a ->
-  Fnonoverlap (s :: es) -> (0 < size es)%N ->
-  let: DWR _ ei1 := TwoSum a s in
-  ei1 <> 0 -> Rabs (nth 0 es 0) <= / 2 * uls ei1.
-Proof.
-move=> Fa Fs Hulsle Fses Hsz.
-case E : (TwoSum a s) => [si ei1] Hn0.
-have Hc : dwh (TwoSum a s) + dwl (TwoSum a s) = a + s.
-  by exact: TwoSum_correct_loc Fa Fs.
-have Hei1 : RND (a + s) + ei1 = a + s by move: Hc; rewrite TwoSum_hi E dwlE.
-have sn0 : s <> 0.
-  move=> s0; apply: Hn0.
-  have Ha : RND (a + s) = a by rewrite s0 Rplus_0_r; apply: round_generic.
-  by lra.
-have an0 : a <> 0.
-  move=> a0; apply: Hn0.
-  have Hb : RND (a + s) = s by rewrite a0 Rplus_0_l; apply: round_generic.
-  by lra.
-have Hle : Rabs (nth 0 es 0) <= / 2 * uls s.
-  have H : (1 < size (s :: es))%N by rewrite /= ltnS.
-  by apply: (Fnonoverlap_imm Fses H sn0).
-have Hulsei : uls s <= uls ei1.
-  have -> : ei1 = dwl (TwoSum a s) by rewrite E.
-  by apply: (TwoSum_err_uls_ge Fa Fs an0 sn0 Hulsle); rewrite E.
-apply: Rle_trans Hle _.
-by have := Hulsei; lra.
-Qed.
-
 (* Relaxed exponent hypothesis (paper Corollary 1): magnitude-sorted floats  *)
 (* with a designated overlap set [I] on which one equal-magnitude overlap is  *)
 (* tolerated (never two in a row), bounded by [ufp(x_{i+1}) <= 2^(p-2)        *)

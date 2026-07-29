@@ -969,14 +969,6 @@ apply: (Z.le_trans _ (2 ^ 6)); first by [].
 by apply: Z.pow_le_mono_r; lia.
 Qed.
 
-(* Master rounding bound: a value [<= k u^2] rounds to [<= k u^2] ([k <       *)
-(* 2^p]).                                                                     *)
-Lemma round_le_imul_u2 w k :
-  (Z.abs k < 2 ^ p)%Z -> Rabs w <= IZR k * (u * u) ->
-  Rabs (RND w) <= IZR k * (u * u).
-Proof. by move=> Hk Hw; apply: Rabs_round_le_r => //; apply: format_imul_u2.
-  Qed.
-
 (* [8u = pow(3-p)] and [8u^2 = pow(3-2p)], used for the [b2] 2Sum-error       *)
 (* bound.                                                                     *)
 Lemma pow_3mp : pow (3 - p) = 8 * u.
@@ -1776,14 +1768,6 @@ Qed.
 Lemma TwoProd00r a : TwoProd a 0 = (0, 0).
 Proof.
 by rewrite /TwoProd Rmult_0_r round_0 Rminus_0_r round_0.
-Qed.
-
-(* [VecSum] and [VSEB] of an all-zero list are all-zero.                      *)
-Lemma vecSumAux_zeros n : vecSumAux (nseq n 0) = (nseq n.-1 0, 0).
-Proof.
-elim: n => [|[|n] IH] //.
-rewrite [nseq n.+2 0]/= vecSumAux_cons -[0 :: nseq n 0]/(nseq n.+1 0) IH.
-by rewrite TwoSum00.
 Qed.
 
 Lemma vsebAux_zeros n : vsebAux 0 (nseq n.+1 0) = [:: 0; 0].

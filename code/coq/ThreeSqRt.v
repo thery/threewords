@@ -1851,7 +1851,7 @@ have Hseed := sqrtBW_x_err_crude Hx Hx0.
 set B := TWval (sqrtBW (tw0 x) (tw1 x)) in He1 Hseed *.
 set I1 := TWval (mul1 (sqrtBW (tw0 x) (tw1 x)) x) in He1 *.
 set s := sqrt (TWval x) in HsX Hs0 Hseed.
-(* the weak form of [mul1]'s error, which is all this bound uses               *)
+(* the weak form of [mul1]'s error -- all this bound uses                     *)
 have He1' : Rabs (I1 - B * TWval x) <= (u * u) * Rabs (B * TWval x).
   apply: Rle_trans He1 _.
   by apply: Rmult_le_compat_r; first by apply: Rabs_pos.
@@ -1894,7 +1894,7 @@ have L6 : u * u * u * u * u * u <= / 2048 * (u * u * u * u * u) by nra.
 by clear -Ht2 Hsq Hmulterm Hu0 Hu2048 L2 L3 L4 L5 L6; nra.
 Qed.
 
-(* [i(2)] has head [1] and is within [105u^2] of it -- what [mul3] demands.    *)
+(* [i(2)] has head [1] and is within [105u^2] of it: what [mul3] demands.     *)
 (*                                                                            *)
 (* AND NOT [40u^2], which is what Algorithm 14 hands over and what            *)
 (* [ThreeProdOneTW_error] used to require.  Algorithm 14 reaches [40u^2]      *)

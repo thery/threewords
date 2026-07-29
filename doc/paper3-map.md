@@ -8,6 +8,9 @@ axioms = classical logic + funext + reals), `—` not formalised.
 Setting: radix 2, precision `p`, **unbounded exponent** (the paper's own model =
 Flocq's FLX), `u = 2^{-p}`.
 
+Every departure from the printed text is collected, in the paper's own
+notation, in **`doc/discrepancies.md`**.
+
 ## Definitions
 
 | # | Definition | Formalised |
@@ -53,10 +56,10 @@ witness). See `doc/thm6.md`.
 | 12 | 3Prod^fast_{2,3}(x,y) (37, 1 test) | err `18u³+75u⁴` | ✓ `ThreeProdDWFast`; `ThreeProdDWFast_isTW` + `ThreeProdDWFast_error` (`doc/alg12.md`) |
 | 13 | 3Reci(x) (73, 2 tests) — reciprocal (Newton) | **Thm 9** (err `11.5u³+1465u⁴` with Alg 11, `19u³+1502u⁴` with Alg 12, `p≥10`) | ✓ `ThreeReci`/`ThreeReciFast`; `_isTW` + `_error`, with `11.5u³+1830u⁴` / `19u³+1870u⁴` — the `u³` are the paper's, the `u⁴` are ours (`doc/thm9.md`, findings 3–5) |
 | 18 | the specialised 2nd product Thm 9 really uses (20, +2 tests) | `δ₂ = u³+620u⁴` (paper: `260u⁴`) | ✓ `ThreeProdOne.v` — old paper §8.4; needs the sorted `Fast2SumS` (`TwoSum.v`) |
-| 14 | 3Div(z,x) (119, 4 tests) — quotient | **Thm 10** (err `24u³+1509u⁴`, `p≥10`; honestly `29u³+2576u⁴`) | ✅ `ThreeDiv.v`: `ThreeDiv_isTW`/`ThreeDivFast_isTW`, `div_error_core`, `ThreeDiv_error` (`29u³+2576u⁴`) / `ThreeDivFast_error` (`44u³+2650u⁴`) — the paper's `u³` term moves too, see `doc/thm10.md` |
-| 15 | 3SqRt(x) (127, 4 tests) — square root (Newton) | **Thm 11** (err `24u³+10260u⁴`, `p≥11`) | 🚧 `ThreeSqRt.v`: definition complete, `sqrt_newton_id` proved; `ThreeSqRt_isTW`/`ThreeSqRtFast_isTW`, `ThreeSqRt_error`/`ThreeSqRtFast_error` + six obligations stated and admitted — proof in the supplementary §3, see `doc/thm11.md` |
+| 14 | 3Div(z,x) (119, 4 tests) — quotient | **Thm 10** (err `24u³+1509u⁴`, `p≥10`; honestly `27u³+2500u⁴`) | ✓ `ThreeDiv.v`: `ThreeDiv_isTW`/`ThreeDivFast_isTW`, `div_error_core`, `ThreeDiv_error` (`27u³+2500u⁴`) / `ThreeDivFast_error` (`42u³+2575u⁴`) — the paper's `u³` term moves too, see `doc/thm10.md` |
+| 15 | 3SqRt(x) (127, 4 tests) — square root (Newton) | **Thm 11** (err `24u³+10260u⁴`, `p≥11`) | ✓ `ThreeSqRt.v`: `ThreeSqRt_isTW`/`ThreeSqRtFast_isTW`, `ThreeSqRt_error`/`ThreeSqRtFast_error` — **the paper's constants exactly**, `24u³+10260u⁴` / `39u³+10333u⁴`. Proof in the supplementary §3, but ours differs (`doc/thm11.md`) |
 | 16–17 | appendix: sign-folded product variants | (support Thms 9–11) | — |
-| 20 | appendix: `3Prod^fast_{3,3}(a,(1),i₁,i₂)` (21) — the `3,3` twin of Alg 18 | `δ₃ = 3u³+264u⁴` claimed; honestly `8u³+1330u⁴` | ✅ `ThreeProdOne.v`: `ThreeProdOneTW_isTW`, `ThreeProdOneTW_error` |
+| 20 | appendix: `3Prod^fast_{3,3}(a,(1),i₁,i₂)` (21) — the `3,3` twin of Alg 18 | `δ₃ = 3u³+264u⁴` claimed; honestly `6u³+1250u⁴` | ✓ `ThreeProdOne.v`: `ThreeProdOneTW_isTW`, `ThreeProdOneTW_error_c` (`δ₃(c) = 6u³+(31c+10)u⁴` for a second factor within `cu²` of `1`, `40 ≤ c ≤ 112`) and `ThreeProdOneTW_error` (its `c = 40` instance) |
 
 Supporting: **Lemma 1** (`½ulp(x) ∣ RN(x+y)`) — used in the Thm 7 proof — is
 `ThreeProd.half_ulp_div_RN_add` (it needs `format y` and `x <> 0`, both left
@@ -95,17 +98,33 @@ is shorter than Theorem 8's because it works with `s₃` instead of `c` and `z�
 **All four multiplication algorithms of §6–7 (Alg 9–12) are now proved, with
 zero admits.**
 
-**Skeleton: the reciprocal (Alg 13 / Thm 9).** `ThreeReciAux` defines
+**Formalised: the reciprocal (Alg 13 / Thm 9).** `ThreeReciAux` defines
 Algorithm 13 generically in the `3Prod₂,₃` it calls, instantiated as
-`ThreeReci` (Algorithm 11) and `ThreeReciFast` (Algorithm 12); the four results
-are stated and admitted. `paper3` gives no proof — it lives in supplementary
-material we do not have — so `doc/thm9.md` recovers the chain from
-`doc/old-triplewors.pdf` §8. The two products enter as black boxes with
-relative errors `δ₁` (Theorem 8, general inputs) and `δ₂ ≈ 1u³` (the second
-product's `ī` has head `1` and second limb `O(u²)`), whence
-`11.5 = 10.5 + 1` and `19 = 18 + 1`; `δ₂` is the one bound still to be derived.
+`ThreeReci` (Algorithm 11) and `ThreeReciFast` (Algorithm 12). `paper3` gives
+no proof, so `doc/thm9.md` recovers the chain from `doc/old-triplewors.pdf` §8.
+The two products enter as black boxes with relative errors `δ₁` (Theorem 8)
+and `δ₂` (Algorithm 18, whose second factor has head `1`), whence
+`11.5 = 10.5 + 1` and `19 = 18 + 1` — the paper's `u³` terms, which we confirm.
+The `u⁴` terms are ours: `1830`/`1870` against `1465`/`1502`, because
+`δ₂ = u³+620u⁴` rather than the announced `u³+260u⁴`.
+
+**Formalised: the quotient (Alg 14 / Thm 10).** `ThreeDiv_error`
+(`27u³+2500u⁴`) and `ThreeDivFast_error` (`42u³+2575u⁴`) against the published
+`24u³+1509u⁴` / `39u³+1582u⁴`. Here the `u³` term moves too, because
+Algorithm 20 costs `δ₃ = 6u³` rather than the announced `3u³` on a genuine
+triple word. Numerical search reaches only `~2.5u³` on legal inputs, so the
+paper is probably right and OUR bound is loose; the three tightening steps are
+in `doc/thm10.md`.
+
+**Formalised: the square root (Alg 15 / Thm 11), with the paper's own
+constants.** `ThreeSqRt_error` (`24u³+10260u⁴`) and `ThreeSqRtFast_error`
+(`39u³+10333u⁴`) — the first theorem here where every intermediate constant of
+ours is worse and the published statement still holds. Our route is not the
+supplementary's: we keep the cancellation between the two occurrences of `i(1)`,
+which turns the weight `1.5` on `δ₁` into `1/2` (`doc/thm11.md` §4.1) and buys
+the `u³` room that absorbs our worse `u⁴` terms.
 
 **Not formalised:** Algorithms 16–17 and 19 (appendix variants: the sign-folded
-products, which save one operation each but change no bound). Algorithms 1–15,
-18 and 20 and Theorems 1–10 are proved; Theorem 11 is a skeleton
-(`ThreeSqRt.v`, `doc/thm11.md`).
+products, which save one operation each but change no bound). **Everything
+else — Algorithms 1–15, 18 and 20, and Theorems 1–11 — is proved with zero
+admits.**

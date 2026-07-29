@@ -206,11 +206,78 @@ constant is what it is announced to be, and the two are consistent.
 
 ---
 
-## 5. In one line
+## 5. The reference implementation
+
+We also read the C reference implementation of this arithmetic
+(`triple_float.c` from `NXP-Research/TWFalcon`, binary32). It matters here
+because it is independent evidence about the two points above.
+
+**The algorithms are transcribed faithfully.** `tw_sqrt` follows Algorithm 15
+line for line — the `1 + 4u` seed, the exact halvings, `1.5f - h01_2`, the two
+FMAs, `Fast2Sum(b01, b12)` — and `tw_sum`, `tw_prod`, `tw_reci`, `tw_div`
+likewise follow Algorithms 8, 9/10, 13 and 14. (Algorithm 7 is not implemented
+at all, so the defect of §2.1 does not reach this code.)
+
+**But the unguarded `Fast2Sum` of §2.6(a) is present verbatim**, in both
+Algorithm 18 and Algorithm 20:
+
+```c
+    two_prod(a.x[0], i[0], &z01_plus, &z01_min);
+    fast_two_sum(a.x[1], z01_plus, &b0t, &b1t);   /* Fast2Sum(b1, z01+) */
+    ...
+    fast_two_sum(e1, e2, &r.x[1], &r.x[2]);       /* and the last line   */
+```
+
+Those two routines are called by the reciprocal, the division **and** the
+square root, so all three inherit the loss. Sorting the two arguments repairs
+it at no arithmetic cost.
+
+**A second, related deviation.** Algorithms 9 and 10 read
+`(e₀,…,e₄) ← VecSum(z₀₀⁺, b₀, b₁, c, z₃)`, and VecSum is built from `2Sum`;
+the implementation uses `Fast2Sum` at those steps instead. Same species of
+unproven shortcut. (The *addition* path does use `2Sum`, correctly.)
+
+**And the source itself flags two errors in the appendix algorithms.** In the
+routine computing `3/2 − 3Prod₂,₃(b̄′, i⁽¹⁾)` one finds
+
+```c
+    // fault in algorithm specification, says z32 instead of z31 here
+    z3 = z31 + z01_min;
+```
+
+and, a few lines further down,
+
+```c
+    // Algorithms specifies * 0.5 somewhere, but For some reason the only way
+    // it is correct is by just doing it the normal way
+```
+
+These are the sign-folded variants (Algorithms 16, 17 and 19). We scoped them
+out because they are presented as purely operational refinements — they fold a
+`+` into a `−` inside the multiplication, saving the explicit `2 − ·` /
+`3/2 − ·` and one operation, and are said to change no bound — while
+Theorems 9, 10 and 11 are stated about Algorithms 13, 14 and 15 as written in
+the body. (We did formalise the two appendix algorithms the theorems genuinely
+need, 18 and 20.)
+
+That scoping now looks too generous. Algorithm 18 is an appendix algorithm too,
+and it carried a real defect *and* a `u⁴` constant more than twice the
+announced one (§2.6). The comments above say 16/17/19 as printed do not work
+either. And these are the routines the implementation actually runs — so
+nothing in the verified chain covers the deployed reciprocal, division or
+square root. **The appendix is worth a re-read, and is the natural next thing
+to verify.**
+
+*Scope: we read the main operation paths, not the constant-time variants or the
+conversion routines.*
+
+## 6. In one line
 
 The published statements stand, with four amendments: **Algorithm 7's inner
 test must be inverted**, **Algorithm 18's two `Fast2Sum` calls must sort their
 arguments**, **`δ₂`'s `u⁴` term is `620`, not `260`** (hence Theorem 9's
 `1830` / `1870`), and **Lemma 1 needs two hypotheses**. Three further points
-(§2.3, §2.4, §2.5) are gaps in proofs whose statements are correct. Theorem 11
-holds verbatim.
+(§2.3, §2.4, §2.5) are gaps in proofs whose statements are correct, and
+Theorem 11 holds verbatim. The C reference implementation carries the
+`Fast2Sum` defect unrepaired, and its own comments report two further errors in
+the appendix algorithms (§5).

@@ -276,6 +276,79 @@ $9989.9u^4$ at $p = 10$, where it exceeds the stated value. So the precision
 requirement is real, the constant is what it is announced to be, and the two
 are consistent.
 
+\section{The reference implementation}\label{sec:impl}
+
+We also read the C reference implementation of this arithmetic
+(\texttt{triple\_float.c} from \texttt{NXP-Research/TWFalcon}, binary32). It
+matters here because it is independent evidence about the two points above.
+
+\paragraph{The algorithms are transcribed faithfully.}
+\texttt{tw\_sqrt} follows Algorithm~15 line for line --- the $1+4u$ seed, the
+exact halvings, $\mathtt{1.5f} - h_{01}^{(2)}$, the two FMAs,
+$\alg{Fast2Sum}(b_{01}, b_{12})$ --- and \texttt{tw\_sum}, \texttt{tw\_prod},
+\texttt{tw\_reci}, \texttt{tw\_div} likewise follow Algorithms 8, 9/10, 13
+and~14. Algorithm~7 is not implemented at all, so the defect of
+\S\ref{sec:roundtw} does not reach this code.
+
+\paragraph{But the unguarded $\alg{Fast2Sum}$ of \S\ref{sec:delta2}(a) is
+present verbatim,} in both Algorithm~18 and Algorithm~20:
+
+\begin{quote}\ttfamily\small
+two\_prod(a.x[0], i[0], \&z01\_plus, \&z01\_min);\\
+fast\_two\_sum(a.x[1], z01\_plus, \&b0t, \&b1t);\quad /* $\alg{Fast2Sum}(b_1, z_{01}^{+})$ */\\
+\dots\\
+fast\_two\_sum(e1, e2, \&r.x[1], \&r.x[2]);\quad\ \ /* and the last line */
+\end{quote}
+
+\noindent
+Those two routines are called by the reciprocal, the division \textbf{and} the
+square root, so all three inherit the loss. Sorting the two arguments repairs
+it at no arithmetic cost.
+
+\paragraph{A second, related deviation.}
+Algorithms 9 and 10 read
+$(e_0,\dots,e_4) \leftarrow \alg{VecSum}(z_{00}^{+}, b_0, b_1, c, z_3)$, and
+$\alg{VecSum}$ is built from $\alg{2Sum}$; the implementation uses
+$\alg{Fast2Sum}$ at those steps instead. Same species of unproven shortcut.
+(The \emph{addition} path does use $\alg{2Sum}$, correctly.)
+
+\paragraph{And the source itself flags two errors in the appendix algorithms.}
+In the routine computing $\frac32 - \Prodacc{2,3}(\bar b\,', i^{(1)})$ one
+finds
+
+\begin{quote}\ttfamily\small
+// fault in algorithm specification, says z32 instead of z31 here\\
+z3 = z31 + z01\_min;
+\end{quote}
+
+\noindent and, a few lines further down,
+
+\begin{quote}\ttfamily\small
+// Algorithms specifies * 0.5 somewhere, but For some reason the only way\\
+// it is correct is by just doing it the normal way
+\end{quote}
+
+\noindent
+These are the sign-folded variants (Algorithms 16, 17 and 19). We scoped them
+out because they are presented as purely operational refinements --- they fold
+a $+$ into a $-$ inside the multiplication, saving the explicit $2 - \cdot$ /
+$\frac32 - \cdot$ and one operation, and are said to change no bound --- while
+Theorems 9, 10 and 11 are stated about Algorithms 13, 14 and 15 as written in
+the body. (We did formalise the two appendix algorithms the theorems genuinely
+need, 18 and 20.)
+
+That scoping now looks too generous. Algorithm~18 is an appendix algorithm too,
+and it carried a real defect \emph{and} a $u^4$ constant more than twice the
+announced one (\S\ref{sec:delta2}). The comments above say 16/17/19 as printed
+do not work either. And these are the routines the implementation actually
+runs --- so nothing in the verified chain covers the deployed reciprocal,
+division or square root. \textbf{The appendix is worth a re-read, and is the
+natural next thing to verify.}
+
+\medskip
+\noindent\emph{Scope: we read the main operation paths, not the constant-time
+variants or the conversion routines.}
+
 \section{In one line}
 
 The published statements stand, with four amendments: \textbf{Algorithm 7's
@@ -283,7 +356,9 @@ inner test must be inverted}, \textbf{Algorithm 18's two $\alg{Fast2Sum}$ calls
 must sort their arguments}, \textbf{$\delta_2$'s $u^4$ term is $620$, not
 $260$} (hence Theorem~9's $1830$ / $1870$), and \textbf{Lemma 1 needs two
 hypotheses}. Three further points (\S\ref{sec:thm6}, \S\ref{sec:thm8} and
-Section 8.3's tail bound) are gaps in proofs whose statements are correct.
-Theorem~11 holds verbatim.
+Section 8.3's tail bound) are gaps in proofs whose statements are correct, and
+Theorem~11 holds verbatim. The C reference implementation carries the
+$\alg{Fast2Sum}$ defect unrepaired, and its own comments report two further
+errors in the appendix algorithms (\S\ref{sec:impl}).
 
 \end{document}

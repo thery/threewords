@@ -1,5 +1,10 @@
 # Formal verification of *Algorithms for triple-word arithmetic* — what was checked, and where it differs from the paper
 
+> **To send to the authors, use `doc/discrepancies.pdf`** — the same note
+> typeset in the paper's own notation (source `doc/discrepancies.tex`, rebuild
+> with `scripts/make-discrepancies-pdf.sh`). This markdown copy is the
+> repository-facing one; **keep the two in sync.**
+
 This note summarises a complete machine-checked verification of the paper, and
 lists every point where the formal proof departs from the printed text. It is
 written entirely in the paper's own notation; no knowledge of the proof

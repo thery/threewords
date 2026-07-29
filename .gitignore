@@ -13,3 +13,7 @@ rocq_mcp_cache*.v
 # C build artifacts
 code/TWFalcon/test_zeros
 *.o
+doc/discrepancies.aux
+doc/discrepancies.log
+doc/discrepancies.out
+doc/discrepancies.toc
